@@ -1,12 +1,12 @@
 <img height=140 src=https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png>
 
-What `maya.cmds` could look like with unique identifiers.
+Fast subset of `maya.cmds`
 
 <br>
 
 ### About
 
-`cmdx` is a superset of `cmds` that looks and acts like the `cmds`, but utilises the new UUID attribute of Maya 2016 and above to make *exact* (X marks the spot) references to nodes, independent of name and path. Like a faster and leaner PyMEL.
+`cmdx` is a fast subset of the `maya.cmds` module, with persistent references to nodes.
 
 ```python
 import cmdx
@@ -20,7 +20,17 @@ cmdx.parent(box, group)
 cmdx.delete(box)
 ```
 
-> Note how renaming and reparenting doesn't break the reference to `box`.
+The traditional `cmds` module is fast, but references nodes by strings. PyMEL offers references that stick through parenting and renaming, but lacks performance. `cmdx` is both fast and persistent; even faster than `cmds` by 2-5x.
+
+**Supports**
+
+- `createNode`
+- `getAttr`
+- `setAttr`
+- `addAttr`
+- `connectAttr`
+- `listRelatives`
+- `ls`
 
 <br>
 
@@ -194,15 +204,43 @@ sphere
 
 ### Comparison
 
-`cmdx` is a better PyMEL. There are a few thing PyMEL does right, such as the object-oriented interface, the unambiguous reference to nodes
+`cmds` and `pymel` is the equivalent of a rock and a hard place.
+
+Maya's Embedded Language (MEL) makes for a compact scene description format.
+
+```python
+createNode transform -n "myNode"
+	setAttr .tx 12
+	setAttr .ty 9
+```
+
+On creation, a node is "selected" which is leveraged by subsequent commands, commands that also reference attributes via their "short" name to further reduce file sizes.
+
+A scene description never faces naming or parenting problems the way programmers do. In a scene description, there is no need to rename nor reparent; a node is created either as a child of another, or not. It is given a name, which is unique. No ambiguity.
+
+From there, it was given expressions, functions, branching logic and was made into a scripting language where the standard library is a scene description kit. 
+
+`cmds` is tedious and `pymel` is slow. `cmds` is also a victim of its own success. Like MEL, it works with relative paths and the current selection; this facilitates the compact file format, whereby a node is created, and then any references to this node is implicit in each subsequent line. Long attribute names have a short equivalent and paths need only be given at enough specificity to not be ambiguous given everything else that was previously created. Great for scene a file format, not so great for code that operates on-top of this scene file.
 
 With PyMEL as baseline, these are the primary goals of this project, in order of importance.
 
+- Fast
+  - Faster than PyMEL, faster than `maya.cmds`
+- Persistent node references
+  - Parent and rename nodes whilst keeping variables
+- Argument signatures
+  - Works with auto-complete and linting
+- [X] Issue tracker
+  - PyMEL has one, but because it is bundled alongside Maya any fixes or changes you or anyone else makes won't be seeing the light of day until the next Autodesk release cycle, and you wouldn't want your software dependent on the very latest release of Maya anyway. This discourages contribution and hinders innovation.
+- [X] Small
+  - You can read and understand this; magic and side-effects are discouraged.
+- [X] Vendored
+  - A single, self-contained, vendorable Python module of <1000 lines of code means you can fix bugs and add features specific to your project, without having to wait for the next version of Maya for others to benefit from it. (PyMEL cloc's in at 35,000 lines)
 - [X] compatibility with maya.cmds
   - PyMEL is an all-or-nothing deal. You either use it everywhere, or not at all. This makes using it for its strengths difficult to impossible, without also suffering from its weaknesses.
   - For adoption, familiarity and ability to swap for `cmds` at any point in time via search-and-replace.
 - [X] Faster
-  - cmdx is 2-150x faster on average
+  - cmdx is 2-150x faster on average (see below)
 - [X] PEP08
   - PyMEL is written in a multitude of styles with little to no linting
 - [X] No side effects
@@ -213,13 +251,91 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
   - PyMEL is multi-module, multi-package 
 - [X] Single module
 
+```bash
+root@0e540f42ee9d:/# git clone https://github.com/LumaPictures/pymel.git
+Cloning into 'pymel'...
+remote: Counting objects: 21058, done.
+remote: Total 21058 (delta 0), reused 0 (delta 0), pack-reused 21058
+Receiving objects: 100% (21058/21058), 193.16 MiB | 15.62 MiB/s, done.
+Resolving deltas: 100% (15370/15370), done.
+Checking connectivity... done.
+root@0e540f42ee9d:/# cd pymel/
+root@0e540f42ee9d:/pymel# ls
+CHANGELOG.rst  LICENSE  README.md  docs  examples  extras  maintenance  maya  pymel  setup.py  tests
+root@0e540f42ee9d:/pymel# cloc pymel/
+      77 text files.
+      77 unique files.
+       8 files ignored.
+
+http://cloc.sourceforge.net v 1.60  T=0.97 s (71.0 files/s, 65293.4 lines/s)
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+Python                          67           9769          22410          31251
+DOS Batch                        2              0              0              2
+-------------------------------------------------------------------------------
+SUM:                            69           9769          22410          31253
+-------------------------------------------------------------------------------
+```
 <br>
 
 ### Performance
 
-All of this convenience would go to waste is `cmdx` was not faster than PyMEL; which already offers many of the same advantages.
+Below is a performance comparisons between the available methods of manipulating the Maya scene graph.
 
-Luckily, the performance is far greater.
+- `MEL`
+- `cmds`
+- `cmdx`
+- `PyMEL`
+- `API 1.0`
+- `API 2.0`
+
+Surprisingly, `MEL` is typically outdone by `cmds`. Unsurprisingly, `PyMEL` performs on average 10x slower than `cmds`, whereas `cmdx` performs on average 5x faster than `cmds`.
+
+<br>
+
+#### MDagModifier
+
+`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`. 
+
+```python
+from maya.api import OpenMaya as om
+
+mod = om.MDagModifier()
+
+def prepare():
+    New()
+    for i in range(10):
+        mobj = mod.createNode(cmdx.Transform)
+        mod.renameNode(mobj, "node%d" % i)
+
+def createManyExclusive():
+    mod.doIt()
+
+
+def createManyInclusive():
+    mod = om.MDagModifier()
+
+    for i in range(10):
+        mobj = mod.createNode(cmdx.Transform)
+        mod.renameNode(mobj, "node%d" % i)
+
+    mod.doIt()
+
+def createMany(number=10):
+    for i in range(number):
+        cmdx.createNode(cmdx.Transform, name="node%d" % i)
+
+Test("API 2.0", "createNodeBulkInclusive", createManyInclusive, number=1, repeat=100, setup=New)
+Test("API 2.0", "createNodeBulkExclusive", createManyExclusive, number=1, repeat=100, setup=prepare)
+Test("cmdx", "createNodeBulk", createMany, number=1, repeat=100, setup=New)
+
+# createNodeBulkInclusive API 2.0: 145.2 ms (627.39 µs/call)
+# createNodeBulkExclusive API 2.0: 132.8 ms (509.58 µs/call)
+# createNodeBulk cmdx: 150.5 ms (620.12 µs/call)
+```
+
+<br>
 
 #### Overall Performance
 
@@ -229,15 +345,9 @@ Shorter is better.
 
 #### import
 
-PyMEL performs a vast number of operations on import. `cmds` is a compiled library that merely points to members internal to Maya, so it isn't accurate to measure the time taken to import it - it's nearly instantaneous. `cmdx` however is a plain Python library that also performs some amount of initialisation yet still fades in comparison to PyMEL.
+Both `cmdx` and PyMEL perform some amount of preprocessing on import.
 
 ![](plots/import.svg)
-
-#### ls
-
-Both PyMEL and `cmdx` wrap results in an object-oriented interface to resulting nodes.
-
-![](plots/ls.svg)
 
 #### createNode
 
@@ -247,31 +357,43 @@ Both PyMEL and `cmdx` wrap results in an object-oriented interface to resulting 
 
 ![](plots/getAttr.svg)
 
+#### setAttr
+
+![](plots/setAttr.svg)
+
+#### connectAttr
+
+![](plots/connectAttr.svg)
+
 #### long
 
 Retrieving the long name of any node, e.g. `cmds.ls("node", long=True)`.
 
 ![](plots/long.svg)
 
-#### uuid
-
-PyMEL was unable to retrieve the UUID of a node. `cmdx` operates on UUIDs natively, so retrieving it is instantaneous.
-
-![](plots/uuid.svg)
-
 #### node.attr
 
-Both PyMEL and `cmdx` offer convenience facilities for reading and writing attributes.
+Both `cmdx` and PyMEL offer an object-oriented interface for reading and writing attributes.
 
 ```python
 # cmdx
-node["tx"]
+node["tx"].read()
+node["tx"].write(5)
 
 # PyMEL
 pynode.tx().get()
+pynode.tx().set(5)
 ```
 
 ![](plots/node.attr.svg)
+
+![](plots/node.attr=5.svg)
+
+#### ls
+
+Both `cmdx` and PyMEL wrap results in an object-oriented interface to resulting nodes.
+
+![](plots/ls.svg)
 
 #### Mission
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Plot performance comparisons between mel, cmds, cmdx and PyMEL"""
 
 import os
@@ -32,27 +33,39 @@ except ImportError:
 # Results from tests end up here
 data = dict()
 
+# Precisions
+Milliseconds = 0
+Nanoseconds = 1
 
-def New(setup=None):
-    cmds.file(new=True, force=True)
-    (setup or (lambda: None))()
 
+def Test(method,
+         task,
+         func,
+         setup=None,
+         teardown=None,
+         number=1000,
+         repeat=5,
+         precision=1):
 
-def Test(method, task, func, setup=None, number=1000, precision=2):
-    results = timeit.Timer(
-        func,
-        setup=setup or (lambda: None)
-    ).repeat(repeat=5, number=number)
+    results = list()
 
-    text = "%s %s: %.1f ms (%.{precision}f ms/call)".format(
-        precision=precision
+    setup = setup or (lambda: None)
+    teardown = teardown or (lambda: None)
+
+    text = "%s %s: %.1f ms (%.2f {precision}/call)".format(
+        precision="μs" if precision else "ms"
     )
+
+    for iteration in range(repeat):
+        setup()
+        results += [timeit.Timer(func).timeit(number)]
+        teardown()
 
     print(text % (
         task,
         method,
-        1000 * min(results),
-        1000 * min(results) / number
+        10 ** 3 * sum(results),
+        10 ** (6 if precision else 3) * min(results) / number
     ))
 
     if task not in data:
@@ -63,9 +76,14 @@ def Test(method, task, func, setup=None, number=1000, precision=2):
         "func": func,
         "number": number,
         "results": results,
-        "min": min(results),
+        "min": sum(results),
         "percall": min(results) / number
     }
+
+
+def New(setup=None):
+    cmds.file(new=True, force=True)
+    (setup or (lambda: None))()
 
 
 def reload_pymel():
@@ -86,140 +104,124 @@ def reload_pymel():
     pymel.core  # avoid linter warning
 
 
-def getPlugValue(inPlug):
-    pAttribute = inPlug.attribute()
-    apiType = pAttribute.apiType()
-
-    # Compounds
-    if apiType in [om2.MFn.kAttribute3Double,
-                   om2.MFn.kAttribute3Float,
-                   om2.MFn.kCompoundAttribute]:
-
-        if inPlug.isCompound:
-            result = []
-            for c in range(inPlug.numChildren()):
-                result.append(getPlugValue(inPlug.child(c)))
-            return result
-        else:
-            raise TypeError("Type '%s' unsupported" % apiType)
-
-    # Distance
-    elif apiType in [om2.MFn.kDoubleLinearAttribute,
-                     om2.MFn.kFloatLinearAttribute]:
-        return inPlug.asMDistance().asCentimeters()
-
-    # Angle
-    elif apiType in [om2.MFn.kDoubleAngleAttribute,
-                     om2.MFn.kFloatAngleAttribute]:
-        return inPlug.asMAngle().asDegrees()
-
-    # Typed
-    elif apiType == om2.MFn.kTypedAttribute:
-        pType = om2.MFnTypedAttribute(pAttribute).attrType()
-        # Matrix
-        if pType == om2.MFnData.kMatrix:
-            return om2.MFnMatrixData(inPlug.asMObject()).matrix()
-        # String
-        elif pType == om2.MFnData.kString:
-            return inPlug.asString()
-
-    # Matrix
-    elif apiType == om2.MFn.kMatrixAttribute:
-
-        return om2.MFnMatrixData(inPlug.asMObject()).matrix()
-
-    # Number
-    elif apiType == om2.MFn.kNumericAttribute:
-        pType = om2.MFnNumericAttribute(pAttribute).numericType()
-        if pType == om2.MFnNumericData.kBoolean:
-            return inPlug.asBool()
-        elif pType in [om2.MFnNumericData.kShort, om2.MFnNumericData.kInt,
-                       om2.MFnNumericData.kLong, om2.MFnNumericData.kByte]:
-            return inPlug.asInt()
-        elif pType in [om2.MFnNumericData.kFloat, om2.MFnNumericData.kDouble,
-                       om2.MFnNumericData.kAddr]:
-            return inPlug.asDouble()
-
-    # Enum
-    elif apiType == om2.MFn.kEnumAttribute:
-        return inPlug.asInt()
-
-    else:
-        raise TypeError("Type '%s' unsupported" % apiType)
-
-
 New()
 
 node = cmdx.createNode("transform", name="Node")
-path = node.path
+path = node.path()
 pynode = pm.PyNode(path)
 api1node = om1.MFnDagNode().create("transform")
 api2node = om2.MFnDagNode().create("transform")
+api1mfn = om1.MFnDagNode(api1node)
+api2mfn = om2.MFnDagNode(api2node)
+
+
+def om1GetAttr():
+    """Fastest way of getting an attribute with API 2.0"""
+    plug = api2mfn.findPlug("translateX", False)
+    return plug.asDouble()
+
+
+def om2GetAttr():
+    """Fastest way of getting an attribute with API 2.0"""
+    plug = api2mfn.findPlug("translateX", False)
+    return plug.asDouble()
+
+
+def om1SetAttr(value):
+    """Fastest way of getting an attribute with API 2.0"""
+    plug = api2mfn.findPlug("translateX", False)
+    return plug.setDouble(value)
+
+
+def om2SetAttr(value):
+    """Fastest way of getting an attribute with API 2.0"""
+    plug = api2mfn.findPlug("translateX", False)
+    return plug.setDouble(value)
+
 
 Test("cmdx", "import", lambda: reload(cmdx), number=100)
 Test("cmds", "import", lambda: reload(cmds), number=100)
 Test("PyMEL", "import", reload_pymel, number=1)
 
-Test("mel", "uuid", lambda: mel.eval("ls -uid %s" % path), precision=4)
-Test("cmds", "uuid", lambda: cmds.ls(path, uuid=True), precision=4)
-Test("cmdx", "uuid", lambda: node.uuid, precision=4)
-Test("API 1.0", "uuid", lambda: om1.MFnDagNode(api1node).uuid())
-Test("API 2.0", "uuid", lambda: om2.MFnDagNode(api2node).uuid())
+Test("cmds", "long", lambda: cmds.ls(path, long=True))
+Test("cmdx", "long", lambda: node.path())
+Test("PyMEL", "long", lambda: pm.ls(path, long=True))
+Test("API 1.0", "long", lambda: api2mfn.fullPathName())
+Test("API 2.0", "long", lambda: api2mfn.fullPathName())
 
-Test("cmds", "long", lambda: cmds.ls(path, long=True), precision=4)
-Test("cmdx", "long", lambda: node.path, precision=4)
-Test("PyMEL", "long", lambda: pm.ls(path, long=True), precision=4)
-Test("API 1.0", "uuid", lambda: om1.MFnDagNode(api1node).fullPathName())
-Test("API 2.0", "uuid", lambda: om2.MFnDagNode(api2node).fullPathName())
+Test("mel", "getAttr", lambda: mel.eval("getAttr %s" % (path + ".tx")), number=10000)
+Test("cmds", "getAttr", lambda: cmds.getAttr(path + ".tx"), number=10000)
+Test("cmdx", "getAttr", lambda: cmdx.getAttr(node + ".tx", type=cmdx.Double), number=10000)
+Test("PyMEL", "getAttr", lambda: pynode.tx.get(), number=10000)
+Test("API 1.0", "getAttr", lambda: om1GetAttr(), number=10000)
+Test("API 2.0", "getAttr", lambda: om2GetAttr(), number=10000)
 
-def getAttr2():
-    attr = om2.MFnDagNode(api2node).attribute(0)
-    plug = om2.MFnDagNode(api2node).findPlug(attr, False)
-    return getPlugValue(plug)
+Test("mel", "setAttr", lambda: mel.eval("setAttr %s %s" % (path + ".tx", 5)))
+Test("cmds", "setAttr", lambda: cmds.setAttr(path + ".tx", 5))
+Test("cmdx", "setAttr", lambda: cmdx.setAttr(node + ".tx", 5, type=cmdx.Double))
+Test("PyMEL", "setAttr", lambda: pynode.tx.set(5))
+Test("API 1.0", "setAttr", lambda: om1SetAttr(5))
+Test("API 2.0", "setAttr", lambda: om2SetAttr(5))
 
+Test("cmdx", "node.attr", lambda: node["tx"].read(), number=10000)
+Test("PyMEL", "node.attr", lambda: pynode.tx.get(), number=10000)
 
-Test("mel", "getAttr", lambda: mel.eval("getAttr %s" % (path + ".tx")))
-Test("cmds", "getAttr", lambda: cmds.getAttr(path + ".tx"))
-Test("cmdx", "getAttr", lambda: cmdx.getAttr(node + ".tx"))
-Test("PyMEL", "getAttr", lambda: pynode.tx.get())
-Test("API 2.0", "getAttr", getAttr2)
+Test("cmdx", "node.attr=5", lambda: node["tx"].write(5, type=cmdx.Double), number=10000)
+Test("PyMEL", "node.attr=5", lambda: pynode.tx.set(5), number=10000)
 
 Test("mel", "createNode", lambda: mel.eval("createNode \"transform\""), New)
 Test("cmds", "createNode", lambda: cmds.createNode("transform"), New)
-Test("cmdx", "createNode", lambda: cmdx.createNode("transform"), New)
+Test("cmdx", "createNode", lambda: cmdx.createNode(cmdx.Transform), New)
 Test("PyMEL", "createNode", lambda: pm.createNode("transform"), New)
 Test("API 1.0", "createNode", lambda: om1.MFnDagNode().create("transform"), New)
 Test("API 2.0", "createNode", lambda: om2.MFnDagNode().create("transform"), New)
 
 New(lambda: [cmds.createNode("transform") for _ in range(100)])
 
+
+def lsapi(om):
+    it = om.MItDependencyNodes()
+    while not it.isDone():
+        it.thisNode()
+        it.next()
+
+
 Test("mel", "ls", lambda: mel.eval("ls"))
 Test("cmds", "ls", lambda: cmds.ls())
 Test("cmdx", "ls", lambda: cmdx.ls())
 Test("PyMEL", "ls", lambda: pm.ls())
+Test("API 1.0", "ls", lambda: lsapi(om1))
+Test("API 2.0", "ls", lambda: lsapi(om2))
 
 New()
 
-nodes = [cmds.createNode("transform") for _ in range(1000)]
-attrs = ["%s.tx" % _ for _ in nodes]
+node1 = cmdx.createNode("transform")
+node2 = cmdx.createNode("transform")
 
-Test("cmds", "getAttr (map)", lambda: cmds.getAttr(attrs), number=100)
-Test("cmdx", "getAttr (map)", lambda: cmds.getAttr(attrs), number=100)
 
-Test("cmdx", "getAttr (multi)", lambda: [
-    cmdx.getAttr(attr) for attr in attrs], number=100)
-Test("cmds", "getAttr (multi)", lambda: [
-    cmds.getAttr(attr) for attr in attrs], number=100)
-Test("PyMEL", "getAttr (multi)", lambda: [
-    pm.getAttr(attr) for attr in attrs], number=100)
+def teardown():
+    cmds.disconnectAttr("transform1.tx", "transform2.tx")
 
-New()
+
+melconnect = 'connectAttr "transform1.tx" "transform2.tx"'
+Test("mel", "connectAttr", lambda: mel.eval(melconnect), teardown=teardown, number=1, repeat=1000)
+Test("cmds", "connectAttr", lambda: cmds.connectAttr("transform1.tx", "transform2.tx"), teardown=teardown, number=1, repeat=5000)
+Test("cmdx", "connectAttr", lambda: cmdx.connectAttr(node1["tx"], node2["tx"]), teardown=teardown, number=1, repeat=5000)
+Test("PyMEL", "connectAttr", lambda: pm.connectAttr("transform1.tx", "transform2.tx"), teardown=teardown, number=1, repeat=5000)
+
+
+def teardown():
+    cmds.delAttr("transform1.myAttr")
+
 
 node = cmdx.createNode("transform")
-pynode = pm.PyNode(node.path)
+path = node.path
 
-Test("cmdx", "node.attr", lambda: node["tx"].value, number=10000)
-Test("PyMEL", "node.attr", lambda: pynode.tx, number=10000)
+meladdattr = 'addAttr -ln "myAttr" -at double -dv 0 transform1;'
+Test("mel", "addAttr", lambda: mel.eval(meladdattr), number=1, repeat=1000, teardown=teardown)
+Test("cmds", "addAttr", lambda: cmds.addAttr(path, longName="myAttr", attributeType="double", defaultValue=0), number=1, repeat=1000, teardown=teardown)
+Test("cmdx", "addAttr", lambda: cmdx.addAttr(node, longName="myAttr", attributeType=cmdx.Double, defaultValue=0), number=1, repeat=1000, teardown=teardown)
+Test("PyMel", "addAttr", lambda: pm.addAttr(path, longName="myAttr", attributeType="double", defaultValue=0), number=1, repeat=1000, teardown=teardown)
 
 #
 # Render performance characteristics as bar charts
@@ -276,16 +278,16 @@ def stacked(data, dirname):
 
 def horizontal(data, dirname):
     data = deepcopy(data)
-    order = ("mel", "cmds", "cmdx", "PyMEL")
+    order = ("PyMEL", "mel", "cmds", "cmdx")
 
     for task, methods in data.items():
         chart = pygal.HorizontalBar()
-        chart.title = task + " (ms)"
+        chart.title = task + u" (μs)"
         for method in order:
             values = methods.get(method, {})
             if not values:
                 continue
-            chart.add(method, 1000 * values.get("percall", 0))
+            chart.add(method, 10 ** 6 * values.get("percall", 0))
 
         fname = os.path.join(
             dirname, r"%s.svg" % task
@@ -294,7 +296,23 @@ def horizontal(data, dirname):
         chart.render_to_file(fname)
 
 
+def average(data):
+    data = deepcopy(data)
+
+    times_faster = list()
+    for task, methods in data.items():
+        a = methods["PyMEL"]["percall"]
+        b = methods["cmdx"]["percall"]
+        faster = a / float(b)
+        print("cmdx is %sx faster" % faster)
+        times_faster.append(faster)
+
+    average = sum(times_faster) / len(times_faster)
+    return average
+
+
 # Draw plots
 dirname = os.path.join(os.path.dirname(cmdx.__file__), "plots")
 stacked(data, dirname)
 horizontal(data, dirname)
+print(average(data))
