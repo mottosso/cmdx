@@ -22,7 +22,7 @@ cmdx.delete(box)
 
 The traditional `cmds` module is fast, but references nodes by strings. PyMEL offers references that stick through parenting and renaming, but lacks performance. `cmdx` is both fast and persistent; even faster than `cmds` by 2-5x.
 
-**Supports**
+**Commands**
 
 - `createNode`
 - `getAttr`
@@ -31,6 +31,17 @@ The traditional `cmds` module is fast, but references nodes by strings. PyMEL of
 - `connectAttr`
 - `listRelatives`
 - `ls`
+
+**Attribute Types**
+
+- `Double`
+- `Double3`
+- `Enum`
+- `String`
+- `Message`
+- `Boolean`
+- `Divider`
+- `Long`
 
 <br>
 
@@ -392,6 +403,8 @@ pynode.tx().set(5)
 #### ls
 
 Both `cmdx` and PyMEL wrap results in an object-oriented interface to resulting nodes.
+
+This one is great, as it tests the `__init__` of the internal class used to encapsulate a Maya node.
 
 ![](plots/ls.svg)
 

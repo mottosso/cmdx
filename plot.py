@@ -159,7 +159,7 @@ Test("API 2.0", "getAttr", lambda: om2GetAttr(), number=10000)
 Test("mel", "setAttr", lambda: mel.eval("setAttr %s %s" % (path + ".tx", 5)))
 Test("cmds", "setAttr", lambda: cmds.setAttr(path + ".tx", 5))
 Test("cmdx", "setAttr", lambda: cmdx.setAttr(node + ".tx", 5, type=cmdx.Double))
-Test("PyMEL", "setAttr", lambda: pynode.tx.set(5))
+Test("PyMEL", "setAttr", lambda: pm.setAttr(pynode + ".tx", 5))
 Test("API 1.0", "setAttr", lambda: om1SetAttr(5))
 Test("API 2.0", "setAttr", lambda: om2SetAttr(5))
 
@@ -176,8 +176,18 @@ Test("PyMEL", "createNode", lambda: pm.createNode("transform"), New)
 Test("API 1.0", "createNode", lambda: om1.MFnDagNode().create("transform"), New)
 Test("API 2.0", "createNode", lambda: om2.MFnDagNode().create("transform"), New)
 
-New(lambda: [cmds.createNode("transform") for _ in range(100)])
+New()
 
+parent = cmdx.createNode("transform")
+path = parent.path
+for x in range(100):
+    cmdx.createNode("transform", parent=parent)
+
+Test("mel", "listRelatives", lambda: mel.eval('listRelatives -children "transform1"'))
+Test("cmds", "listRelatives", lambda: cmds.listRelatives(path, children=True))
+Test("cmdx", "listRelatives", lambda: cmdx.listRelatives(parent, children=True))
+
+New(lambda: [cmds.createNode("transform") for _ in range(100)])
 
 def lsapi(om):
     it = om.MItDependencyNodes()
@@ -185,10 +195,9 @@ def lsapi(om):
         it.thisNode()
         it.next()
 
-
 Test("mel", "ls", lambda: mel.eval("ls"))
 Test("cmds", "ls", lambda: cmds.ls())
-Test("cmdx", "ls", lambda: cmdx.ls())
+Test("cmdx", "ls", lambda: list(cmdx.ls()))
 Test("PyMEL", "ls", lambda: pm.ls())
 Test("API 1.0", "ls", lambda: lsapi(om1))
 Test("API 2.0", "ls", lambda: lsapi(om2))
@@ -209,13 +218,14 @@ Test("cmds", "connectAttr", lambda: cmds.connectAttr("transform1.tx", "transform
 Test("cmdx", "connectAttr", lambda: cmdx.connectAttr(node1["tx"], node2["tx"]), teardown=teardown, number=1, repeat=5000)
 Test("PyMEL", "connectAttr", lambda: pm.connectAttr("transform1.tx", "transform2.tx"), teardown=teardown, number=1, repeat=5000)
 
+New()
 
 def teardown():
-    cmds.delAttr("transform1.myAttr")
+    cmds.deleteAttr("transform1.myAttr")
 
 
 node = cmdx.createNode("transform")
-path = node.path
+path = node.path()
 
 meladdattr = 'addAttr -ln "myAttr" -at double -dv 0 transform1;'
 Test("mel", "addAttr", lambda: mel.eval(meladdattr), number=1, repeat=1000, teardown=teardown)

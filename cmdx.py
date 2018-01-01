@@ -2,140 +2,184 @@
 from maya.api import OpenMaya as om
 
 NotExistError = type("NotExistError", (Exception,), {})
-Modifier = om.MDGModifier()
+GlobalModifier = om.MDGModifier()
 
-Bool = om.MFnNumericData.kBoolean
-Int = om.MFnNumericData.kInt
-Short = om.MFnNumericData.kShort
-Long = om.MFnNumericData.kLong
-Byte = om.MFnNumericData.kByte
-Float = om.MFnNumericData.kFloat
-Double = om.MFnNumericData.kDouble
-Addr = om.MFnNumericData.kAddr
-Matrix = om.MFnData.kMatrix
-
-Getters = {
-    Bool: lambda plug: plug.asBool,
-    Int: lambda plug: plug.asInt,
-    Long: lambda plug: plug.asInt,
-    Byte: lambda plug: plug.asInt,
-    Short: lambda plug: plug.asShort,
-    Long: lambda plug: plug.asLong,
-    Double: lambda plug: plug.asDouble,
-    Float: lambda plug: plug.asDouble,
-    Addr: lambda plug: plug.asDouble,
-    Matrix: lambda plug: plug.asMatrix,
-}
-
-Setters = {
-    Bool: lambda plug: plug.setBool,
-    Int: lambda plug: plug.setInt,
-    Long: lambda plug: plug.setInt,
-    Byte: lambda plug: plug.setInt,
-    Short: lambda plug: plug.setShort,
-    Long: lambda plug: plug.setLong,
-    Double: lambda plug: plug.setDouble,
-    Float: lambda plug: plug.setDouble,
-    Addr: lambda plug: plug.setDouble,
-    Matrix: lambda plug: plug.setMatrix,
-}
+# TODO: Try om.MFnDependencyNode.setObject to avoid re-instantiating these
+GlobalDagNode = om.MFnDagNode()
+GlobalDependencyNode = om.MFnDependencyNode()
 
 
-def Node(functionSet):
-    class Node(functionSet):
-        def __eq__(self, other):
-            return self.uuid() == other.uuid()
+class Node(object):
+    def __eq__(self, other):
+        return self.uuid() == other.uuid()
 
-        def __neq__(self, other):
-            return self.uuid() != other.uuid()
+    def __neq__(self, other):
+        return self.uuid() != other.uuid()
 
-        def __str__(self):
-            return self.path()
+    def __str__(self):
+        return self.path()
 
-        def __repr__(self):
-            return self.path()
+    def __repr__(self):
+        return self.path()
 
-        def __add__(self, other):
-            return self[other.strip(".")]
+    def __add__(self, other):
+        return self[other.strip(".")]
 
-        def __getitem__(self, attr):
-            plug = self.findPlug(attr, False)
-            return Plug(plug)
+    def __getitem__(self, attr):
+        plug = self._fn.findPlug(attr, False)
+        return Plug(plug)
 
-        def __setitem__(self, attr, value):
-            type = None
-            if isinstance(value, Plug):
-                value = value.read()
-                type = value.type
+    def __setitem__(self, key, value):
+        """Support item assignment of new attributes or values
 
-            Plug(self, attr).write(value, type)
+        Example:
+            >>> from maya.api import OpenMaya
+            >>> node = Node(OpenMaya.MFnDagNode())
+            >>> node.create("transform")
+            >>> node["myAttr"] = Double(default=1.0)
+            >>> node["myAttr"] == 1.0
+            True
+            >>> node.pop("myAttr")
 
-        def __init__(self, *args):
-            try:
-                self._mobject = args[0]
-            except IndexError:
-                self._mobject = None
+        """
 
-            super(Node, self).__init__(*args)
+        # Create a new attribute
+        if isinstance(value, (tuple, list)):
+            Attribute, kwargs = value
+            return self.addAttr(Attribute(key, **kwargs))
 
-        def create(self, *args, **kwargs):
-            self._mobject = super(Node, self).create(*args, **kwargs)
-            return self._mobject
+        # Set an existing attribute
+        type = None
+        if isinstance(value, Plug):
+            value = value.read()
+            type = value.type
 
-        def path(self):
-            try:
-                return self.fullPathName()
+        Plug(self, key).write(value, type)
 
-            # Only DAG nodes have a path
-            except AttributeError:
-                return self.name()
+    def __delitem__(self, key):
+        attr = self[key]
+        self.deleteAttr(attr)
 
-        @property
-        def mobject(self):
-            return self._mobject
+    def __init__(self, fn, mobject=None):
+        self._fn = fn
+        self._mobject = mobject
 
-        def dump(self, detail=0):
-            """Return dictionary of all attributes"""
+    def create(self, type, name=None, parent=None):
+        kwargs = {}
 
-            attrs = {}
-            count = self.attributeCount()
-            for index in range(count):
-                obj = self.attribute(index)
-                plug = self.findPlug(obj, False)
+        if name:
+            kwargs["name"] = name
 
-                attrs[plug.name()] = Plug(plug).read()
+        if parent:
+            kwargs["parent"] = parent._mobject
 
-            return attrs
+        mobject = self._fn.create(type, **kwargs)
 
-        @property
-        def basename(self):
-            return self.path().rsplit("|", 1)[-1]
+        # Update reference
+        self._mobject = mobject
 
-        def split(self, delimiter, count=-1):
-            return self.path().split(delimiter, count)
+        return mobject
 
-        def rsplit(self, delimiter, count=-1):
-            pass
+    def update(self, attrs):
+        """Add `attrs` to self
 
-        def parent(self, type=None):
-            return self.__class__(super(Node, self).parent(0))
+        Arguments:
+            attrs (dict): Key/value pairs of name and attribute
 
-        def children(self, type=None):
-            for index in range(self.childCount()):
-                yield self.__class__(super(Node, self).child(index))
+        """
 
-        def child(self):
-            return next(self.children())
+        for key, value in attrs.items():
+            self[key] = value
 
-        def shapes(self, type=None):
-            pass
+    def pop(self, key):
+        del self[key]
 
-    return Node
+    def path(self):
+        """Return full path to node"""
+        try:
+            return self._fn.fullPathName()
 
+        # Only DAG nodes have a path
+        except AttributeError:
+            return self._fn.name()
 
-# Dynamic superclass
-DependencyNode = Node(om.MFnDependencyNode)
-DagNode = Node(om.MFnDagNode)
+    def shortestPath(self):
+        """Return shortest unique path to node"""
+        try:
+            return self._fn.partialPathName()
+
+        # Only DAG nodes have a path
+        except AttributeError:
+            return self._fn.name()
+
+    def uuid(self):
+        return self._fn.uuid()
+
+    def dump(self, detail=0):
+        """Return dictionary of all attributes"""
+
+        attrs = {}
+        count = self._fn.attributeCount()
+        for index in range(count):
+            obj = self._fn.attribute(index)
+            plug = self._fn.findPlug(obj, False)
+
+            attrs[plug.name()] = Plug(plug).read()
+
+        return attrs
+
+    @property
+    def basename(self):
+        return self.path().rsplit("|", 1)[-1]
+
+    def root(self):
+        Class = self.__class__
+        Fn = self._fn.__class__
+        mobject = self._fn.dagRoot()
+        return Class(Fn(mobject), mobject)
+
+    def parent(self, type=None):
+        Class = self.__class__
+        Fn = self._fn.__class__
+        mobject = self._fn.parent(0)
+        return Class(Fn(mobject), mobject)
+
+    def children(self, type=None):
+        Class = self.__class__
+        Fn = self._fn.__class__
+
+        for index in range(self._fn.childCount()):
+            mobject = self._fn.child(index)
+            fn = Fn(mobject)
+
+            if not type or fn.typeId == type:
+                yield Class(fn, mobject)
+
+    def child(self, type=None):
+        return next(self.children(type))
+
+    def shapes(self, type=None):
+        pass
+
+    def addAttr(self, attr):
+        GlobalModifier.addAttribute(self._mobject, attr.create())
+
+        try:
+            GlobalModifier.doIt()
+        except RuntimeError as e:
+            errorType, message = e.message.split(":")
+            errorType = errorType.strip("()")
+
+            if errorType == "kInvalidParameter":
+                raise ValueError(message)
+
+            # Unhandled exception
+            else:
+                raise
+
+    def deleteAttr(self, attr):
+        GlobalModifier.removeAttribute(self._mobject, attr)
+        GlobalModifier.doIt()
 
 
 class Plug(om.MPlug):
@@ -182,8 +226,8 @@ class Plug(om.MPlug):
             return None
 
     def connect(self, other):
-        Modifier.connect(self, other)
-        Modifier.doIt()
+        GlobalModifier.connect(self, other)
+        GlobalModifier.doIt()
 
 
 def plug_to_python(plug):
@@ -292,10 +336,15 @@ def python_to_plug(python, plug):
 
 
 def encode(path):
-    """Fastest conversion from absolute path to DependencyNode"""
+    """Fastest conversion from absolute path to Node"""
     selectionList = om.MSelectionList()
     selectionList.add(path)
-    return DagNode(selectionList.getDependNode(0))
+    mobj = selectionList.getDependNode(0)
+
+    if mobj.hasFn(om.MFn.kDagNode):
+        return Node(om.MFnDagNode(mobj), mobj)
+    else:
+        return Node(om.MFnDependencyNode(mobj), mobj)
 
 
 def decode(node):
@@ -305,16 +354,21 @@ def decode(node):
 
 def createNode(type, name=None, parent=None):
     kwargs = {}
+    fn = GlobalDependencyNode
 
     if name:
         kwargs["name"] = name
 
     if parent:
         kwargs["parent"] = parent._mobject
+        fn = GlobalDagNode
 
-    node = DagNode()
-    node.create(type, **kwargs)
-    return node
+    mobj = fn.create(type, **kwargs)
+
+    if fn == GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
+        return Node(om.MFnDagNode(mobj), mobj)
+    else:
+        return Node(om.MFnDependencyNode(mobj), mobj)
 
 
 def getAttr(attr, type=None):
@@ -327,51 +381,48 @@ def setAttr(attr, value, type=None):
 
 def addAttr(node,
             longName,
+            attributeType,
             shortName=None,
-            attributeType=None,
             enumName=None,
             defaultValue=None):
 
-    if isinstance(attributeType, (tuple, list)):
-        fn, type = attributeType
+    if isinstance(attributeType, type):
+        Attribute = attributeType
+
     else:
-        fn, type = {
+        # Support legacy maya.cmds interface
+        Attribute = {
             "double": Double,
+            "double3": Double3,
             "string": String,
             "long": Long,
             "bool": Boolean,
             "enume": Enum,
         }[attributeType]
 
-    fn = fn()
-    args = [longName, shortName or longName]
+    kwargs = {
+        "shortName": shortName,
+        "default": defaultValue
+    }
 
-    if type is not None:
-        args += [type]
+    if enumName:
+        kwargs["fields"] = enumName.split(":")
 
-    if defaultValue is not None:
-        args += [defaultValue]
-
-    attr = fn.create(*args)
-
-    if type == Enum[1]:
-        for field in enumName.split(":"):
-            fn.addField(field)
-
-    mod = om.MDGModifier()
-    mod.addAttribute(node._mobject, attr)
-    mod.doIt()
+    attribute = Attribute(longName, **kwargs)
+    node.addAttr(attribute)
 
 
-def listRelatives(dagNode, type=None, allDesdencents=False):
-    assert isinstance(dagNode, DagNode)
+def listRelatives(node, type=None, children=False, allDesdencents=False):
+    result = list()
 
-    for child in dagNode.children():
-        if type is not None:
-            if child.apiType() == type:
-                yield child
-        else:
-            yield child
+    # Only DAG nodes have relatives
+    if not isinstance(node._fn, om.MFnDependencyNode):
+        return result
+
+    for child in node.children(type=type):
+        result.append(child)
+
+    return result
 
 
 def connectAttr(plugA, plugB):
@@ -379,16 +430,20 @@ def connectAttr(plugA, plugB):
 
 
 def ls(type=om.MFn.kInvalid):
+    nodes = list()
+
     it = om.MItDependencyNodes(type)
     while not it.isDone():
         mobj = it.thisNode()
 
         if mobj.hasFn(om.MFn.kDagNode):
-            yield DagNode(mobj)
+            nodes.append(Node(om.MFnDagNode(mobj), mobj))
         else:
-            yield DependencyNode(mobj)
+            nodes.append(Node(om.MFnDependencyNode(mobj), mobj))
 
         it.next()
+
+    return nodes
 
 
 # --------------------------------------------------------
@@ -397,15 +452,271 @@ def ls(type=om.MFn.kInvalid):
 #
 # --------------------------------------------------------
 
-String = (om.MFnTypedAttribute, om.MFnData.kString)
-Double = (om.MFnNumericAttribute, om.MFnNumericData.kDouble)
-Double3 = (om.MFnNumericAttribute, om.MFnNumericData.k3Double)
-Long = (om.MFnNumericAttribute, om.MFnNumericData.kLong)
-Int = (om.MFnNumericAttribute, om.MFnNumericData.kInt)
-Float = (om.MFnNumericAttribute, om.MFnNumericData.kFloat)
-Boolean = (om.MFnNumericAttribute, om.MFnNumericData.kBoolean)
-Short = (om.MFnNumericAttribute, om.MFnNumericData.kShort)
-Enum = (om.MFnEnumAttribute, None)
+class AbstractAttribute(dict):
+    Fn = None
+    Type = None
+    Default = None
+
+    Readable = True
+    Writable = True
+    Cached = False  # Cache in datablock?
+    Storable = True  # Write value to file?
+    Hidden = False  # Display in Attribute Editor?
+
+    Array = False
+    Connectable = True
+
+    Keyable = True
+    ChannelBox = False
+
+    def __eq__(self, other):
+        try:
+            # Support Attribute -> Attribute comparison
+            return self["name"] == other["name"]
+        except AttributeError:
+            # Support Attribute -> string comparison
+            return self["name"] == other
+
+    def __neq__(self, other):
+        try:
+            return self["name"] != other["name"]
+        except AttributeError:
+            return self["name"] != other
+
+    def __hash__(self):
+        """Support storing in set()"""
+        return hash(self["name"])
+
+    def __repr__(self):
+        """Avoid repr depicting the full contents of this dict"""
+        return self["name"]
+
+    def __new__(cls, *args, **kwargs):
+        if not args:
+            return cls, kwargs
+        return super(AbstractAttribute, cls).__new__(cls, *args, **kwargs)
+
+    def __init__(self,
+                 name,
+                 shortName=None,
+                 default=None,
+                 label=None,
+
+                 writable=None,
+                 readable=None,
+                 cached=None,
+                 storable=None,
+                 keyable=None,
+                 hidden=None,
+                 channelBox=None,
+                 array=False,
+                 connectable=True):
+
+        self["name"] = name
+        self["shortName"] = shortName or name
+        self["label"] = label
+        self["default"] = default or self.Default
+
+        self["writable"] = writable or self.Writable
+        self["readable"] = readable or self.Readable
+        self["cached"] = cached or self.Cached
+        self["storable"] = storable or self.Storable
+        self["keyable"] = keyable or self.Keyable
+        self["hidden"] = hidden or self.Hidden
+        self["channelBox"] = channelBox or self.ChannelBox
+        self["array"] = array or self.Array
+        self["connectable"] = connectable or self.Connectable
+
+        # Filled in on creation
+        self["mobject"] = None
+
+    def default(self):
+        """Return one of three available values
+
+        Resolution order:
+            1. Argument
+            2. Node default (from cls.defaults)
+            3. Attribute default
+
+        """
+
+        if self["default"] is not None:
+            return self["default"]
+
+        return self.Default
+
+    def type(self):
+        return self.Type
+
+    def create(self):
+        args = [
+            arg
+            for arg in (self["name"],
+                        self["shortName"],
+                        self.type())
+            if arg is not None
+        ]
+
+        default = self.default()
+        if default:
+            if isinstance(default, (list, tuple)):
+                args += default
+            else:
+                args += [default]
+
+        self["mobject"] = self.Fn.create(*args)
+
+        # 3 μs
+        self.Fn.storable = self["storable"]
+        self.Fn.readable = self["readable"]
+        self.Fn.writable = self["writable"]
+        self.Fn.hidden = self["hidden"]
+        self.Fn.channelBox = self["channelBox"]
+        self.Fn.keyable = self["keyable"]
+        self.Fn.array = self["array"]
+
+        if self["label"] is not None:
+            self.Fn.setNiceNameOverride(self["label"])
+
+        return self["mobject"]
+
+    def read(self, data):
+        pass
+
+
+class Enum(AbstractAttribute):
+    Fn = om.MFnEnumAttribute()
+    Type = None
+    Default = 0
+
+    Keyable = True
+
+    def __init__(self, name, fields=None, default=0, label=None):
+        super(Enum, self).__init__(name, default, label)
+
+        self.update({
+            "fields": fields or (name,),
+        })
+
+    def create(self):
+        attr = super(Enum, self).create()
+
+        for index, field in enumerate(self["fields"]):
+            self.Fn.addField(field, index)
+
+        return attr
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asShort()
+
+
+class Divider(Enum):
+    """Visual divider in channel box
+
+    Example:
+
+        Translate X  [ 0.0 ]
+        Translate X  [ 0.0 ]
+        Translate X  [ 0.0 ]
+                     My Divider
+        Custom Attr [ True ]
+
+    """
+
+    def __init__(self, label):
+        super(Divider, self).__init__("_", fields=(label,), label=" ")
+
+
+class String(AbstractAttribute):
+    Fn = om.MFnTypedAttribute()
+    Type = om.MFnData.kString
+    Default = ""
+
+    def default(self):
+        default = super(String, self).default()
+        return om.MFnStringData().create(default)
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asString()
+
+
+class Message(AbstractAttribute):
+    Fn = om.MFnMessageAttribute()
+    Type = None
+    Default = None
+    Storable = False
+
+
+class Matrix(AbstractAttribute):
+    Fn = om.MFnMatrixAttribute()
+
+    Default = (0.0,) * 4 * 4  # Identity matrix
+
+    Array = True
+    Readable = True
+    Keyable = False
+    Hidden = False
+
+    def default(self):
+        return None
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asMatrix()
+
+
+class Long(AbstractAttribute):
+    Fn = om.MFnNumericAttribute()
+    Type = om.MFnNumericData.kLong
+    Default = 0
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asLong()
+
+
+class Double(AbstractAttribute):
+    Fn = om.MFnNumericAttribute()
+    Type = om.MFnNumericData.kDouble
+    Default = 0.0
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asDouble()
+
+
+class Double3(AbstractAttribute):
+    Fn = om.MFnNumericAttribute()
+    Type = None
+    Default = (0.0,) * 3
+
+    def default(self):
+        default = self.get("default")
+
+        # Support single-value default
+        if isinstance(default, int):
+            default = (default, default, default)
+
+        children = list()
+        for index, child in enumerate("XYZ"):
+            attribute = self.Fn.create(self["name"] + child,
+                                       self["shortName"] + child,
+                                       om.MFnNumericData.kDouble,
+                                       default[index])
+            children.append(attribute)
+
+        return children
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asDouble3()
+
+
+# NOTE: Name clash, "Boolean" is a node type
+class Bool(AbstractAttribute):
+    Fn = om.MFnNumericAttribute()
+    Type = om.MFnNumericData.kBoolean
+    Default = True
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asBool()
+
 
 # --------------------------------------------------------
 #
