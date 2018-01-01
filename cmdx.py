@@ -4,17 +4,17 @@ from maya.api import OpenMaya as om
 NotExistError = type("NotExistError", (Exception,), {})
 GlobalModifier = om.MDGModifier()
 
-# TODO: Try om.MFnDependencyNode.setObject to avoid re-instantiating these
 GlobalDagNode = om.MFnDagNode()
 GlobalDependencyNode = om.MFnDependencyNode()
 
 
 class Node(object):
     def __eq__(self, other):
-        return self.uuid() == other.uuid()
+        """MObject supports this operator explicitly"""
+        return self._mobject == other._mobject
 
     def __neq__(self, other):
-        return self.uuid() != other.uuid()
+        return self._mobject != other._mobject
 
     def __str__(self):
         return self.path()
@@ -23,6 +23,18 @@ class Node(object):
         return self.path()
 
     def __add__(self, other):
+        """Support legacy + '.attr' behavior
+
+        Example:
+            >>> from maya.api import OpenMaya
+            >>> node = Node(OpenMaya.MFnDagNode())
+            >>> node.create("transform")
+            >>> getAttr(node + ".tx")
+            0.0
+            >>> delete(node)
+
+        """
+
         return self[other.strip(".")]
 
     def __getitem__(self, attr):
@@ -39,7 +51,7 @@ class Node(object):
             >>> node["myAttr"] = Double(default=1.0)
             >>> node["myAttr"] == 1.0
             True
-            >>> node.pop("myAttr")
+            >>> delete(node)
 
         """
 
@@ -139,10 +151,26 @@ class Node(object):
         return Class(Fn(mobject), mobject)
 
     def parent(self, type=None):
-        Class = self.__class__
-        Fn = self._fn.__class__
         mobject = self._fn.parent(0)
-        return Class(Fn(mobject), mobject)
+
+        if mobject.apiType() == om.MFn.kWorld:
+            return
+
+        Class = self.__class__
+        fn = self._fn.__class__(mobject)
+
+        if type:
+            if isinstance(type, int):
+                other = mobject.apiType()
+            else:
+                # Strip leading k, e.g. "kJoint" -> "joint"
+                other = mobject.apiTypeStr[1:].lower()
+
+            if type == other:
+                return Class(fn, mobject)
+
+        else:
+            return Class(fn, mobject)
 
     def children(self, type=None):
         Class = self.__class__
@@ -152,7 +180,17 @@ class Node(object):
             mobject = self._fn.child(index)
             fn = Fn(mobject)
 
-            if not type or fn.typeId == type:
+            if type:
+                if isinstance(type, int):
+                    other = mobject.apiType()
+                else:
+                    # Strip leading k, e.g. "kJoint" -> "joint"
+                    other = mobject.apiTypeStr[1:].lower()
+
+                if type == other:
+                    yield Class(fn, mobject)
+
+            else:
                 yield Class(fn, mobject)
 
     def child(self, type=None):
@@ -416,7 +454,7 @@ def listRelatives(node, type=None, children=False, allDesdencents=False):
     result = list()
 
     # Only DAG nodes have relatives
-    if not isinstance(node._fn, om.MFnDependencyNode):
+    if not isinstance(node._fn, om.MFnDagNode):
         return result
 
     for child in node.children(type=type):
@@ -445,6 +483,9 @@ def ls(type=om.MFn.kInvalid):
 
     return nodes
 
+
+def delete(nodes):
+    GlobalModifier.deleteNode()
 
 # --------------------------------------------------------
 #

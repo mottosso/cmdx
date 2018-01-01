@@ -179,13 +179,16 @@ Test("API 2.0", "createNode", lambda: om2.MFnDagNode().create("transform"), New)
 New()
 
 parent = cmdx.createNode("transform")
-path = parent.path
+path = parent.path()
+pynode = pm.PyNode(path)
+
 for x in range(100):
     cmdx.createNode("transform", parent=parent)
 
 Test("mel", "listRelatives", lambda: mel.eval('listRelatives -children "transform1"'))
 Test("cmds", "listRelatives", lambda: cmds.listRelatives(path, children=True))
 Test("cmdx", "listRelatives", lambda: cmdx.listRelatives(parent, children=True))
+Test("PyMEL", "listRelatives", lambda: pm.listRelatives(pynode, children=True))
 
 New(lambda: [cmds.createNode("transform") for _ in range(100)])
 
