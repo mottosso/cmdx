@@ -1,14 +1,27 @@
 # -*- coding: utf-8 -*-
+import json
+import logging
+
+from maya import cmds
 from maya.api import OpenMaya as om
 
-NotExistError = type("NotExistError", (Exception,), {})
-GlobalModifier = om.MDGModifier()
+log = logging.getLogger("cmdx")
 
+NotExistError = type("NotExistError", (KeyError,), {})
+AlreadyExistError = type("AlreadyExistError", (KeyError,), {})
+
+# Reusable objects, for performance
 GlobalDagNode = om.MFnDagNode()
 GlobalDependencyNode = om.MFnDependencyNode()
+GlobalDagIterator = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
+
+First = 0
+Last = -1
 
 
 class Node(object):
+    Fn = om.MFnDependencyNode
+
     def __eq__(self, other):
         """MObject supports this operator explicitly"""
         return self._mobject == other._mobject
@@ -17,18 +30,17 @@ class Node(object):
         return self._mobject != other._mobject
 
     def __str__(self):
-        return self.path()
+        return self.name()
 
     def __repr__(self):
-        return self.path()
+        return self.name()
 
     def __add__(self, other):
         """Support legacy + '.attr' behavior
 
         Example:
             >>> from maya.api import OpenMaya
-            >>> node = Node(OpenMaya.MFnDagNode())
-            >>> node.create("transform")
+            >>> node = createNode("transform")
             >>> getAttr(node + ".tx")
             0.0
             >>> delete(node)
@@ -38,15 +50,19 @@ class Node(object):
         return self[other.strip(".")]
 
     def __getitem__(self, attr):
-        plug = self._fn.findPlug(attr, False)
-        return Plug(plug)
+        try:
+            plug = self._fn.findPlug(attr, False)
+        except RuntimeError:
+            raise NotExistError(attr)
+
+        return Plug(self, plug)
 
     def __setitem__(self, key, value):
         """Support item assignment of new attributes or values
 
         Example:
             >>> from maya.api import OpenMaya
-            >>> node = Node(OpenMaya.MFnDagNode())
+            >>> node = createNode("transform")
             >>> node.create("transform")
             >>> node["myAttr"] = Double(default=1.0)
             >>> node["myAttr"] == 1.0
@@ -55,42 +71,49 @@ class Node(object):
 
         """
 
+        if isinstance(value, Plug):
+            # For __iadd__
+            return
+
         # Create a new attribute
         if isinstance(value, (tuple, list)):
-            Attribute, kwargs = value
-            return self.addAttr(Attribute(key, **kwargs))
+            if isinstance(value[0], type):
+                if issubclass(value[0], AbstractAttribute):
+                    Attribute, kwargs = value
+                    attr = Attribute(key, **kwargs).create()
+
+                    try:
+                        return self.addAttr(attr)
+
+                    except RuntimeError:
+                        # NOTE: I can't be sure this is the only occasion
+                        # where this exception is thrown. Stay catious.
+                        raise AlreadyExistError(key)
 
         # Set an existing attribute
-        type = None
+        typ = None
         if isinstance(value, Plug):
             value = value.read()
-            type = value.type
+            typ = value.type
 
-        Plug(self, key).write(value, type)
+        try:
+            plug = self._fn.findPlug(key, False)
+        except RuntimeError:
+            raise KeyError(key)
+
+        Plug(self, plug).write(value, typ)
 
     def __delitem__(self, key):
-        attr = self[key]
-        self.deleteAttr(attr)
+        plug = self[key]
+        attribute = plug._mplug.attribute()
+        self.deleteAttr(attribute)
 
-    def __init__(self, fn, mobject=None):
-        self._fn = fn
+    def __init__(self, mobject):
         self._mobject = mobject
+        self._fn = self.Fn(mobject)
 
-    def create(self, type, name=None, parent=None):
-        kwargs = {}
-
-        if name:
-            kwargs["name"] = name
-
-        if parent:
-            kwargs["parent"] = parent._mobject
-
-        mobject = self._fn.create(type, **kwargs)
-
-        # Update reference
-        self._mobject = mobject
-
-        return mobject
+    def name(self):
+        return self._fn.name()
 
     def update(self, attrs):
         """Add `attrs` to self
@@ -106,24 +129,6 @@ class Node(object):
     def pop(self, key):
         del self[key]
 
-    def path(self):
-        """Return full path to node"""
-        try:
-            return self._fn.fullPathName()
-
-        # Only DAG nodes have a path
-        except AttributeError:
-            return self._fn.name()
-
-    def shortestPath(self):
-        """Return shortest unique path to node"""
-        try:
-            return self._fn.partialPathName()
-
-        # Only DAG nodes have a path
-        except AttributeError:
-            return self._fn.name()
-
     def uuid(self):
         return self._fn.uuid()
 
@@ -136,19 +141,66 @@ class Node(object):
             obj = self._fn.attribute(index)
             plug = self._fn.findPlug(obj, False)
 
-            attrs[plug.name()] = Plug(plug).read()
+            try:
+                value = Plug(self, plug).read()
+            except RuntimeError:
+                # TODO: Support more types of attributes,
+                # such that this doesn't need to happen.
+                value = None
+
+            attrs[plug.name()] = value
 
         return attrs
 
-    @property
-    def basename(self):
-        return self.path().rsplit("|", 1)[-1]
+    def dumps(self, indent=4, sortKeys=True):
+        return json.dumps(self.dump(), indent=indent, sort_keys=sortKeys)
+
+    def type(self):
+        return self._fn.typeName
+
+    def addAttr(self, attr):
+        if isinstance(attr, AbstractAttribute):
+            attr = attr.create()
+
+        self._fn.addAttribute(attr)
+
+    def deleteAttr(self, attr):
+        self._fn.removeAttribute(attr)
+
+
+class DagNode(Node):
+    Fn = om.MFnDagNode
+
+    def __str__(self):
+        return self.path()
+
+    def __repr__(self):
+        return self.path()
+
+    def path(self):
+        """Return full path to node"""
+        return self._fn.fullPathName()
+
+    def shortestPath(self):
+        """Return shortest unique path to node"""
+        return self._fn.partialPathName()
+
+    def addChild(self, child, index=Last):
+        """Add `child` to self
+
+        Arguments:
+            child (Node): Child to add
+            index (int, optional): Physical location in hierarchy,
+                defaults to cmdx.Last
+
+        """
+
+        self._fn.addChild(child._mobject, index)
 
     def root(self):
-        Class = self.__class__
-        Fn = self._fn.__class__
         mobject = self._fn.dagRoot()
-        return Class(Fn(mobject), mobject)
+        cls = self.__class__
+        return cls(mobject)
 
     def parent(self, type=None):
         mobject = self._fn.parent(0)
@@ -156,71 +208,124 @@ class Node(object):
         if mobject.apiType() == om.MFn.kWorld:
             return
 
-        Class = self.__class__
+        cls = self.__class__
         fn = self._fn.__class__(mobject)
 
-        if type:
-            if isinstance(type, int):
-                other = mobject.apiType()
-            else:
-                # Strip leading k, e.g. "kJoint" -> "joint"
-                other = mobject.apiTypeStr[1:].lower()
+        if not type or type == fn.typeName:
+            return cls(mobject)
 
-            if type == other:
-                return Class(fn, mobject)
-
-        else:
-            return Class(fn, mobject)
-
-    def children(self, type=None):
-        Class = self.__class__
+    def children(self, type=None, filter=om.MFn.kTransform):
+        cls = self.__class__
         Fn = self._fn.__class__
 
         for index in range(self._fn.childCount()):
             mobject = self._fn.child(index)
+
+            if not mobject.hasFn(filter):
+                continue
+
             fn = Fn(mobject)
-
-            if type:
-                if isinstance(type, int):
-                    other = mobject.apiType()
-                else:
-                    # Strip leading k, e.g. "kJoint" -> "joint"
-                    other = mobject.apiTypeStr[1:].lower()
-
-                if type == other:
-                    yield Class(fn, mobject)
-
-            else:
-                yield Class(fn, mobject)
+            if not type or type == fn.typeName:
+                yield cls(mobject)
 
     def child(self, type=None):
-        return next(self.children(type))
+        return next(self.children(type), None)
 
     def shapes(self, type=None):
+        return self.children(type, om.MFn.kShape)
+
+    def shape(self, type=None):
+        return next(self.shapes(type), None)
+
+    def siblings(self):
         pass
 
-    def addAttr(self, attr):
-        GlobalModifier.addAttribute(self._mobject, attr.create())
+    def descendents(self, type=om.MFn.kInvalid):
+        typeName = None
 
-        try:
-            GlobalModifier.doIt()
-        except RuntimeError as e:
-            errorType, message = e.message.split(":")
-            errorType = errorType.strip("()")
+        # Support filtering by typeName
+        if isinstance(type, str):
+            typeName = type
+            type = om.MFn.kInvalid
 
-            if errorType == "kInvalidParameter":
-                raise ValueError(message)
+        GlobalDagIterator.reset(self._mobject, om.MItDag.kDepthFirst, type)
 
-            # Unhandled exception
-            else:
-                raise
+        while not GlobalDagIterator.isDone():
+            mobj = GlobalDagIterator.currentItem()
+            node = DagNode(mobj)
 
-    def deleteAttr(self, attr):
-        GlobalModifier.removeAttribute(self._mobject, attr)
-        GlobalModifier.doIt()
+            if not typeName or typeName == node._fn.typeName:
+                yield node
+
+            GlobalDagIterator.next()
 
 
-class Plug(om.MPlug):
+class Plug(object):
+    def __abs__(self):
+        return abs(self.read())
+
+    def __float__(self):
+        return float(self.read())
+
+    def __int__(self):
+        return int(self.read())
+
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            other = other.read()
+        return self.read() == other
+
+    def __neq__(self, other):
+        if isinstance(other, type(self)):
+            other = other.read()
+        return self.read() != other
+
+    def __div__(self, other):
+        """Python 2.x division"""
+        if isinstance(other, type(self)):
+            other = other.read()
+        return self.read() / other
+
+    def __floordiv__(self, other):
+        """Integer division, e.g. self // other"""
+        if isinstance(other, type(self)):
+            other = other.read()
+        return self.read() // other
+
+    def __truediv__(self, other):
+        """Float division, e.g. self / other"""
+        if isinstance(other, type(self)):
+            other = other.read()
+        return self.read() / other
+
+    def __add__(self, other):
+        if isinstance(other, str):
+            return self._node[self.name() + other]
+
+        raise TypeError(
+            "unsupported operand type(s) for +: 'Plug' and '%s'"
+            % type(other)
+        )
+
+    def __iadd__(self, other):
+        """Support plug += 1"""
+
+        if isinstance(other, type(self)):
+            other = other.read()
+
+        value = self.read()
+
+        if isinstance(value, (float, int)):
+            self.write(value + other)
+
+        else:
+            raise TypeError(
+                "Could not add %s to %s (%s)"
+                % (other, value, self.path())
+            )
+
+        return self
+
     def __str__(self):
         return str(self.read())
 
@@ -235,52 +340,104 @@ class Plug(om.MPlug):
         """Support connecting attributes via A << B"""
         other.connect(self)
 
-    @property
+    def __iter__(self):
+        for value in self.read():
+            yield value
+
+    def __getitem__(self, index):
+        cls = self.__class__
+
+        if self._mplug.isArray:
+            return cls(self._node, self._mplug.elementByLogicalIndex(index))
+        elif self._mplug.isCompound:
+            return cls(self._node, self._mplug.child(index))
+        else:
+            raise TypeError("%s does not support indexing "
+                            "(it is neither array nor "
+                            "compound attribute)" % self.path())
+
+    def __init__(self, node, mplug):
+        self._node = node
+        self._mplug = mplug
+
     def type(self):
-        return self.attribute().apiType()
+        return self._mplug.attribute().apiTypeStr
+
+    def path(self):
+        return self._mplug.partialName(
+            includeNodeName=True,
+            useLongNames=True,
+            useFullAttributePath=True
+        )
+
+    def name(self):
+        return self._mplug.partialName(
+            includeNodeName=False,
+            useLongNames=False,
+            useFullAttributePath=True
+        )
 
     def read(self, type=None):
         """Passing type = 20% faster"""
         try:
-            return plug_to_python(self)
+            return plug_to_python(self._mplug, type)
 
         except RuntimeError:
             raise
-            return None
 
         except TypeError:
-            raise
+            # Expected errors
+            log.warning("'%s': failed to read attribute" % self.path())
             return None
 
     def write(self, value, type=None):
         """Passing type = 10% faster"""
         try:
-            return python_to_plug(value, self)
+            return python_to_plug(value, self, type)
 
         except RuntimeError:
-            return None
+            raise
 
         except TypeError:
+            log.warning("'%s': failed to write attribute" % self.path())
             return None
 
     def connect(self, other):
-        GlobalModifier.connect(self, other)
-        GlobalModifier.doIt()
+        mod = om.MDGModifier()
+        mod.connect(self._mplug, other._mplug)
+        mod.doIt()
+
+    def connections(self):
+        pass
 
 
-def plug_to_python(plug):
+def plug_to_python(plug, type=None):
+    if plug.isCompound:
+        return tuple(
+            plug_to_python(plug.child(index))
+            for index in range(plug.numChildren())
+        )
+
+    elif plug.isArray:
+        # E.g. transform["worldMatrix"]
+        return tuple(
+            plug_to_python(plug.elementByLogicalIndex(index))
+            for index in range(plug.numElements())
+        )
+
     attr = plug.attribute()
     type = attr.apiType()
-
-    # Typed
     if type == om.MFn.kTypedAttribute:
         innerType = om.MFnTypedAttribute(attr).attrType()
 
-        # Matrix
-        if innerType == om.MFnData.kMatrix:
-            return om.MFnMatrixData(plug.asMObject()).matrix()
+        if innerType == om.MFnData.kAny:
+            # E.g. choice["input"][0]
+            return None
 
-        # String
+        elif innerType == om.MFnData.kMatrix:
+            # E.g. transform["worldMatrix"][0]
+            return tuple(om.MFnMatrixData(plug.asMObject()).matrix())
+
         elif innerType == om.MFnData.kString:
             return plug.asString()
 
@@ -293,26 +450,13 @@ def plug_to_python(plug):
             raise TypeError("Unsupported typed type: %s"
                             % innerType)
 
-    # Matrix
     elif type == om.MFn.kMatrixAttribute:
-        return om.MFnMatrixData(plug.asMObject()).matrix()
+        return tuple(om.MFnMatrixData(plug.asMObject()).matrix())
 
-    # Compound
-    elif type in (om.MFn.kAttribute3Double,
-                  om.MFn.kAttribute3Float,
-                  om.MFn.kCompoundAttribute) and plug.isCompound:
-
-        return tuple(
-            plug_to_python(plug.child(index))
-            for index in range(plug.numChildren())
-        )
-
-    # Distance
     elif type in (om.MFn.kDoubleLinearAttribute,
                   om.MFn.kFloatLinearAttribute):
         return plug.asMDistance().asCentimeters()
 
-    # Angle
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
         return plug.asMAngle().asDegrees()
@@ -356,21 +500,31 @@ def plug_to_python(plug):
         raise TypeError("Unsupported type '%s'" % type)
 
 
-def python_to_plug(python, plug):
+def python_to_plug(python, plug, type=None):
     if isinstance(python, str):
-        plug.setString(python)
+        plug._mplug.setString(python)
 
     elif isinstance(python, int):
-        plug.setInt(python)
+        plug._mplug.setInt(python)
 
     elif isinstance(python, float):
-        plug.setDouble(python)
+        plug._mplug.setDouble(python)
 
     elif isinstance(python, bool):
-        plug.setBool(python)
+        plug._mplug.setBool(python)
+
+    elif isinstance(python, (tuple, list)):
+        for index, value in enumerate(python):
+            if isinstance(value, (tuple, list)):
+                raise TypeError(
+                    "Unsupported nested Python type: %s"
+                    % value.__class__
+                )
+
+            python_to_plug(value, plug[index])
 
     else:
-        raise TypeError("Unsupported Python type '%s'" % type(python))
+        raise TypeError("Unsupported Python type '%s'" % python.__class__)
 
 
 def encode(path):
@@ -380,9 +534,9 @@ def encode(path):
     mobj = selectionList.getDependNode(0)
 
     if mobj.hasFn(om.MFn.kDagNode):
-        return Node(om.MFnDagNode(mobj), mobj)
+        return DagNode(mobj)
     else:
-        return Node(om.MFnDependencyNode(mobj), mobj)
+        return Node(mobj)
 
 
 def decode(node):
@@ -403,10 +557,10 @@ def createNode(type, name=None, parent=None):
 
     mobj = fn.create(type, **kwargs)
 
-    if fn == GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
-        return Node(om.MFnDagNode(mobj), mobj)
+    if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
+        return DagNode(mobj)
     else:
-        return Node(om.MFnDependencyNode(mobj), mobj)
+        return Node(mobj)
 
 
 def getAttr(attr, type=None):
@@ -463,35 +617,121 @@ def listRelatives(node, type=None, children=False, allDesdencents=False):
     return result
 
 
+def listConnections(attr, **kwargs):
+    if isinstance(attr, Plug):
+        attr = attr.path()
+
+    # TODO: Needs a faster solution without `cmds`
+    return [
+        encode(c) for c in cmds.listConnections(attr, **kwargs) or []
+    ]
+
+
 def connectAttr(plugA, plugB):
     plugA.connect(plugB)
 
 
-def ls(type=om.MFn.kInvalid):
+def ls(selection=False, type=om.MFn.kInvalid):
     nodes = list()
+
+    if selection:
+        return selection(type)
 
     it = om.MItDependencyNodes(type)
     while not it.isDone():
         mobj = it.thisNode()
 
         if mobj.hasFn(om.MFn.kDagNode):
-            nodes.append(Node(om.MFnDagNode(mobj), mobj))
+            nodes.append(DagNode(mobj))
         else:
-            nodes.append(Node(om.MFnDependencyNode(mobj), mobj))
+            nodes.append(Node(mobj))
 
         it.next()
 
     return nodes
 
 
-def delete(nodes):
-    GlobalModifier.deleteNode()
+def selection(type=None):
+    # TODO: Needs a faster solution without `cmds`
+    kwargs = {"selection": True, "long": True}
+
+    if type:
+        kwargs["type"] = type
+
+    return [
+        encode(path) for path in cmds.ls(**kwargs)
+    ]
+
+    nodes = list()
+    selectionList = om.MGlobal.getActiveSelectionList()
+
+    if not selectionList.length() > 0:
+        return nodes
+
+    it = om.MItSelectionList(selectionList, om.MFn.kDagNode)
+
+    while not it.isDone():
+        mobj = it.currentItem()
+
+        if mobj.hasFn(om.MFn.kDagNode):
+            nodes.append(DagNode(mobj))
+        else:
+            nodes.append(Node(mobj))
+
+        it.next()
+
+
+def delete(*nodes):
+    mod = om.MDGModifier()
+
+    for node in nodes:
+        mod.deleteNode(node._mobject)
+
+    # TODO: Deleted this way, and nodes still appear to exist
+    # and can still be used from Python. They have a path and all.
+    # Find out why that is, as it doesn't happen when objects are
+    # deleted via the GUI.
+    mod.doIt()
+
+
+def select(nodes, replace=True):
+    if not isinstance(nodes, (tuple, list)):
+        nodes = [nodes]
+
+    # TODO: Needs a faster solution without `cmds`
+    nodes = [decode(node) for node in nodes]
+    cmds.select(nodes, replace=replace)
+
+
+def parent(children, parent, relative=True, absolute=False):
+    assert isinstance(parent, DagNode), "parent must be DagNode"
+
+    if isinstance(children, DagNode):
+        children = [children]
+
+    for child in children:
+        assert isinstance(child, DagNode), "child must be DagNode"
+        parent.addChild(child)
+
+
+def objExists(obj):
+    if isinstance(obj, (Node, Plug)):
+        obj = obj.path()
+
+    try:
+        om.MSelectionList().add(obj)
+    except RuntimeError:
+        return False
+    else:
+        return True
+
 
 # --------------------------------------------------------
 #
 # Attribute Types
 #
 # --------------------------------------------------------
+
 
 class AbstractAttribute(dict):
     Fn = None
