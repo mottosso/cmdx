@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+import sys
 import json
 import logging
 
 from maya import cmds
 from maya.api import OpenMaya as om
 
+__version__ = "0.1.0"
+
+self = sys.modules[__name__]
 log = logging.getLogger("cmdx")
 
 NotExistError = type("NotExistError", (KeyError,), {})
@@ -197,10 +201,18 @@ class DagNode(Node):
 
         self._fn.addChild(child._mobject, index)
 
-    def root(self):
-        mobject = self._fn.dagRoot()
-        cls = self.__class__
-        return cls(mobject)
+    def assembly(self):
+        """Return the top-level parent of self"""
+        path = self._fn.getPath()
+
+        root = None
+        for level in range(path.length() - 1):
+            root = path.pop()
+
+        return self.__class__(root.node()) if root else self
+
+    # Alias
+    root = assembly
 
     def parent(self, type=None):
         mobject = self._fn.parent(0)
@@ -263,6 +275,13 @@ class DagNode(Node):
 class Plug(object):
     def __abs__(self):
         return abs(self.read())
+
+    def __bool__(self):
+        """if plug:"""
+        return bool(self.read())
+
+    # Python 3
+    __nonzero__ = __bool__
 
     def __float__(self):
         return float(self.read())
@@ -635,7 +654,7 @@ def ls(selection=False, type=om.MFn.kInvalid):
     nodes = list()
 
     if selection:
-        return selection(type)
+        return self.selection(type)
 
     it = om.MItDependencyNodes(type)
     while not it.isDone():
