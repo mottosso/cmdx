@@ -22,6 +22,18 @@ GlobalDagIterator = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
 First = 0
 Last = -1
 
+# Distance units
+Centimeters = om.MDistance.kCentimeters
+Feet = om.MDistance.kFeet
+Inches = om.MDistance.kInches
+Invalid = om.MDistance.kInvalid
+Kilometers = om.MDistance.kKilometers
+Last = om.MDistance.kLast
+Meters = om.MDistance.kMeters
+Miles = om.MDistance.kMiles
+Millimeters = om.MDistance.kMillimeters
+Yards = om.MDistance.kYards
+
 
 class Node(object):
     Fn = om.MFnDependencyNode
@@ -54,12 +66,30 @@ class Node(object):
         return self[other.strip(".")]
 
     def __getitem__(self, attr):
+        """Get plug from self
+
+        Arguments:
+            attr (str, tuple): String lookup of attribute,
+                optionally pass tuple to include unit.
+
+        Example:
+            >> node["scale"]
+            (1.0, 1.0, 1.0)
+            >> node["scale", cmdx.Meters]
+            (0.01, 0.01, 0.01)
+
+        """
+
+        unit = None
+        if isinstance(attr, (list, tuple)):
+            attr, unit = attr
+
         try:
             plug = self._fn.findPlug(attr, False)
         except RuntimeError:
             raise NotExistError(attr)
 
-        return Plug(self, plug)
+        return Plug(self, plug, unit)
 
     def __setitem__(self, key, value):
         """Support item assignment of new attributes or values
@@ -478,7 +508,7 @@ def plug_to_python(plug, type=None):
 
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
-        return plug.asMAngle().asDegrees()
+        return plug.asMAngle().internalToUI()
 
     # Number
     elif type == om.MFn.kNumericAttribute:
