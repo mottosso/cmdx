@@ -105,10 +105,6 @@ class Node(object):
 
         """
 
-        if isinstance(value, Plug):
-            # For __iadd__
-            return
-
         # Create a new attribute
         if isinstance(value, (tuple, list)):
             if isinstance(value[0], type):
@@ -125,17 +121,15 @@ class Node(object):
                         raise AlreadyExistError(key)
 
         # Set an existing attribute
-        typ = None
         if isinstance(value, Plug):
             value = value.read()
-            typ = value.type
 
         try:
             plug = self._fn.findPlug(key, False)
         except RuntimeError:
             raise KeyError(key)
 
-        Plug(self, plug).write(value, typ)
+        Plug(self, plug).write(value)
 
     def __delitem__(self, key):
         plug = self[key]
@@ -356,25 +350,6 @@ class Plug(object):
             % type(other)
         )
 
-    def __iadd__(self, other):
-        """Support plug += 1"""
-
-        if isinstance(other, type(self)):
-            other = other.read()
-
-        value = self.read()
-
-        if isinstance(value, (float, int)):
-            self.write(value + other)
-
-        else:
-            raise TypeError(
-                "Could not add %s to %s (%s)"
-                % (other, value, self.path())
-            )
-
-        return self
-
     def __str__(self):
         return str(self.read())
 
@@ -559,6 +534,9 @@ def python_to_plug(python, plug, type=None):
     elif isinstance(python, float):
         plug._mplug.setDouble(python)
 
+    elif isinstance(python, om.MAngle):
+        plug._mplug.setMAngle(python)
+
     elif isinstance(python, bool):
         plug._mplug.setBool(python)
 
@@ -604,7 +582,10 @@ def createNode(type, name=None, parent=None):
         kwargs["parent"] = parent._mobject
         fn = GlobalDagNode
 
-    mobj = fn.create(type, **kwargs)
+    try:
+        mobj = fn.create(type, **kwargs)
+    except RuntimeError:
+        raise TypeError("Unrecognized node type '%s'" % type)
 
     if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
         return DagNode(mobj)
