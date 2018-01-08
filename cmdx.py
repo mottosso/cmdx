@@ -404,6 +404,9 @@ class Node(object):
         for plug in self._fn.getConnections():
             yield Plug(plug.node(), plug, unit)
 
+    def connection(self, unit=None):
+        return next(self.connections(unit), None)
+
 
 class DagNode(Node):
     """A Maya DAG node
@@ -750,6 +753,23 @@ class Plug(object):
 
         for plug in self._mplug.connectedTo(source, destination):
             yield cls(plug.node(), plug, unit)
+
+    def connection(self, source=True, destination=True, unit=None):
+        return next(self.connections(source, destination, unit), None)
+
+    def source(self, unit=None):
+        cls = self.__class__
+        plug = self._mplug.source()
+
+        if not plug.isNull:
+            return cls(plug.node(), plug, unit)
+
+    def node(self):
+        node = self._mplug.node()
+        if node.hasFn(om.MFn.kDagNode):
+            return DagNode(node)
+        else:
+            return Node(node)
 
 
 def _plug_to_python(plug, unit=None):
