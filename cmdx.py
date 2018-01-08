@@ -168,13 +168,21 @@ class Node(object):
 
         """
 
+        if isinstance(value, Plug):
+            value = value.read()
+
         unit = None
         if isinstance(key, (list, tuple)):
             key, unit = key
-            value = unit(value)
+
+            # Convert value to the given unit
+            if isinstance(value, (list, tuple)):
+                value = list(unit(v) for v in value)
+            else:
+                value = unit(value)
 
         # Create a new attribute
-        if isinstance(value, (tuple, list)):
+        elif isinstance(value, (tuple, list)):
             if isinstance(value[0], type):
                 if issubclass(value[0], _AbstractAttribute):
                     Attribute, kwargs = value
@@ -187,10 +195,6 @@ class Node(object):
                         # NOTE: I can't be sure this is the only occasion
                         # where this exception is thrown. Stay catious.
                         raise AlreadyExistError(key)
-
-        # Set an existing attribute
-        if isinstance(value, Plug):
-            value = value.read(unit=unit)
 
         try:
             plug = self._fn.findPlug(key, False)
@@ -392,7 +396,7 @@ class Node(object):
         attribute = attr._mplug.attribute()
         self._fn.removeAttribute(attribute)
 
-    def connections(self, unit=None):
+    def connections(self, type=None, unit=None):
         """Yield plugs of node with a connection to any other plug
 
         Arguments:
@@ -402,10 +406,13 @@ class Node(object):
         """
 
         for plug in self._fn.getConnections():
-            yield Plug(plug.node(), plug, unit)
+            node = plug.node()
 
-    def connection(self, unit=None):
-        return next(self.connections(unit), None)
+            if not type or type == node._fn.typeName:
+                yield Plug(node, plug, unit)
+
+    def connection(self, type=None, unit=None):
+        return next(self.connections(type, unit), None)
 
 
 class DagNode(Node):
@@ -617,30 +624,30 @@ class Plug(object):
         return int(self.read())
 
     def __eq__(self, other):
-        if isinstance(other, type(self)):
+        if isinstance(other, Plug):
             other = other.read()
         return self.read() == other
 
     def __neq__(self, other):
-        if isinstance(other, type(self)):
+        if isinstance(other, Plug):
             other = other.read()
         return self.read() != other
 
     def __div__(self, other):
         """Python 2.x division"""
-        if isinstance(other, type(self)):
+        if isinstance(other, Plug):
             other = other.read()
         return self.read() / other
 
     def __floordiv__(self, other):
         """Integer division, e.g. self // other"""
-        if isinstance(other, type(self)):
+        if isinstance(other, Plug):
             other = other.read()
         return self.read() // other
 
     def __truediv__(self, other):
         """Float division, e.g. self / other"""
-        if isinstance(other, type(self)):
+        if isinstance(other, Plug):
             other = other.read()
         return self.read() / other
 
@@ -687,7 +694,21 @@ class Plug(object):
                             "(it is neither array nor "
                             "compound attribute)" % self.path())
 
+    def __setitem__(self, index, value):
+        self[index].write(value)
+
     def __init__(self, node, mplug, unit=None):
+        """A Maya plug
+
+        Arguments:
+            node (Node): Parent Node of plug
+            mplug (maya.api.OpenMaya.MPlug): Internal Maya plug
+            unit (int, optional): Unit with which to read plug
+
+        """
+
+        assert isinstance(node, Node), "%s is not a Node" % node
+
         self._node = node
         self._mplug = mplug
         self._unit = unit
@@ -709,9 +730,11 @@ class Plug(object):
             useFullAttributePath=True
         )
 
-    def read(self):
+    def read(self, unit=None):
+        unit = unit if unit is not None else self._unit
+
         try:
-            return _plug_to_python(self._mplug, self._unit)
+            return _plug_to_python(self._mplug, unit)
 
         except RuntimeError:
             raise
@@ -737,7 +760,7 @@ class Plug(object):
         mod.connect(self._mplug, other._mplug)
         mod.doIt()
 
-    def connections(self, source=True, destination=True, unit=None):
+    def connections(self, source=True, destination=True, type=None, unit=None):
         """Yield plugs connected to self
 
         Arguments:
@@ -749,27 +772,34 @@ class Plug(object):
 
         """
 
-        cls = self.__class__
-
         for plug in self._mplug.connectedTo(source, destination):
-            yield cls(plug.node(), plug, unit)
+            mobject = plug.node()
 
-    def connection(self, source=True, destination=True, unit=None):
-        return next(self.connections(source, destination, unit), None)
+            if mobject.hasFn(om.MFn.kDagNode):
+                node = DagNode(mobject)
+            else:
+                node = Node(mobject)
+
+            if not type or type == node._fn.typeName:
+                yield Plug(node, plug, unit)
+
+    def connection(self, source=True, destination=True, type=None, unit=None):
+        return next(self.connections(source, destination, type, unit), None)
 
     def source(self, unit=None):
         cls = self.__class__
         plug = self._mplug.source()
+        node = plug.node()
+        if node.hasFn(om.MFn.kDagNode):
+            node = DagNode(node)
+        else:
+            node = Node(node)
 
         if not plug.isNull:
-            return cls(plug.node(), plug, unit)
+            return cls(node, plug, unit)
 
     def node(self):
-        node = self._mplug.node()
-        if node.hasFn(om.MFn.kDagNode):
-            return DagNode(node)
-        else:
-            return Node(node)
+        return self._node
 
 
 def _plug_to_python(plug, unit=None):
@@ -965,7 +995,12 @@ def encode(path):
     """
 
     selectionList = om.MSelectionList()
-    selectionList.add(path)
+
+    try:
+        selectionList.add(path)
+    except RuntimeError:
+        raise ValueError("'%s' does not exist" % path)
+
     mobj = selectionList.getDependNode(0)
 
     if mobj.hasFn(om.MFn.kDagNode):
@@ -982,7 +1017,10 @@ def decode(node):
 
     """
 
-    return node.shortestPath()
+    try:
+        return node.shortestPath()
+    except AttributeError:
+        return node.name()
 
 
 def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
@@ -1165,7 +1203,7 @@ def listConnections(attr,
                     connections=False,
                     exactType=False,
                     plugs=False,
-                    shapes=False,
+                    shapes=True,
                     skipConversionNodes=False,
                     type=None):
     """List connections to `attr`
@@ -1176,6 +1214,7 @@ def listConnections(attr,
             source and destination
         destination (bool, optional): List plugs from the destination side
         source (bool, optional): List plugs from the source side
+        shapes (bool, optional): Return shapes, rather than transforms
         type (str, optional): When returning nodes, only return nodes
             of this node type; e.g. "transform"
         exactType (bool, optional): Unused; always True
@@ -1190,6 +1229,10 @@ def listConnections(attr,
         >>> listConnections(node1 + ".tx") == [node2]
         True
         >>> listConnections(node1["tx"]) == [node2]
+        True
+        >>> listConnections(node1["tx"], type="transform") == [node2]
+        True
+        >>> listConnections(node1["tx"], type="transform", shapes=False) == []
         True
 
     """
@@ -1225,17 +1268,12 @@ def listConnections(attr,
                 output.append(plug)
                 continue
 
-            node = plug._mplug.node()
+            node = plug.node()
 
-            if not shapes and node.hasFn(om.MFn.kShape):
-                node = om.MFnDagNode(node).parent(0)
+            if not shapes and node._mobject.hasFn(om.MFn.kShape):
+                node = node.parent()
 
-            if not type or type == node.typeName():
-                if node.hasFn(om.MFn.kDagNode):
-                    node = DagNode(node)
-                else:
-                    node = Node(node)
-
+            if not type or type == node._fn.typeName:
                 output.append(node)
 
     return output
