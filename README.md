@@ -18,10 +18,14 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See [API Documentation]() for usage 
 
+<br>
+<br>
+
 **Table of contents**
 
 - [Syntax](#syntax)
 - [Performance](#performance)
+- [Goals](#goals)
 - [Interoperability](#interoperability)
 - [Units](#units)
 - [Node Creation](#node-creation)
@@ -60,6 +64,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 **Legacy**
 
+Familiar and fast.
+
 ```python
 import cmdx
 joe = cmdx.createNode("transform", name="Joe")
@@ -71,6 +77,8 @@ cmdx.delete(joe)
 ```
 
 **Modern**
+
+Faster and most concise.
 
 ```python
 import cmdx
@@ -118,11 +126,28 @@ See [Measurements](#measurements) for performance statistics and comparisons bet
 
 <br>
 
+### Goals
+
+With PyMEL as baseline, these are the primary goals of this project, in order of importance.
+
+| Goal            | Description
+|:----------------|:-------------
+| Fast            | Faster than PyMEL, and cmds.
+| Lightweight     | A single Python module, implementing critical parts well, leaving the rest to `cmds`
+| Persistent      | References to nodes don't break
+| External        | Shipped alongside your code, not alongside Maya; you control the version, features and fixes.
+| Vendorable      | Embed an appropriate version of `cmdx` alongside your own project
+| PEP8            | Continuous integration ensures that every commit follows the consistency of PEP8
+| Examples        | No feature is without examples
+| No side effects | Importing `cmdx` has no affect any other module
+
+<br>
+
 ### Interoperability
 
-`cmdx` complements the performance sensitive aspects of `cmds`, but it does not replace it.
+`cmdx` complements `cmds`, but does not replace it.
 
-Commands such as `menuItem`, `inViewMessage` and `move` are left out and considered convenience functionality; not sensitive to performance-critical tasks such as generating nodes, settings or connecting.
+Commands such as `menuItem`, `inViewMessage` and `move` are left out and considered a convenience; not sensitive to performance-critical tasks such as generating nodes, setting or connecting attributes etc.
 
 Hence interoperability looks like this.
 
@@ -133,14 +158,12 @@ from maya import cmds
 group = cmds.group(name="group", empty=True)
 cmds.move(group, 0, 50, 0)
 group = cmdx.encode(group)
-group["rotateX", cmdx.Radians] = 0.14
+group["rotateX", cmdx.Radians] = 3.14
 cmds.select(cmdx.decode(group))
 ```
 
 - See [API Documentation]() for which members are available in `cmdx`
 - Submit an [issue](issues) or [pull-request](#fork) with commands you miss
-
-The remainder of this documentation is dedicated to the faster, object-oriented interface of `cmdx`.
 
 <br>
 
@@ -280,33 +303,79 @@ attr = node + ".tx"
 
 <br>
 
+### Compound and Array Attributes
+
+These both have children, and are accessed like a Python list.
+
+```python
+node = cmdx.createNode("transform")
+decompose = cmdx.createNode("decomposeMatrix")
+node["worldMatrix"][0] >> decompose["inputMatrix"]
+```
+
+Array attributes are created by an additional argument.
+
+```python
+node = cmdx.createNode("transform")
+node["myArray"] = cmdx.Double(array=True)
+```
+
+Compound attributes are created as a group.
+
+```python
+node = cmdx.createNode("transform")
+node["myGroup"] = cmdx.Compound(children=(
+  cmdx.Double("myGroupX")
+  cmdx.Double("myGroupY")
+  cmdx.Double("myGroupZ")
+))
+```
+
+Both array and compound attributes can be written via index or tuple assignment.
+
+```python
+node["myArray"] = (5, 5, 5)
+node["myArray"][1] = 10
+node["myArray"][2]
+# 5
+```
+
+<br>
+
 ### Connections
 
-Connecting one attribute to another, unsurprisingly, works the way you would expect.
+Connect one attribute to another with one of two syntaxes, whichever one is the most readable.
 
 ```python
 a, b = map(cmdx.createNode, ("transform", "camera"))
-cmdx.connectAttr(a + ".translateX", b + ".translateX")
-```
 
-With optional object-oriented conveniences.
-
-```python
 # Option 1
 a["translateX"] >> b["translateX"]
 
 # Option 2
-a["translateX"].connect(b["translateX"])
+a["translateY"].connect(b["translateY"])
 ```
 
+Legacy syntax is also supported, and is almost as fast - the overhead is one additional call to `str.strip`.
+
 ```python
-group["visibility"] = True
-sphere
+cmdx.connectAttr(a + ".translateX", b + ".translateX")
 ```
 
 <br>
 
 ### FAQ
+
+> Why is it crashing?
+
+`cmdx` should never crash (if it does, please [submit a bug report!]()), but the cost of performance is safety. `maya.cmds` rarely causes a crash because it has safety procedures built in. It double checks to ensure that the object you operate on exists, and if it doesn't provides a safe warning message. This double-checking is part of what makes `maya.cmds` slow; conversely, the lack of it is part of why `cmdx` is so fast.
+
+Common causes of a crash is:
+
+- Use of a node that has been deleted
+- ... (add your issue here)
+
+This can happen when, for example, you experiment in the Script Editor, and retain access to nodes created from a different scene, or after the node has simply been deleted.
 
 > Why is PyMEL slow?
 
@@ -345,19 +414,6 @@ From there, it was given expressions, functions, branching logic and was made in
 ##### PyMEL
 
 PyMEL is 31,000 lines of code, the bulk of which implements backwards compatibility to `maya.cmds` versions of Maya as far back as 2008, the rest reiterates the Maya API.
-
-With PyMEL as baseline, these are the primary goals of this project, in order of importance.
-
-| Goal        | Description
-|:------------|:-------------
-| Fast        | Faster than PyMEL, and cmds.
-| Lightweight | A singly Python module, implementing critical parts well, leaving the rest to `cmds`
-| Persistent  | References to nodes don't break
-| External    | Shipped alongside your code, not alongside Maya, which means you control the version, features and fixes.
-| Vendorable  | Use the version of `cmdx` that suits each of your projects best; no need for each to adhere to a single universal version.
-| PEP8        | Continuous integration ensures that every commit follows the consistency of PEP8
-| Examples    | No feature is without examples
-| No side effects | Importing `cmdx` has no affect any other module
 
 **Line count**
 
