@@ -6,21 +6,48 @@ Fast subset of `maya.cmds`
 
 ### About
 
-`cmdx` is a fast subset of the `maya.cmds` module, with persistent references to nodes.
+`cmdx` is a Python wrapper for the [Maya Python API 2.0](http://help.autodesk.com/view/MAYAUL/2016/ENU/?guid=__py_ref_index_html) and a fast subset of the `maya.cmds` module, with persistent references to nodes.
+
+If you fit in either of these groups, then `cmdx` is for you.
+
+- You like `cmds`, but wish to type less
+- You like `PyMEL`, but wish it was faster
+
+On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictures/pymel), and 2.5x faster than `maya.cmds` at common tasks; at best, it is 1,300x faster than PyMEL.
+
+- See [Measurements](#measurements) and [Timings](#timings) for details
+- See [API Documentation]() for usage 
+
+<br>
+
+### Syntax
+
+`cmdx` supports the legacy syntax of `maya.cmds`, along with an object-oriented syntax, similar to PyMEL.
+
+
+**Legacy**
 
 ```python
 import cmdx
-
-box = cmdx.createNode("transform", name="myBox")
-cmdx.rename(box, "yourBox")
-child = cmdx.createNode("transform", name="myChild", parent=box)
-cmdx.setAttr(box + ".translateX", 5)
-group = cmdx.group(empty=True)
-cmdx.parent(box, group)
-cmdx.delete(box)
+joe = cmdx.createNode("transform", name="Joe")
+benji = cmdx.createNode("transform", name="myChild", parent=joe)
+cmdx.addAttr(joe, longName="myAttr", defaultValue=5.0, attributeType="double")
+cmdx.connectAttr(joe + ".myAttr", benji + ".tx")
+cmdx.setAttr(joe + ".myAttr", 5)
+cmdx.delete(joe)
 ```
 
-The traditional `cmds` module is fast, but references nodes by strings. PyMEL offers references that stick through parenting and renaming, but lacks performance. `cmdx` is both fast and persistent; even faster than `cmds` by 2-5x.
+**Modern**
+
+```python
+import cmdx
+joe = cmdx.createNode("transform", name="Joe")
+benji = cmdx.createNode("transform", name="myChild", parent=joe)
+joe["myAttr"] = cmdx.Double(default=5.0)
+joe["myAttr"] >> benji["translateX"]
+joe["tx"] = 5
+cmdx.delete(joe)
+```
 
 **Commands**
 
@@ -30,6 +57,7 @@ The traditional `cmds` module is fast, but references nodes by strings. PyMEL of
 - `addAttr`
 - `connectAttr`
 - `listRelatives`
+- `listConnections`
 - `ls`
 
 **Attribute Types**
@@ -38,161 +66,197 @@ The traditional `cmds` module is fast, but references nodes by strings. PyMEL of
 - `Double3`
 - `Enum`
 - `String`
+- `Angle`
+- `Distance`
+- `Time`
 - `Message`
 - `Boolean`
 - `Divider`
 - `Long`
+- `Compound`
 
 <br>
 
-### Transition
+### Performance
 
-`cmdx` works as a drop-in replacement for `cmds`, meaning you can search-and-replace `cmds` with `cmdx` and expect everything to work alike; if not then that's a bug and you should file [an issue]().
+`cmdx` is fast, faster than `cmds` by 2-5x and PyMEL by 5-150x, because of how it uses the Maya API 2.0, how classes are built and the (efficient) pre-processing happening on import.
 
-Once you are confident in `cmdx`, you can start improving readability.
-
-**Before**
-
-```python
-node = cmds.rename(node, "newName")
-```
-
-**After**
-
-```python
-cmds.rename(node, "newName")
-```
-
-- See [Optimising for Readability](#optimising-for-readability) for more tips and tricks.
+See [Measurements](#measurements) for performance statistics and comparisons between MEL, cmds, cmdx, PyMEL, API 1.0 and 2.0.
 
 <br>
 
 ### Interoperability
 
-`cmdx` is designed to work alongside `cmds`, with one caveat; paths are **absolute**, not relative.
+`cmdx` complements the performance sensitive aspects of `cmds`, but it does not replace it.
 
-For example.
+Commands such as `menuItem`, `inViewMessage` and `move` are left out and considered convenience functionality; not sensitive to performance-critical tasks such as generating nodes, settings or connecting.
 
-```python
-group = cmdx.group(name="group", empty=True)
-print(group)
-# |group
-```
-
-Conversely, `cmds` returns the *shortest* path to any node, which in some cases is the above, in other cases only `group|child` and in others only `child`.
-
-Under the hood, references to each node in `cmdx` is made via a unique identifiers known as a "uuid".
+Hence interoperability looks like this.
 
 ```python
-node1 = cmds.createNode("transform", name="node1")
-node2 = cmds.createNode("transform", name="node1", parent=node1)
+import cmdx
+from maya import cmds
 
-cmds.rename(node1, "node2")
-# ERROR: More than one object matches name
-
-node1 = cmdx.createNode("transform", name="node1")
-node2 = cmdx.createNode("transform", name="node1", parent=node1)
-
-cmdx.rename(node1, "node2")
-# OK
+group = cmds.group(name="group", empty=True)
+cmds.move(group, 0, 50, 0)
+group = cmdx.encode(group)
+group["rotateX", cmdx.Radians] = 0.14
+cmds.select(cmdx.decode(group))
 ```
 
-This works because the UUID of `node1` is independent of its name and place in the hierarchy.
+- See [API Documentation]() for which members are available in `cmdx`
+- Submit an [issue](issues) or [pull-request](#fork) with commands you miss
+
+The remainder of this documentation is dedicated to the faster, object-oriented interface of `cmdx`.
+
+<br>
+
+### Units
+
+`cmdx` takes and returns values in the units used by the UI. For example, Maya's default unit for distances, such as `translateX` is in Centimeters.
+
+```python
+import cmdx
+
+node = cmdx.createNode("transform")
+node["translateX"] = 5
+node["translateX"]
+# 5
+```
+
+To return `translateX` in Meters, you can pass in a unit explicitly.
+
+```python
+node["translateX", cmdx.Meters]
+# 0.05
+```
+
+To set `translateX` to a value defined in Meters, you can pass that explicitly too.
+
+```python
+node["translateX", cmdx.Meters] = 5
+```
+
+Or use the alternative syntax.
+
+```python
+node["translateX"] = cmdx.Meters(5)
+```
+
+The following units are currently supported.
+
+- Angular
+  - `Degrees`
+  - `Radians`
+  - `AngularMinutes`
+  - `AngularSeconds`
+- Linear
+  - `Millimeters`
+  - `Centimeters`
+  - `Meters`
+  - `Kilometers`
+  - `Inches`
+  - `Feet`
+  - `Miles`
+  - `Yards`
 
 <br>
 
 ### Optimising for Readability
 
-Code is read more often than it is written.
+<br>
 
-**Before**
+### Node Creation
 
-```python
-node = cmds.createNode("transform", name="myNode")
-node = cmds.parent(node, otherNode)
-```
-
-**After**
+Nodes are created much like with `maya.cmds`.
 
 ```python
-node = cmds.createNode("transform", name="myNode")
-cmds.parent(node, otherNode)
+import cmdx
+cmdx.createNode("transform")
 ```
 
-Readability can be improved further with a little object-oriented syntax sugar.
+For a 5-10% performance increase, you may pass type as an object rather than string.
 
 ```python
-
+cmdx.createNode(cmdx.Transform)
 ```
+
+Only the most commonly used and performance sensitive types are available as explicit types.
+
+- `AddDoubleLinear` 
+- `AddMatrix` 
+- `AngleBetween` 
+- `MultMatrix` 
+- `AngleDimension` 
+- `BezierCurve` 
+- `BlendShape` 
+- `Camera` 
+- `Choice` 
+- `Chooser` 
+- `Condition` 
+- `Transform` 
+- `TransformGeometry` 
+- `WtAddMatrix` 
+
+See [API Documentation]() for more.
 
 <br>
 
-### Identity
-
-Perhaps the greatest strength of `cmdx` over `cmds` is the relationship between your variable and node.
-
-With `cmds`, nodes are referenced via their relative path at the time of creation.
-
-```python
-mynode = cmds.createNode("transform", name="myNode")
-cmds.parent(cmds.group(empty=True))
-cmds.rename(mynode, "yourNode")
-# Error
-```
-
-Because the node referenced by the variable `mynode` was re-parented, the link between it and the node is severed. To account for this, the `cmds.parent` command returns an updated reference to the node.
-
-```python
-mynode = cmds.createNode("transform", name="myNode")
-mynode = cmds.parent(cmds.group(empty=True))
-cmds.rename(mynode, "yourNode")
-# Success
-```
-
-But this does not account for children.
-
-```python
-parent = cmds.createNode("transform")
-child = cmds.createNode("transform", parent=parent)
-
-parent = cmds.rename(parent, "myParent")
-child = cmds.rename(child, "myNode")
-# Error
-```
-
-Despite our best efforts, the link between `child` and the node is again severed.
-
 ### Attribute Query and Assignment
 
-The traditional interface works as you would expect.
+Attributes are accessed in a dictionary-like fashion.
 
 ```python
-transform, generator = cmdx.sphere()
-cmdx.setAttr(generator + ".radius", 2)
+import cmdx
+node = cmdx.createNode("transform")
+node["translateX"]
+# 0.0
 ```
 
-The equivalent extended interface looks like this.
+Evaluation of an attribute is delayed until the very last minute, which means that if you don't *read* the attribute, then it is only accessed and not evaluated and cast to a Python type.
 
 ```python
-transform, generator = cmdx.sphere()
-generator["radius"] = 2
+attr = node["rx"]
 ```
 
-Reading an attribute works similarly.
+The resulting type of an attribute is `cmdx.Plug`
 
 ```python
-print(cmdx.getAttr(generator + ".subdivisionHeight"))
-# 20
-print(generator["subdivisionAxis"])
-# 20
+type(attr)
+# <class 'cmdx.Plug'>
 ```
+
+Which has a number of additional methods for query and assignment.
+
+```python
+attr.read()
+# 0.0
+attr.write(1.0)
+attr.read()
+# 1.0
+```
+
+`attr.read()` is called when printing an attribute.
+
+```python
+print(attr)
+# 1.0
+```
+
+For familiarity, an attribute may also be accessed by string concatenation.
+
+```python
+attr = node + ".tx"
+```
+
+<br>
 
 ### Connections
 
 Connecting one attribute to another, unsurprisingly, works the way you would expect.
 
 ```python
-a, b = cmdx.createNode("transform"), cmds.createNode("transform")
+a, b = map(cmdx.createNode, ("transform", "camera"))
 cmdx.connectAttr(a + ".translateX", b + ".translateX")
 ```
 
@@ -213,9 +277,21 @@ sphere
 
 <br>
 
+### FAQ
+
+> Doesn't PyMEL also use the Maya API?
+
+Yes and no. Some functionality, such as [`listRelatives`](https://github.com/LumaPictures/pymel/blob/eb984107952cde052a3ecdb473e66c7db7deb3b7/pymel/core/general.py#L1026) call on `cmds.listRelatives` and later convert the output to instances of `PyNode`. This performs at best as well as `cmds`, with the added overhead of converting the transient path to a `PyNode`.
+
+Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.OpenMaya.MMatrix` class and would have come at virtually no cost, had it not inherited 2 additional layers of superclasses and implemented much of the [computationally expensive]() functionality in pure-Python.
+
+<br>
+
 ### Comparison
 
-`cmds` and `pymel` is the equivalent of a rock and a hard place.
+This section explores the relationship between `cmdx` and (1) MEL, (2) cmds, (3) PyMEL and (4) API 1/2.
+
+**MEL**
 
 Maya's Embedded Language (MEL) makes for a compact scene description format.
 
@@ -233,34 +309,26 @@ From there, it was given expressions, functions, branching logic and was made in
 
 `cmds` is tedious and `pymel` is slow. `cmds` is also a victim of its own success. Like MEL, it works with relative paths and the current selection; this facilitates the compact file format, whereby a node is created, and then any references to this node is implicit in each subsequent line. Long attribute names have a short equivalent and paths need only be given at enough specificity to not be ambiguous given everything else that was previously created. Great for scene a file format, not so great for code that operates on-top of this scene file.
 
+**PyMEL**
+
+PyMEL is 31,000 lines of code, the bulk of which implements backwards compatibility to `maya.cmds` versions of Maya as far back as 2008, the rest reiterates the Maya API.
+
 With PyMEL as baseline, these are the primary goals of this project, in order of importance.
 
-- Fast
-  - Faster than PyMEL, faster than `maya.cmds`
-- Persistent node references
-  - Parent and rename nodes whilst keeping variables
-- Argument signatures
-  - Works with auto-complete and linting
-- [X] Issue tracker
-  - PyMEL has one, but because it is bundled alongside Maya any fixes or changes you or anyone else makes won't be seeing the light of day until the next Autodesk release cycle, and you wouldn't want your software dependent on the very latest release of Maya anyway. This discourages contribution and hinders innovation.
-- [X] Small
-  - You can read and understand this; magic and side-effects are discouraged.
-- [X] Vendored
-  - A single, self-contained, vendorable Python module of <1000 lines of code means you can fix bugs and add features specific to your project, without having to wait for the next version of Maya for others to benefit from it. (PyMEL cloc's in at 35,000 lines)
-- [X] compatibility with maya.cmds
-  - PyMEL is an all-or-nothing deal. You either use it everywhere, or not at all. This makes using it for its strengths difficult to impossible, without also suffering from its weaknesses.
-  - For adoption, familiarity and ability to swap for `cmds` at any point in time via search-and-replace.
-- [X] Faster
-  - cmdx is 2-150x faster on average (see below)
-- [X] PEP08
-  - PyMEL is written in a multitude of styles with little to no linting
-- [X] No side effects
-  - PyMEL changes external function, classes and modules on import; presumably to account for flaws in its own design and the design of the externals. This is both dangerous, unexpected and 
-- [X] Customisable
-  - PyMEL is bundled with Maya, making it difficult to impossible to expect users to install and maintain their own copy.
-  - PyMEL is large and riddled with hacks to account for bugs encountered throughout the years.
-  - PyMEL is multi-module, multi-package 
-- [X] Single module
+| Goal        | Description
+|:------------|:-------------
+| Fast        | Faster than PyMEL, and cmds.
+| Lightweight | A singly Python module, implementing critical parts well, leaving the rest to `cmds`
+| Persistent  | References to nodes don't break
+| External    | Shipped alongside your code, not alongside Maya, which means you control the version, features and fixes.
+| Vendorable  | Use the version of `cmdx` that suits each of your projects best; no need for each to adhere to a single universal version.
+| PEP8        | Continuous integration ensures that every commit follows the consistency of PEP8
+| Examples    | No feature is without examples
+| No side effects | Importing `cmdx` has no affect any other module
+
+**Line count**
+
+PyMEL has accumulated a large number of lines throughout the years.
 
 ```bash
 root@0e540f42ee9d:/# git clone https://github.com/LumaPictures/pymel.git
@@ -290,7 +358,60 @@ SUM:                            69           9769          22410          31253
 ```
 <br>
 
-### Performance
+### YAGNI
+
+The Maya Ascii file format consists of a limited number of MEL commands that accurately and efficiently reproduce anything you can achieve in Maya. This format consists of primarily 4 commands.
+
+- `createNode`
+- `addAttr`
+- `setAttr`
+- `connectAttr`
+
+You'll notice how there aren't any calls to reparent, rename otherwise readjust created nodes. Nor are there high-level commands such as `cmds.polySphere` or `cmds.move`. These 4 commands is all there is to represent the entirety of the Maya scenegraph; including complex rigs, ugly hacks and workarounds by inexperienced and seasoned artists alike.
+
+The members of `cmdx` is a reflection of this simplicity.
+
+However, convenience members make for more readable and maintainable code, so a balance must be struck between minimalism and readability. This balance is captured in `cmdx.encode` and `cmdx.decode` which acts as a bridge between `cmds` and `cmdx`. Used effectively, you should see little to no performance impact when performing bulk-operations with `cmdx` and passing the resulting nodes as transient paths to `cmds.`
+
+<br>
+
+### Timings
+
+`cmdx` is on average `142.89x` faster than `PyMEL` on these common tasks.
+
+|         | Times        | Task
+|:--------|:-------------|:------------
+| cmdx is | 2.2x faster  | addAttr
+| cmdx is | 4.9x faster  | setAttr
+| cmdx is | 7.5x faster  | createNode
+| cmdx is | 2.6x faster  | connectAttr
+| cmdx is | 50.9x faster | long
+| cmdx is | 16.6x faster | getAttr
+| cmdx is | 19.0x faster | node.attr
+| cmdx is | 11.3x faster | node.attr=5
+| cmdx is | 1285.6x faster | import
+| cmdx is | 148.7x faster | listRelatives
+| cmdx is | 22.6x faster | ls
+
+`cmdx` is on average `2.53x` faster than `cmds` on these common tasks.
+
+|         | Times       | Task
+|:--------|:------------|:------------
+| cmdx is | 1.4x faster | addAttr
+| cmdx is | 2.3x faster | setAttr
+| cmdx is | 4.8x faster | createNode
+| cmdx is | 2.1x faster | connectAttr
+| cmdx is | 8.0x faster | long
+| cmdx is | 1.8x faster | getAttr
+| cmdx is | 0.0x faster | import
+| cmdx is | 1.8x faster | listRelatives
+| cmdx is | 0.5x faster | ls
+
+> Run `plot.py` to reproduce these numbers.
+
+<br>
+
+### Measurements
 
 Below is a performance comparisons between the available methods of manipulating the Maya scene graph.
 
@@ -408,6 +529,19 @@ This one is great, as it tests the `__init__` of the internal class used to enca
 
 ![](plots/ls.svg)
 
-#### Mission
+<br>
 
-Because references to nodes are exact, the potential for performance is greater than that of `cmds`.
+### Evolution
+
+`cmdx` started as a wrapper for `cmds` where instead of returning a transient path to nodes, it returned the new UUID attribute of Maya 2016 and newer. The benefit was immediate; no longer had I to worry about whether references to any node was stale. But it impacted negatively on performance. It was effectively limited to the performance of `cmds` plus the overhead of converting to/from the UUID of each absolute path.
+
+The next hard decision was to pivot from being a superset of `cmds` to a subset; to rather than wrapping the entirety of `cmds` instead support a minimal set of functionality. The benefit of which is that more development and optimisation effort is spent on less functionality.
+
+<br>
+
+### References
+
+These are some of the resources used to create this project.
+
+- http://austinjbaker.com/mplugs-setting-values
+- https://nccastaff.bournemouth.ac.uk/jmacey/RobTheBloke/www/mayaapi.html

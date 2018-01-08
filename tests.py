@@ -4,16 +4,20 @@ from nose.tools import (
 )
 
 import cmdx
+from maya import cmds
 
 
 def new_scene():
-    cmdx.file(new=True, force=True)
+    cmds.file(new=True, force=True)
 
 
 @with_setup(new_scene)
 def test_createNode():
-    noname = cmdx.createNode("transform")
-    name = cmdx.createNode("transform", name="MyName")
-    assert_equals(name.basename, "MyName")
-    parent = cmdx.createNode("transform", parent=name)
-    shared = cmdx.createNode("multMatrix", name="myMult", shared=True)
+    node = cmdx.createNode("transform")
+    parent = cmdx.createNode("transform", "MyNode")
+    assert_equals(parent.name(), "MyNode")
+    child = cmdx.createNode("transform", "MyNode", parent)
+    assert parent in child.children()
+
+    node = cmdx.createNode("transform", name="MyNode")
+    node = cmdx.createNode("transform", name="MyNode", parent=node)

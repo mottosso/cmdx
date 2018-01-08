@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import sys
 import json
 import logging
@@ -6,7 +7,14 @@ import logging
 from maya import cmds
 from maya.api import OpenMaya as om
 
+IGNORE_VERSION = bool(os.getenv("CMDX_IGNORE_VERSION"))
+
 __version__ = "0.1.0"
+__maya_version__ = int(cmds.about(version=True))
+
+# TODO: Lower this requirement
+if not IGNORE_VERSION:
+    assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
 
 self = sys.modules[__name__]
 log = logging.getLogger("cmdx")
@@ -17,26 +25,70 @@ AlreadyExistError = type("AlreadyExistError", (KeyError,), {})
 # Reusable objects, for performance
 GlobalDagNode = om.MFnDagNode()
 GlobalDependencyNode = om.MFnDependencyNode()
-GlobalDagIterator = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
 
 First = 0
 Last = -1
 
+
+class _Unit(int):
+    """A Maya unit, for unit-attributes such as Angle and Distance
+
+    Because the resulting classes are subclasses of `int`, there
+    is virtually no run-time performance penalty to using it as
+    an integer. No additional Python is called, most notably when
+    passing the integer class to the Maya C++ binding (which wouldn't
+    call our overridden methods anyway).
+
+    The added overhead to import time is neglible.
+
+    """
+
+    def __new__(cls, unit, enum):
+        self = super(_Unit, cls).__new__(cls, enum)
+        self._unit = unit
+        return self
+
+    def __call__(self, enum):
+        return self._unit(enum, self)
+
+
+# Angular units
+Degrees = _Unit(om.MAngle, om.MAngle.kDegrees)
+Radians = _Unit(om.MAngle, om.MAngle.kRadians)
+AngularMinutes = _Unit(om.MAngle, om.MAngle.kAngMinutes)
+AngularSeconds = _Unit(om.MAngle, om.MAngle.kAngSeconds)
+
 # Distance units
-Centimeters = om.MDistance.kCentimeters
-Feet = om.MDistance.kFeet
-Inches = om.MDistance.kInches
-Invalid = om.MDistance.kInvalid
-Kilometers = om.MDistance.kKilometers
-Last = om.MDistance.kLast
-Meters = om.MDistance.kMeters
-Miles = om.MDistance.kMiles
-Millimeters = om.MDistance.kMillimeters
-Yards = om.MDistance.kYards
+Millimeters = _Unit(om.MDistance, om.MDistance.kMillimeters)
+Centimeters = _Unit(om.MDistance, om.MDistance.kCentimeters)
+Meters = _Unit(om.MDistance, om.MDistance.kMeters)
+Kilometers = _Unit(om.MDistance, om.MDistance.kKilometers)
+Inches = _Unit(om.MDistance, om.MDistance.kInches)
+Feet = _Unit(om.MDistance, om.MDistance.kFeet)
+Miles = _Unit(om.MDistance, om.MDistance.kMiles)
+Yards = _Unit(om.MDistance, om.MDistance.kYards)
 
 
 class Node(object):
-    Fn = om.MFnDependencyNode
+    """A Maya dependency node
+
+    Example:
+        >>> _ = cmds.file(new=True, force=True)
+        >>> decompose = createNode("decomposeMatrix", name="decompose")
+        >>> str(decompose)
+        'decompose'
+        >>> alias = encode(decompose.name())
+        >>> decompose == alias
+        True
+        >>> transform = createNode("transform")
+        >>> transform["tx"] = 5
+        >>> transform >> decompose
+        >>> decompose["outputTranslate"]
+        (5.0, 0, 0)
+
+    """
+
+    _Fn = om.MFnDependencyNode
 
     def __eq__(self, other):
         """MObject supports this operator explicitly"""
@@ -51,11 +103,18 @@ class Node(object):
     def __repr__(self):
         return self.name()
 
+    def __rshift__(self, other):
+        """Support connecting nodes via A >> B"""
+        return self.connect(other)
+
+    def __lshift__(self, other):
+        """Support connecting nodes via A << B"""
+        other.connect(self)
+
     def __add__(self, other):
         """Support legacy + '.attr' behavior
 
         Example:
-            >>> from maya.api import OpenMaya
             >>> node = createNode("transform")
             >>> getAttr(node + ".tx")
             0.0
@@ -65,50 +124,59 @@ class Node(object):
 
         return self[other.strip(".")]
 
-    def __getitem__(self, attr):
+    def __getitem__(self, key):
         """Get plug from self
 
         Arguments:
-            attr (str, tuple): String lookup of attribute,
+            key (str, tuple): String lookup of attribute,
                 optionally pass tuple to include unit.
 
         Example:
-            >> node["scale"]
-            (1.0, 1.0, 1.0)
-            >> node["scale", cmdx.Meters]
+            >>> node = createNode("transform")
+            >>> node["translate"] = (1, 1, 1)
+            >>> node["translate", Meters]
             (0.01, 0.01, 0.01)
 
         """
 
         unit = None
-        if isinstance(attr, (list, tuple)):
-            attr, unit = attr
+        if isinstance(key, (list, tuple)):
+            key, unit = key
 
         try:
-            plug = self._fn.findPlug(attr, False)
+            plug = self._fn.findPlug(key, False)
         except RuntimeError:
-            raise NotExistError(attr)
+            raise NotExistError(key)
 
-        return Plug(self, plug, unit)
+        return Plug(self, plug, unit=unit)
 
     def __setitem__(self, key, value):
         """Support item assignment of new attributes or values
 
         Example:
-            >>> from maya.api import OpenMaya
             >>> node = createNode("transform")
-            >>> node.create("transform")
             >>> node["myAttr"] = Double(default=1.0)
             >>> node["myAttr"] == 1.0
             True
+            >>> node["rotateX", Degrees] = 1.0
+            >>> node["rotateX"] = Degrees(1)
+            >>> node["rotateX", Degrees]
+            1.0
+            >>> round(node["rotateX", Radians], 3)
+            0.017
             >>> delete(node)
 
         """
 
+        unit = None
+        if isinstance(key, (list, tuple)):
+            key, unit = key
+            value = unit(value)
+
         # Create a new attribute
         if isinstance(value, (tuple, list)):
             if isinstance(value[0], type):
-                if issubclass(value[0], AbstractAttribute):
+                if issubclass(value[0], _AbstractAttribute):
                     Attribute, kwargs = value
                     attr = Attribute(key, **kwargs).create()
 
@@ -122,26 +190,89 @@ class Node(object):
 
         # Set an existing attribute
         if isinstance(value, Plug):
-            value = value.read()
+            value = value.read(unit=unit)
 
         try:
             plug = self._fn.findPlug(key, False)
         except RuntimeError:
             raise KeyError(key)
 
-        Plug(self, plug).write(value)
+        Plug(self, plug, unit=unit).write(value)
 
     def __delitem__(self, key):
-        plug = self[key]
-        attribute = plug._mplug.attribute()
-        self.deleteAttr(attribute)
+        self.deleteAttr(key)
 
     def __init__(self, mobject):
         self._mobject = mobject
-        self._fn = self.Fn(mobject)
+        self._fn = self._Fn(mobject)
 
     def name(self):
+        """Return the name of this node
+
+        Example:
+            >>> node = createNode("transform", name="myName")
+            >>> node.name()
+            u'myName'
+
+        """
+
         return self._fn.name()
+
+    def uuid(self):
+        """Return UUID of node
+
+        Example:
+            >>> node = createNode("transform")
+            >>> uuid = node.uuid()
+
+        """
+
+        return self._fn.uuid()
+
+    def connect(self, other):
+        """Attempt to automatically connect one node to another
+
+        This makes a "best guess" estimate on which plugs of which
+        node to connect. For example, connecting two Transform nodes
+        results in their transformation channels - translate, rotate
+        and scale - to be connected.
+
+        Example:
+            >>> node1 = createNode("transform")
+            >>> node2 = createNode("transform")
+            >>> node1 >> node2
+            >>> for connection in node1["t"].connections():
+            ...   assert connection == node2["t"]
+            ...
+
+        """
+
+        if self == other:
+            raise TypeError("Cannot connect node to itself")
+
+        this_type = self.type()
+        other_type = other.type()
+
+        if this_type == "transform" and other_type == "transform":
+            self["translate"] >> other["translate"]
+            self["rotate"] >> other["rotate"]
+            self["scale"] >> other["scale"]
+
+        elif this_type == "decomposeMatrix" and other_type == "transform":
+            self["outputTranslate"] >> other["translate"]
+            self["outputRotate"] >> other["rotate"]
+            self["outputScale"] >> other["scale"]
+
+        elif this_type == "transform" and other_type == "decomposeMatrix":
+            self["outputTranslate"] << other["translate"]
+            self["outputRotate"] << other["rotate"]
+            self["outputScale"] << other["scale"]
+
+        else:
+            raise TypeError(
+                "Could not determine how to connect %s -> %s"
+                % (this_type, other_type)
+            )
 
     def update(self, attrs):
         """Add `attrs` to self
@@ -149,16 +280,38 @@ class Node(object):
         Arguments:
             attrs (dict): Key/value pairs of name and attribute
 
+        Example:
+            >>> node = createNode("transform")
+            >>> node.update({
+            ...   "translateX": 1.0,
+            ...   "translateY": 1.0,
+            ...   "translateZ": 5.0,
+            ... })
+            ...
+            >>> node["tx"] == 1.0
+            True
+
         """
 
         for key, value in attrs.items():
             self[key] = value
 
     def pop(self, key):
-        del self[key]
+        """Delete an attribute
 
-    def uuid(self):
-        return self._fn.uuid()
+        Arguments:
+            key (str): Name of attribute to delete
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["myAttr"] = Double()
+            >>> node.pop("myAttr")
+            >>> node.hasAttr("myAttr")
+            False
+
+        """
+
+        del self[key]
 
     def dump(self, detail=0):
         """Return dictionary of all attributes"""
@@ -181,23 +334,103 @@ class Node(object):
         return attrs
 
     def dumps(self, indent=4, sortKeys=True):
+        """Return a JSON compatible dictionary of all attributes"""
         return json.dumps(self.dump(), indent=indent, sort_keys=sortKeys)
 
     def type(self):
+        """Return type name"""
         return self._fn.typeName
 
     def addAttr(self, attr):
-        if isinstance(attr, AbstractAttribute):
+        """Add a new dynamic attribute to node
+
+        Arguments:
+            attr (Plug): Add this attribute
+
+        Example:
+            >>> node = createNode("transform")
+            >>> attr = Double("myAttr", default=5.0)
+            >>> node.addAttr(attr)
+            >>> node["myAttr"] == 5.0
+            True
+
+        """
+
+        if isinstance(attr, _AbstractAttribute):
             attr = attr.create()
 
         self._fn.addAttribute(attr)
 
+    def hasAttr(self, attr):
+        """Return whether or not `attr` exists
+
+        Arguments:
+            attr (str): Name of attribute to check
+
+        """
+
+        return self._fn.hasAttribute(attr)
+
     def deleteAttr(self, attr):
-        self._fn.removeAttribute(attr)
+        """Delete `attr` from node
+
+        Arguments:
+            attr (Plug): Attribute to remove
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["myAttr"] = Double()
+            >>> node.deleteAttr("myAttr")
+            >>> node.hasAttr("myAttr")
+            False
+
+        """
+
+        if not isinstance(attr, Plug):
+            attr = self[attr]
+
+        attribute = attr._mplug.attribute()
+        self._fn.removeAttribute(attribute)
+
+    def connections(self, unit=None):
+        """Yield plugs of node with a connection to any other plug
+
+        Arguments:
+            unit (int, optional): Return plug in this unit,
+                e.g. Meters or Radians
+
+        """
+
+        for plug in self._fn.getConnections():
+            yield Plug(plug.node(), plug, unit)
 
 
 class DagNode(Node):
-    Fn = om.MFnDagNode
+    """A Maya DAG node
+
+    The difference between this and Node is that a DagNode
+    can have children and a parent.
+
+    Example:
+        >>> parent = createNode("transform")
+        >>> child = createNode("transform", parent=parent)
+        >>> child.parent() == parent
+        True
+        >>> next(parent.children()) == child
+        True
+        >>> parent.child() == child
+        True
+        >>> sibling = createNode("transform", parent=parent)
+        >>> list(parent.siblings()) == [child, sibling]
+        >>> shape = createNode("mesh", parent=child)
+        >>> child.shape() == shape
+        True
+        >>> shape.parent() == child
+        True
+
+    """
+
+    _Fn = om.MFnDagNode
 
     def __str__(self):
         return self.path()
@@ -206,11 +439,35 @@ class DagNode(Node):
         return self.path()
 
     def path(self):
-        """Return full path to node"""
+        """Return full path to node
+
+        Example:
+            >>> parent = createNode("transform", "myParent")
+            >>> child = createNode("transform", "myChild", parent=parent)
+            >>> child.name()
+            u'myChild'
+            >>> child.path()
+            u'|myParent|myChild'
+
+        """
+
         return self._fn.fullPathName()
 
     def shortestPath(self):
-        """Return shortest unique path to node"""
+        """Return shortest unique path to node
+
+        Example:
+            >>> parent = createNode("transform", "myParent")
+            >>> child = createNode("transform", "myChild", parent=parent)
+            >>> child.shortestPath()
+            u'myChild'
+            >>> child = createNode("transform", "myChild")
+            >>> # Now `myChild` could refer to more than a single node
+            >>> child.shortestPath()
+            u'myParent|myChild'
+
+        """
+
         return self._fn.partialPathName()
 
     def addChild(self, child, index=Last):
@@ -221,12 +478,30 @@ class DagNode(Node):
             index (int, optional): Physical location in hierarchy,
                 defaults to cmdx.Last
 
+        Example:
+            >>> parent = createNode("transform")
+            >>> child = createNode("transform")
+            >>> parent.addChild(child)
+
         """
 
         self._fn.addChild(child._mobject, index)
 
     def assembly(self):
-        """Return the top-level parent of self"""
+        """Return the top-level parent of node
+
+        Example:
+            >>> parent1 = createNode("transform")
+            >>> parent2 = createNode("transform")
+            >>> child = createNode("transform", parent=parent1)
+            >>> grandchild = createNode("transform", parent=child)
+            >>> child.assembly() == parent1
+            True
+            >>> parent2.assembly() == parent2
+            True
+
+        """
+
         path = self._fn.getPath()
 
         root = None
@@ -239,6 +514,21 @@ class DagNode(Node):
     root = assembly
 
     def parent(self, type=None):
+        """Return parent of node
+
+        Arguments:
+            type (str, optional): Return parent, only if it matches this type
+
+        Example:
+            >>> parent = createNode("transform")
+            >>> child = createNode("transform", parent=parent)
+            >>> child.parent() == parent
+            True
+            >>> not child.parent(type="camera")
+            True
+
+        """
+
         mobject = self._fn.parent(0)
 
         if mobject.apiType() == om.MFn.kWorld:
@@ -251,6 +541,14 @@ class DagNode(Node):
             return cls(mobject)
 
     def children(self, type=None, filter=om.MFn.kTransform):
+        """Return children of node
+
+        Arguments:
+            type (str, optional): Return only children that match this type
+            filter (int, optional): Return only children with this function set
+
+        """
+
         cls = self.__class__
         Fn = self._fn.__class__
 
@@ -277,6 +575,7 @@ class DagNode(Node):
         pass
 
     def descendents(self, type=om.MFn.kInvalid):
+        assert __maya_version__ >= 2017, "Requires Maya 2017 or newer"
         typeName = None
 
         # Support filtering by typeName
@@ -284,16 +583,17 @@ class DagNode(Node):
             typeName = type
             type = om.MFn.kInvalid
 
-        GlobalDagIterator.reset(self._mobject, om.MItDag.kDepthFirst, type)
+        it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
+        it.reset(self._mobject, om.MItDag.kDepthFirst, type)
 
-        while not GlobalDagIterator.isDone():
-            mobj = GlobalDagIterator.currentItem()
+        while not it.isDone():
+            mobj = it.currentItem()
             node = DagNode(mobj)
 
             if not typeName or typeName == node._fn.typeName:
                 yield node
 
-            GlobalDagIterator.next()
+            it.next()
 
 
 class Plug(object):
@@ -372,17 +672,22 @@ class Plug(object):
         cls = self.__class__
 
         if self._mplug.isArray:
-            return cls(self._node, self._mplug.elementByLogicalIndex(index))
+            index = self._mplug.elementByLogicalIndex(index)
+            return cls(self._node, index, self._unit)
+
         elif self._mplug.isCompound:
-            return cls(self._node, self._mplug.child(index))
+            index = self._mplug.child(index)
+            return cls(self._node, index, self._unit)
+
         else:
             raise TypeError("%s does not support indexing "
                             "(it is neither array nor "
                             "compound attribute)" % self.path())
 
-    def __init__(self, node, mplug):
+    def __init__(self, node, mplug, unit=None):
         self._node = node
         self._mplug = mplug
+        self._unit = unit
 
     def type(self):
         return self._mplug.attribute().apiTypeStr
@@ -401,10 +706,9 @@ class Plug(object):
             useFullAttributePath=True
         )
 
-    def read(self, type=None):
-        """Passing type = 20% faster"""
+    def read(self):
         try:
-            return plug_to_python(self._mplug, type)
+            return _plug_to_python(self._mplug, self._unit)
 
         except RuntimeError:
             raise
@@ -414,10 +718,9 @@ class Plug(object):
             log.warning("'%s': failed to read attribute" % self.path())
             return None
 
-    def write(self, value, type=None):
-        """Passing type = 10% faster"""
+    def write(self, value):
         try:
-            return python_to_plug(value, self, type)
+            return _python_to_plug(value, self)
 
         except RuntimeError:
             raise
@@ -431,21 +734,42 @@ class Plug(object):
         mod.connect(self._mplug, other._mplug)
         mod.doIt()
 
-    def connections(self):
-        pass
+    def connections(self, source=True, destination=True, unit=None):
+        """Yield plugs connected to self
+
+        Arguments:
+            source (bool, optional): Return source plugs,
+                default is True
+            destination (bool, optional): Return destination plugs,
+                default is True
+            unit (int, optional): Return plug in this unit, e.g. Meters
+
+        """
+
+        cls = self.__class__
+
+        for plug in self._mplug.connectedTo(source, destination):
+            yield cls(plug.node(), plug, unit)
 
 
-def plug_to_python(plug, type=None):
+def _plug_to_python(plug, unit=None):
+    """Convert native `plug` to Python type
+
+    Arguments:
+        plug (om.MPlug): Native Maya plug
+
+    """
+
     if plug.isCompound:
         return tuple(
-            plug_to_python(plug.child(index))
+            _plug_to_python(plug.child(index), unit)
             for index in range(plug.numChildren())
         )
 
     elif plug.isArray:
         # E.g. transform["worldMatrix"]
         return tuple(
-            plug_to_python(plug.elementByLogicalIndex(index))
+            _plug_to_python(plug.elementByLogicalIndex(index), unit)
             for index in range(plug.numElements())
         )
 
@@ -479,11 +803,41 @@ def plug_to_python(plug, type=None):
 
     elif type in (om.MFn.kDoubleLinearAttribute,
                   om.MFn.kFloatLinearAttribute):
-        return plug.asMDistance().asCentimeters()
+        if unit is None:
+            return plug.asMDistance().asUnits(om.MDistance.uiUnit())
+        elif unit == Millimeters:
+            return plug.asMDistance().asMillimeters()
+        elif unit == Centimeters:
+            return plug.asMDistance().asCentimeters()
+        elif unit == Meters:
+            return plug.asMDistance().asMeters()
+        elif unit == Kilometers:
+            return plug.asMDistance().asKilometers()
+        elif unit == Inches:
+            return plug.asMDistance().asInches()
+        elif unit == Feet:
+            return plug.asMDistance().asFeet()
+        elif unit == Miles:
+            return plug.asMDistance().asMiles()
+        elif unit == Yards:
+            return plug.asMDistance().asYards()
+        else:
+            raise TypeError("Unsupported unit '%d'" % unit)
 
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
-        return plug.asMAngle().internalToUI()
+        if unit is None:
+            return plug.asMAngle().asUnits(om.MAngle.uiUnit())
+        elif unit == Degrees:
+            return plug.asMAngle().asDegrees()
+        elif unit == Radians:
+            return plug.asMAngle().asRadians()
+        elif unit == AngularSeconds:
+            return plug.asMAngle().asAngSeconds()
+        elif unit == AngularMinutes:
+            return plug.asMAngle().asAngMinutes()
+        else:
+            raise TypeError("Unsupported unit '%d'" % unit)
 
     # Number
     elif type == om.MFn.kNumericAttribute:
@@ -524,38 +878,72 @@ def plug_to_python(plug, type=None):
         raise TypeError("Unsupported type '%s'" % type)
 
 
-def python_to_plug(python, plug, type=None):
-    if isinstance(python, str):
-        plug._mplug.setString(python)
+def _python_to_plug(value, plug):
+    """Pass value of `value` to `plug`
 
-    elif isinstance(python, int):
-        plug._mplug.setInt(python)
+    Arguments:
+        value (any): Instance of Python or Maya type
+        plug (Plug): Target plug to which value is applied
 
-    elif isinstance(python, float):
-        plug._mplug.setDouble(python)
+    """
 
-    elif isinstance(python, om.MAngle):
-        plug._mplug.setMAngle(python)
+    # Native Python types
 
-    elif isinstance(python, bool):
-        plug._mplug.setBool(python)
+    if isinstance(value, str):
+        plug._mplug.setString(value)
 
-    elif isinstance(python, (tuple, list)):
-        for index, value in enumerate(python):
+    elif isinstance(value, int):
+        plug._mplug.setInt(value)
+
+    elif isinstance(value, float):
+        plug._mplug.setDouble(value)
+
+    elif isinstance(value, bool):
+        plug._mplug.setBool(value)
+
+    # Native Maya types
+
+    elif isinstance(value, om.MAngle):
+        plug._mplug.setMAngle(value)
+
+    elif isinstance(value, om.MDistance):
+        plug._mplug.setMDistance(value)
+
+    elif isinstance(value, om.MTime):
+        plug._mplug.setMTime(value)
+
+    # Compound values
+
+    elif isinstance(value, (tuple, list)):
+        for index, value in enumerate(value):
+
+            # Tuple values are assumed flat:
+            #   e.g. (0, 0, 0, 0)
+            # Nested values are not supported:
+            #   e.g. ((0, 0), (0, 0))
+            # Those can sometimes appear in e.g. matrices
             if isinstance(value, (tuple, list)):
                 raise TypeError(
                     "Unsupported nested Python type: %s"
                     % value.__class__
                 )
 
-            python_to_plug(value, plug[index])
+            _python_to_plug(value, plug[index])
 
     else:
-        raise TypeError("Unsupported Python type '%s'" % python.__class__)
+        raise TypeError("Unsupported Python type '%s'" % value.__class__)
 
 
 def encode(path):
-    """Fastest conversion from absolute path to Node"""
+    """Convert relative or absolute `path` to cmdx Node
+
+    Fastest conversion from absolute path to Node
+
+    Arguments:
+        path (str): Absolute or relative path to DAG or DG node
+
+    """
+
     selectionList = om.MSelectionList()
     selectionList.add(path)
     mobj = selectionList.getDependNode(0)
@@ -567,11 +955,39 @@ def encode(path):
 
 
 def decode(node):
-    """Fastest conversion from DependencyNode to absolute path"""
-    return node.path()
+    """Convert cmdx Node to shortest unique path
+
+    This is the same as `node.shortestPath()`
+    To get an absolute path, use `node.path()`
+
+    """
+
+    return node.shortestPath()
 
 
-def createNode(type, name=None, parent=None):
+def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
+    """Create a new node
+
+    This function forms the basic building block
+    with which to create new nodes in Maya.
+
+    .. note:: Missing arguments `shared` and `skipSelect`
+    .. tip:: For performance, `type` may be given as a TypeId
+
+    Arguments:
+        type (str): Type name of new node, e.g. "transform"
+        name (str, optional): Sets the name of the newly-created node
+        parent (Node, optional): Specifies the parent in the DAG under which
+            the new node belongs
+        skipSelect (bool, optional): Unused; always True
+        shared (bool, optional): Unused; always False
+
+    Example:
+        >>> node = createNode("transform")  # Type as string
+        >>> node = createNode(Transform)  # Type as ID
+
+    """
+
     kwargs = {}
     fn = GlobalDependencyNode
 
@@ -594,11 +1010,37 @@ def createNode(type, name=None, parent=None):
 
 
 def getAttr(attr, type=None):
-    return attr.read(type)
+    """Read `attr`
+
+    Arguments:
+        attr (Plug): Attribute as a cmdx.Plug
+        type (str, optional): Unused
+
+    Example:
+        >>> node = createNode("transform")
+        >>> getAttr(node + ".translateX")
+        0.0
+
+    """
+
+    return attr.read()
 
 
 def setAttr(attr, value, type=None):
-    attr.write(value, type)
+    """Write `value` to `attr`
+
+    Arguments:
+        attr (Plug): Existing attribute to edit
+        value (any): Value to write
+        type (int, optional): Unused
+
+    Example:
+        >>> node = createNode("transform")
+        >>> setAttr(node + ".translateX", 5.0)
+
+    """
+
+    attr.write(value)
 
 
 def addAttr(node,
@@ -607,8 +1049,25 @@ def addAttr(node,
             shortName=None,
             enumName=None,
             defaultValue=None):
+    """Add new attribute to `node`
 
-    if isinstance(attributeType, type):
+    Arguments:
+        node (Node): Add attribute to this node
+        longName (str): Name of resulting attribute
+        attributeType (str): Type of attribute, e.g. `string`
+        shortName (str, optional): Alternate name of attribute
+        enumName (str, optional): Options for an enum attribute
+        defaultValue (any, optional): Default value of attribute
+
+    Example:
+        >>> node = createNode("transform")
+        >>> addAttr(node, "myString", attributeType="string")
+        >>> addAttr(node, "myDouble", attributeType=Double)
+
+    """
+
+    at = attributeType
+    if isinstance(at, type) and issubclass(at, _AbstractAttribute):
         Attribute = attributeType
 
     else:
@@ -634,31 +1093,149 @@ def addAttr(node,
     node.addAttr(attribute)
 
 
-def listRelatives(node, type=None, children=False, allDesdencents=False):
-    result = list()
+def listRelatives(node,
+                  type=None,
+                  children=False,
+                  allDesdencents=False,
+                  fullPath=True,
+                  parent=False,
+                  path=True,
+                  noIntermediate=False,
+                  allParents=False,
+                  shapes=False):
+    """List relatives of `node`
 
-    # Only DAG nodes have relatives
-    if not isinstance(node._fn, om.MFnDagNode):
-        return result
+    Arguments:
+        node (DagNode): Node to enquire about
+        type (int, optional): Only return nodes of this type
+        children (bool, optional): Return children of `node`
+        parent (bool, optional): Return parent of `node`
+        shapes (bool, optional): Return only children that are shapes
+        allDescendents (bool, optional): Return descendents of `node`
+        fullPath (bool, optional): Unused; nodes are always exact
+        path (bool, optional): Unused; nodes are always exact
 
-    for child in node.children(type=type):
-        result.append(child)
+    Example:
+        >>> parent = createNode("transform")
+        >>> child = createNode("transform", parent=parent)
+        >>> listRelatives(child, parent=True) == [parent]
+        True
 
-    return result
+    """
+
+    if not isinstance(node, DagNode):
+        return None
+
+    elif allDesdencents:
+        return list(node.descendents(type=type))
+
+    elif shapes:
+        return list(node.shapes(type=type))
+
+    elif parent:
+        return [node.parent(type=type)]
+
+    elif children:
+        return list(node.children(type=type))
 
 
-def listConnections(attr, **kwargs):
+def listConnections(attr,
+                    source=False,
+                    destination=True,
+                    connections=False,
+                    exactType=False,
+                    plugs=False,
+                    shapes=False,
+                    skipConversionNodes=False,
+                    type=None):
+    """List connections to `attr`
+
+    Arguments:
+        attr (Plug or Node):
+        connections (bool, optional): List plugs from both
+            source and destination
+        destination (bool, optional): List plugs from the destination side
+        source (bool, optional): List plugs from the source side
+        type (str, optional): When returning nodes, only return nodes
+            of this node type; e.g. "transform"
+        exactType (bool, optional): Unused; always True
+        skipConversionNodes (bool, optional): Unused; always False
+
+    Example:
+        >>> node1 = createNode("transform")
+        >>> node2 = createNode("transform")
+        >>> node1["tx"] >> node2["tx"]
+        >>> listConnections(node1) == [node2]
+        True
+        >>> listConnections(node1 + ".tx") == [node2]
+        True
+        >>> listConnections(node1["tx"]) == [node2]
+        True
+
+    """
+
+    if connections:
+        destination, source = True, True
+
     if isinstance(attr, Plug):
-        attr = attr.path()
+        its = [attr.connections(
+            destination=destination,
+            source=source,
+        )]
 
-    # TODO: Needs a faster solution without `cmds`
-    return [
-        encode(c) for c in cmds.listConnections(attr, **kwargs) or []
-    ]
+    elif isinstance(attr, Node):
+        # Return connections to all
+        # connected attributes of Node
+        its = iter(
+            a.connections(
+                destination=destination,
+                source=source
+            )
+            for a in attr.connections()
+        )
+
+    else:
+        raise TypeError("Invalid type '%s'" % type(attr))
+
+    output = list()
+    for it in its:
+        for plug in it:
+
+            if plugs:
+                output.append(plug)
+                continue
+
+            node = plug._mplug.node()
+
+            if not shapes and node.hasFn(om.MFn.kShape):
+                node = om.MFnDagNode(node).parent(0)
+
+            if not type or type == node.typeName():
+                if node.hasFn(om.MFn.kDagNode):
+                    node = DagNode(node)
+                else:
+                    node = Node(node)
+
+                output.append(node)
+
+    return output
 
 
-def connectAttr(plugA, plugB):
-    plugA.connect(plugB)
+def connectAttr(src, dst):
+    """Connect `src` to `dst`
+
+    Arguments:
+        src (Plug): Source plug
+        dst (Plug): Destination plug
+
+    Example:
+        >>> src = createNode("transform")
+        >>> dst = createNode("transform")
+        >>> connectAttr(src + ".rotateX", dst + ".scaleY")
+
+    """
+
+    src.connect(dst)
 
 
 def ls(selection=False, type=om.MFn.kInvalid):
@@ -717,10 +1294,6 @@ def delete(*nodes):
     for node in nodes:
         mod.deleteNode(node._mobject)
 
-    # TODO: Deleted this way, and nodes still appear to exist
-    # and can still be used from Python. They have a path and all.
-    # Find out why that is, as it doesn't happen when objects are
-    # deleted via the GUI.
     mod.doIt()
 
 
@@ -736,7 +1309,7 @@ def select(nodes, replace=True):
 def parent(children, parent, relative=True, absolute=False):
     assert isinstance(parent, DagNode), "parent must be DagNode"
 
-    if isinstance(children, DagNode):
+    if not isinstance(children, (tuple, list)):
         children = [children]
 
     for child in children:
@@ -763,7 +1336,7 @@ def objExists(obj):
 # --------------------------------------------------------
 
 
-class AbstractAttribute(dict):
+class _AbstractAttribute(dict):
     Fn = None
     Type = None
     Default = None
@@ -805,7 +1378,7 @@ class AbstractAttribute(dict):
     def __new__(cls, *args, **kwargs):
         if not args:
             return cls, kwargs
-        return super(AbstractAttribute, cls).__new__(cls, *args, **kwargs)
+        return super(_AbstractAttribute, cls).__new__(cls, *args, **kwargs)
 
     def __init__(self,
                  name,
@@ -895,7 +1468,7 @@ class AbstractAttribute(dict):
         pass
 
 
-class Enum(AbstractAttribute):
+class Enum(_AbstractAttribute):
     Fn = om.MFnEnumAttribute()
     Type = None
     Default = 0
@@ -922,23 +1495,13 @@ class Enum(AbstractAttribute):
 
 
 class Divider(Enum):
-    """Visual divider in channel box
-
-    Example:
-
-        Translate X  [ 0.0 ]
-        Translate X  [ 0.0 ]
-        Translate X  [ 0.0 ]
-                     My Divider
-        Custom Attr [ True ]
-
-    """
+    """Visual divider in channel box"""
 
     def __init__(self, label):
         super(Divider, self).__init__("_", fields=(label,), label=" ")
 
 
-class String(AbstractAttribute):
+class String(_AbstractAttribute):
     Fn = om.MFnTypedAttribute()
     Type = om.MFnData.kString
     Default = ""
@@ -951,14 +1514,14 @@ class String(AbstractAttribute):
         return data.inputValue(self["mobject"]).asString()
 
 
-class Message(AbstractAttribute):
+class Message(_AbstractAttribute):
     Fn = om.MFnMessageAttribute()
     Type = None
     Default = None
     Storable = False
 
 
-class Matrix(AbstractAttribute):
+class Matrix(_AbstractAttribute):
     Fn = om.MFnMatrixAttribute()
 
     Default = (0.0,) * 4 * 4  # Identity matrix
@@ -975,7 +1538,7 @@ class Matrix(AbstractAttribute):
         return data.inputValue(self["mobject"]).asMatrix()
 
 
-class Long(AbstractAttribute):
+class Long(_AbstractAttribute):
     Fn = om.MFnNumericAttribute()
     Type = om.MFnNumericData.kLong
     Default = 0
@@ -984,7 +1547,7 @@ class Long(AbstractAttribute):
         return data.inputValue(self["mobject"]).asLong()
 
 
-class Double(AbstractAttribute):
+class Double(_AbstractAttribute):
     Fn = om.MFnNumericAttribute()
     Type = om.MFnNumericData.kDouble
     Default = 0.0
@@ -993,7 +1556,7 @@ class Double(AbstractAttribute):
         return data.inputValue(self["mobject"]).asDouble()
 
 
-class Double3(AbstractAttribute):
+class Double3(_AbstractAttribute):
     Fn = om.MFnNumericAttribute()
     Type = None
     Default = (0.0,) * 3
@@ -1019,8 +1582,7 @@ class Double3(AbstractAttribute):
         return data.inputValue(self["mobject"]).asDouble3()
 
 
-# NOTE: Name clash, "Boolean" is a node type
-class Bool(AbstractAttribute):
+class Boolean(_AbstractAttribute):
     Fn = om.MFnNumericAttribute()
     Type = om.MFnNumericData.kBoolean
     Default = True
@@ -1029,773 +1591,90 @@ class Bool(AbstractAttribute):
         return data.inputValue(self["mobject"]).asBool()
 
 
+class AbstractUnit(_AbstractAttribute):
+    Fn = om.MFnUnitAttribute()
+    Default = 0.0
+    Min = None
+    Max = None
+    SoftMin = None
+    SoftMax = None
+
+
+class Angle(AbstractUnit):
+    def default(self):
+        default = super(Angle, self).default()
+
+        # When no unit was explicitly passed, assume degrees
+        if not isinstance(default, om.MAngle):
+            default = om.MAngle(default, om.MAngle.kDegrees)
+
+        return default
+
+
+class Time(AbstractUnit):
+    def default(self):
+        default = super(Time, self).default()
+
+        # When no unit was explicitly passed, assume seconds
+        if not isinstance(default, om.MTime):
+            default = om.MTime(default, om.MTime.kSeconds)
+
+        return default
+
+
+class Distance(AbstractUnit):
+    def default(self):
+        default = super(Distance, self).default()
+
+        # When no unit was explicitly passed, assume centimeters
+        if not isinstance(default, om.MDistance):
+            default = om.MDistance(default, om.MDistance.kCentimeters)
+
+        return default
+
+
+class Compound(_AbstractAttribute):
+    Fn = om.MFnCompoundAttribute()
+
+    def __init__(self, name, children, **kwargs):
+        super(Compound, self).__init__(name, **kwargs)
+        self["children"] = children
+
+    def create(self):
+        mobj = super(Compound, self).create()
+
+        for child in self["children"]:
+            self.Fn.addChild(child.create())
+
+        return mobj
+
+
 # --------------------------------------------------------
 #
-# Node Types
+# Commonly Node Types
+#
+# Creating a new node using a pre-defined Type ID is 10% faster
+# than doing it using a string, but keeping all (~800) around
+# has a negative impact on maintainability and readability of
+# the project, so a balance is struck where only the most
+# performance sensitive types are included here.
 #
 # --------------------------------------------------------
 
 
-AISEnvFacade = om.MTypeId(0x52454656)
-AboutToSetValueTestNode = om.MTypeId(0x4153564e)
-AbsOverride = om.MTypeId(0x58000378)
-AbsUniqueOverride = om.MTypeId(0x580003a0)
 AddDoubleLinear = om.MTypeId(0x4441444c)
 AddMatrix = om.MTypeId(0x44414d58)
-AdskMaterial = om.MTypeId(0x4144534d)
-AimConstraint = om.MTypeId(0x44414d43)
-AirField = om.MTypeId(0x59414952)
-AirManip = om.MTypeId(0x554d4958)
-AlignCurve = om.MTypeId(0x4e414c43)
-AlignManip = om.MTypeId(0x554d4144)
-AlignSurface = om.MTypeId(0x4e414c53)
-AmbientLight = om.MTypeId(0x414d424c)
 AngleBetween = om.MTypeId(0x4e414254)
+MultMatrix = om.MTypeId(0x444d544d)
 AngleDimension = om.MTypeId(0x4147444e)
-AnimBlend = om.MTypeId(0x41424e44)
-AnimBlendInOut = om.MTypeId(0x4142494f)
-AnimBlendNodeAdditive = om.MTypeId(0x41424e41)
-AnimBlendNodeAdditiveDA = om.MTypeId(0x41424141)
-AnimBlendNodeAdditiveDL = om.MTypeId(0x4142414c)
-AnimBlendNodeAdditiveF = om.MTypeId(0x41424146)
-AnimBlendNodeAdditiveFA = om.MTypeId(0x41424641)
-AnimBlendNodeAdditiveFL = om.MTypeId(0x4142464c)
-AnimBlendNodeAdditiveI16 = om.MTypeId(0x41424153)
-AnimBlendNodeAdditiveI32 = om.MTypeId(0x41424149)
-AnimBlendNodeAdditiveRotation = om.MTypeId(0x41424e52)
-AnimBlendNodeAdditiveScale = om.MTypeId(0x41424e53)
-AnimBlendNodeBoolean = om.MTypeId(0x4142424f)
-AnimBlendNodeEnum = om.MTypeId(0x41424e45)
-AnimBlendNodeTime = om.MTypeId(0x41425449)
-AnimClip = om.MTypeId(0x434c504e)
-AnimCurveTA = om.MTypeId(0x50435441)
-AnimCurveTL = om.MTypeId(0x5043544c)
-AnimCurveTT = om.MTypeId(0x50435454)
-AnimCurveTU = om.MTypeId(0x50435455)
-AnimCurveUA = om.MTypeId(0x50435541)
-AnimCurveUL = om.MTypeId(0x5043554c)
-AnimCurveUT = om.MTypeId(0x50435554)
-AnimCurveUU = om.MTypeId(0x50435555)
-AnimLayer = om.MTypeId(0x414e4c52)
-Anisotropic = om.MTypeId(0x52414e49)
-AnnotationShape = om.MTypeId(0x414e4e53)
-AovChildCollection = om.MTypeId(0x5800039c)
-AovCollection = om.MTypeId(0x5800039b)
-ApplyAbs2FloatsOverride = om.MTypeId(0x58000397)
-ApplyAbs3FloatsOverride = om.MTypeId(0x58000381)
-ApplyAbsBoolOverride = om.MTypeId(0x5800038a)
-ApplyAbsEnumOverride = om.MTypeId(0x5800038c)
-ApplyAbsFloatOverride = om.MTypeId(0x5800037d)
-ApplyAbsIntOverride = om.MTypeId(0x58000391)
-ApplyAbsStringOverride = om.MTypeId(0x58000393)
-ApplyConnectionOverride = om.MTypeId(0x58000384)
-ApplyRel2FloatsOverride = om.MTypeId(0x58000399)
-ApplyRel3FloatsOverride = om.MTypeId(0x58000383)
-ApplyRelFloatOverride = om.MTypeId(0x5800037f)
-ApplyRelIntOverride = om.MTypeId(0x58000392)
-ArcLengthDimension = om.MTypeId(0x41444d4e)
-AreaLight = om.MTypeId(0x41524c54)
-ArrayMapper = om.MTypeId(0x44414d50)
-ArrowManip = om.MTypeId(0x554d4152)
-ArubaTessellate = om.MTypeId(0x41544553)
-AttachCurve = om.MTypeId(0x4e415443)
-AttachSurface = om.MTypeId(0x4e415453)
-AttrHierarchyTest = om.MTypeId(0x41544854)
-Audio = om.MTypeId(0x41554449)
-AvgCurves = om.MTypeId(0x4e414352)
-AvgNurbsSurfacePoints = om.MTypeId(0x4e414e50)
-AvgSurfacePoints = om.MTypeId(0x4e415350)
-BallProjManip = om.MTypeId(0x554d4250)
-BarnDoorManip = om.MTypeId(0x554d4c4e)
-BaseLattice = om.MTypeId(0x46424153)
-BasicSelector = om.MTypeId(0x58000375)
-Bevel = om.MTypeId(0x4e42564c)
-BevelPlus = om.MTypeId(0x4e425356)
 BezierCurve = om.MTypeId(0x42435256)
-BezierCurveToNurbs = om.MTypeId(0x42544e52)
-BlendColorSets = om.MTypeId(0x50424353)
-BlendColors = om.MTypeId(0x52424c32)
-BlendDevice = om.MTypeId(0x424c4456)
-BlendShape = om.MTypeId(0x46424c53)
-BlendTwoAttr = om.MTypeId(0x41424c32)
-BlendWeighted = om.MTypeId(0x41424c57)
-BlindDataTemplate = om.MTypeId(0x424c4454)
-Blinn = om.MTypeId(0x52424c4e)
-BoneLattice = om.MTypeId(0x4642554c)
-Boolean = om.MTypeId(0x4e424f4c)
-Boundary = om.MTypeId(0x4e424e44)
-Brownian = om.MTypeId(0x5246424d)
-Brush = om.MTypeId(0x42525348)
-Bulge = om.MTypeId(0x52544255)
-Bump2d = om.MTypeId(0x5242554d)
-Bump3d = om.MTypeId(0x52425533)
-ButtonManip = om.MTypeId(0x55465054)
-CacheBlend = om.MTypeId(0x4354524b)
-CacheFile = om.MTypeId(0x43434846)
 Camera = om.MTypeId(0x4443414d)
-CameraManip = om.MTypeId(0x554d4958)
-CameraPlaneManip = om.MTypeId(0x554d4350)
-CameraSet = om.MTypeId(0x44525452)
-CameraView = om.MTypeId(0x44434156)
-CenterManip = om.MTypeId(0x434e4d50)
-Character = om.MTypeId(0x43484152)
-CharacterMap = om.MTypeId(0x434d4150)
-CharacterOffset = om.MTypeId(0x584f4646)
-Checker = om.MTypeId(0x52544348)
 Choice = om.MTypeId(0x43484345)
 Chooser = om.MTypeId(0x43484f4f)
-CircleManip = om.MTypeId(0x554d434c)
-CircleSweepManip = om.MTypeId(0x5543534d)
-Clamp = om.MTypeId(0x52434c33)
-ClipGhostShape = om.MTypeId(0x43475348)
-ClipLibrary = om.MTypeId(0x434c4950)
-ClipScheduler = om.MTypeId(0x43534348)
-ClipToGhostData = om.MTypeId(0x43324744)
-CloseCurve = om.MTypeId(0x4e434355)
-CloseSurface = om.MTypeId(0x4e435355)
-ClosestPointOnMesh = om.MTypeId(0x43504f4d)
-ClosestPointOnSurface = om.MTypeId(0x4e435053)
-Cloth = om.MTypeId(0x5254434c)
-Cloud = om.MTypeId(0x52544344)
-Cluster = om.MTypeId(0x46434c53)
-ClusterFlexorShape = om.MTypeId(0x464a4346)
-ClusterHandle = om.MTypeId(0x46434c48)
-CoiManip = om.MTypeId(0x55465054)
-Collection = om.MTypeId(0x58000373)
-CollisionModel = om.MTypeId(0x59434f4c)
-ColorManagementGlobals = om.MTypeId(0x434d4742)
-ColorProfile = om.MTypeId(0x434f4c50)
-CombinationShape = om.MTypeId(0x46434e53)
-CompactPlugArrayTest = om.MTypeId(0x43504154)
-ComponentManip = om.MTypeId(0x5554544d)
-ConcentricProjManip = om.MTypeId(0x554d434f)
 Condition = om.MTypeId(0x52434e44)
-ConnectionOverride = om.MTypeId(0x58000385)
-ConnectionUniqueOverride = om.MTypeId(0x580003a2)
-Container = om.MTypeId(0x434f4e54)
-ContainerBase = om.MTypeId(0x434f4241)
-Contrast = om.MTypeId(0x52434f4e)
-Controller = om.MTypeId(0x43475250)
-CopyColorSet = om.MTypeId(0x43504353)
-CopyUVSet = om.MTypeId(0x43505553)
-CpManip = om.MTypeId(0x554d4350)
-Crater = om.MTypeId(0x52533430)
-CreaseSet = om.MTypeId(0x43524541)
-CreateColorSet = om.MTypeId(0x43524353)
-CreateUVSet = om.MTypeId(0x43525553)
-CubicProjManip = om.MTypeId(0x554d4355)
-CurveFromMeshCoM = om.MTypeId(0x4e434d43)
-CurveFromMeshEdge = om.MTypeId(0x4e434d45)
-CurveFromSubdivEdge = om.MTypeId(0x53435345)
-CurveFromSubdivFace = om.MTypeId(0x53435346)
-CurveFromSurfaceBnd = om.MTypeId(0x4e435342)
-CurveFromSurfaceCoS = om.MTypeId(0x4e435343)
-CurveFromSurfaceIso = om.MTypeId(0x4e435349)
-CurveInfo = om.MTypeId(0x4e43494e)
-CurveIntersect = om.MTypeId(0x4e434349)
-CurveNormalizerAngle = om.MTypeId(0x434e5241)
-CurveNormalizerLinear = om.MTypeId(0x434e524c)
-CurveSegmentManip = om.MTypeId(0x554d5043)
-CurveVarGroup = om.MTypeId(0x4e435647)
-CylindricalProjManip = om.MTypeId(0x554d4359)
-DagContainer = om.MTypeId(0x44414743)
-DagPose = om.MTypeId(0x46504f53)
-DataBlockTest = om.MTypeId(0x44425453)
-DefaultLightList = om.MTypeId(0x4445464c)
-DefaultRenderUtilityList = om.MTypeId(0x4452554c)
-DefaultRenderingList = om.MTypeId(0x44524e4c)
-DefaultShaderList = om.MTypeId(0x5244534c)
-DefaultTextureList = om.MTypeId(0x5244544c)
-DeformBend = om.MTypeId(0x46444244)
-DeformFlare = om.MTypeId(0x4644464c)
-DeformSine = om.MTypeId(0x4644534e)
-DeformSquash = om.MTypeId(0x46445351)
-DeformTwist = om.MTypeId(0x46445457)
-DeformWave = om.MTypeId(0x46445756)
-DeleteColorSet = om.MTypeId(0x444c4353)
-DeleteComponent = om.MTypeId(0x44454354)
-DeleteUVSet = om.MTypeId(0x444c4d53)
-DeltaMush = om.MTypeId(0x444c544d)
-DetachCurve = om.MTypeId(0x4e445443)
-DetachSurface = om.MTypeId(0x4e445453)
-DirectedDisc = om.MTypeId(0x44445343)
-DirectionManip = om.MTypeId(0x55465054)
-DirectionalLight = om.MTypeId(0x4449524c)
-DiscManip = om.MTypeId(0x5544534d)
-DiskCache = om.MTypeId(0x44534b43)
-DisplacementShader = om.MTypeId(0x52445348)
-DisplayLayer = om.MTypeId(0x4453504c)
-DisplayLayerManager = om.MTypeId(0x44504c4d)
-DistanceBetween = om.MTypeId(0x44444254)
-DistanceDimShape = om.MTypeId(0x44444d4e)
-DistanceManip = om.MTypeId(0x554d444d)
-Dof = om.MTypeId(0x444f4644)
-DofManip = om.MTypeId(0x554d4350)
-DoubleShadingSwitch = om.MTypeId(0x53574832)
-DpBirailSrf = om.MTypeId(0x4e444253)
-DragField = om.MTypeId(0x59445247)
-DropoffLocator = om.MTypeId(0x444c4354)
-DynAttenuationManip = om.MTypeId(0x554d444d)
-DynController = om.MTypeId(0x5943544c)
-DynGlobals = om.MTypeId(0x5944474c)
-DynHolder = om.MTypeId(0x59484c44)
-DynSpreadManip = om.MTypeId(0x554d444d)
-DynamicConstraint = om.MTypeId(0x44434f4e)
-EditMetadata = om.MTypeId(0x454d5444)
-EditsManager = om.MTypeId(0x454d4752)
-EmitterManip = om.MTypeId(0x554d4958)
-EnableManip = om.MTypeId(0x454e4d50)
-EnvBall = om.MTypeId(0x5245424c)
-EnvChrome = om.MTypeId(0x52454348)
-EnvCube = om.MTypeId(0x52454342)
-EnvFacade = om.MTypeId(0x52454643)
-EnvFog = om.MTypeId(0x52454647)
-EnvSky = om.MTypeId(0x5245534b)
-EnvSphere = om.MTypeId(0x52455350)
-EnvironmentFog = om.MTypeId(0x454e5646)
-ExplodeNurbsShell = om.MTypeId(0x4e455348)
-Expression = om.MTypeId(0x44455850)
-ExtendCurve = om.MTypeId(0x4e455843)
-ExtendSurface = om.MTypeId(0x4e455853)
-Extrude = om.MTypeId(0x4e455852)
-Facade = om.MTypeId(0x4446434e)
-FfBlendSrf = om.MTypeId(0x4e424c54)
-FfBlendSrfObsolete = om.MTypeId(0x4e424c53)
-FfFilletSrf = om.MTypeId(0x4e464653)
-Ffd = om.MTypeId(0x46464644)
-FieldManip = om.MTypeId(0x554d4958)
-FieldsManip = om.MTypeId(0x554d4958)
-File = om.MTypeId(0x52544654)
-FilletCurve = om.MTypeId(0x4e464352)
-FitBspline = om.MTypeId(0x4e465443)
-FlexorShape = om.MTypeId(0x464c5848)
-Flow = om.MTypeId(0x464c4f57)
-FluidEmitter = om.MTypeId(0x46454d49)
-FluidShape = om.MTypeId(0x464c5549)
-FluidSliceManip = om.MTypeId(0x46534c4d)
-FluidTexture2D = om.MTypeId(0x464c5454)
-FluidTexture3D = om.MTypeId(0x464c5458)
-Follicle = om.MTypeId(0x48435256)
-ForceUpdateManip = om.MTypeId(0x554d4655)
-FosterParent = om.MTypeId(0x4650524e)
-FourByFourMatrix = om.MTypeId(0x4642464d)
-Fractal = om.MTypeId(0x52543246)
-FrameCache = om.MTypeId(0x46434348)
-FreePointManip = om.MTypeId(0x554d4650)
-FreePointTriadManip = om.MTypeId(0x55465054)
-GammaCorrect = om.MTypeId(0x5247414d)
-GeoConnectable = om.MTypeId(0x5947434f)
-GeoConnector = om.MTypeId(0x59474354)
-GeomBind = om.MTypeId(0x4742494e)
-GeometryConstraint = om.MTypeId(0x44474e43)
-GeometryFilter = om.MTypeId(0x44474649)
-GeometryOnLineManip = om.MTypeId(0x554d474c)
-GeometryVarGroup = om.MTypeId(0x4e475647)
-GlobalCacheControl = om.MTypeId(0x4743434c)
-GlobalStitch = om.MTypeId(0x4e475354)
-Granite = om.MTypeId(0x52544752)
-GravityField = om.MTypeId(0x59475241)
-GreasePencilSequence = om.MTypeId(0x47505351)
-GreasePlane = om.MTypeId(0x4447504c)
-GreasePlaneRenderShape = om.MTypeId(0x47505253)
-Grid = om.MTypeId(0x52544744)
-GroupId = om.MTypeId(0x47504944)
-GroupParts = om.MTypeId(0x47525050)
-Guide = om.MTypeId(0x46475549)
-HairConstraint = om.MTypeId(0x4850494e)
-HairSystem = om.MTypeId(0x48535953)
-HairTubeShader = om.MTypeId(0x52485442)
-HardenPoint = om.MTypeId(0x4e484450)
-HardwareRenderGlobals = om.MTypeId(0x48575247)
-HardwareRenderingGlobals = om.MTypeId(0x48525247)
-HeightField = om.MTypeId(0x4f435050)
-HierarchyTestNode1 = om.MTypeId(0x48544e31)
-HierarchyTestNode2 = om.MTypeId(0x48544e32)
-HierarchyTestNode3 = om.MTypeId(0x48544e33)
-HikEffector = om.MTypeId(0x4446494b)
-HikFKJoint = om.MTypeId(0x4a54494b)
-HikFloorContactMarker = om.MTypeId(0x4846434d)
-HikGroundPlane = om.MTypeId(0x48474e44)
-HikHandle = om.MTypeId(0x4b484948)
-HikIKEffector = om.MTypeId(0x494b4546)
-HikSolver = om.MTypeId(0x4b48494b)
-HistorySwitch = om.MTypeId(0x48495353)
-HoldMatrix = om.MTypeId(0x4450484d)
-HsvToRgb = om.MTypeId(0x52483252)
-HwReflectionMap = om.MTypeId(0x4857524d)
-HwRenderGlobals = om.MTypeId(0x59485244)
-HyperGraphInfo = om.MTypeId(0x48595052)
-HyperLayout = om.MTypeId(0x4859504c)
-HyperView = om.MTypeId(0x44485056)
-IkEffector = om.MTypeId(0x4b454646)
-IkHandle = om.MTypeId(0x4b48444c)
-IkMCsolver = om.MTypeId(0x4b4d4353)
-IkPASolver = om.MTypeId(0x4b504153)
-IkRPsolver = om.MTypeId(0x4b525053)
-IkSCsolver = om.MTypeId(0x4b534353)
-IkSplineSolver = om.MTypeId(0x4b535053)
-IkSystem = om.MTypeId(0x4b535953)
-ImagePlane = om.MTypeId(0x4449504c)
-ImplicitBox = om.MTypeId(0x46494258)
-ImplicitCone = om.MTypeId(0x4649434f)
-ImplicitSphere = om.MTypeId(0x46495350)
-IndexManip = om.MTypeId(0x554d4958)
-InsertKnotCurve = om.MTypeId(0x4e494b43)
-InsertKnotSurface = om.MTypeId(0x4e494b53)
-Instancer = om.MTypeId(0x594e5354)
-IntersectSurface = om.MTypeId(0x4e495346)
-Jiggle = om.MTypeId(0x4a474446)
-Joint = om.MTypeId(0x4a4f494e)
-JointCluster = om.MTypeId(0x464a434c)
-JointFfd = om.MTypeId(0x46464442)
-JointLattice = om.MTypeId(0x4642454c)
-KeyframeRegionManip = om.MTypeId(0x4b46524d)
-KeyingGroup = om.MTypeId(0x4b475250)
-Lambert = om.MTypeId(0x524c414d)
-Lattice = om.MTypeId(0x464c4154)
-LayeredShader = om.MTypeId(0x4c595253)
-LayeredTexture = om.MTypeId(0x4c595254)
-LeastSquaresModifier = om.MTypeId(0x4e4c534d)
-Leather = om.MTypeId(0x52544c45)
-LightEditor = om.MTypeId(0x580003e3)
-LightFog = om.MTypeId(0x52464f47)
-LightGroup = om.MTypeId(0x580003e2)
-LightInfo = om.MTypeId(0x524c494e)
-LightItem = om.MTypeId(0x580003e1)
-LightLinker = om.MTypeId(0x524c4c4b)
-LightList = om.MTypeId(0x4c4c5354)
-LightManip = om.MTypeId(0x554d4958)
-LightsChildCollection = om.MTypeId(0x5800039a)
-LightsCollection = om.MTypeId(0x58000394)
-LightsCollectionSelector = om.MTypeId(0x580003a4)
-LimitManip = om.MTypeId(0x4c544d50)
-LineManip = om.MTypeId(0x554d4c4e)
-LineModifier = om.MTypeId(0x4c4d4f44)
-Locator = om.MTypeId(0x4c4f4354)
-LodGroup = om.MTypeId(0x4c4f4447)
-LodThresholds = om.MTypeId(0x4c4f4454)
-Loft = om.MTypeId(0x4e534b4e)
-LookAt = om.MTypeId(0x444c4154)
-Luminance = om.MTypeId(0x524c554d)
-MakeGroup = om.MTypeId(0x504d4752)
-MakeIllustratorCurves = om.MTypeId(0x4e4d4943)
-MakeNurbCircle = om.MTypeId(0x4e435243)
-MakeNurbCone = om.MTypeId(0x4e434e45)
-MakeNurbCube = om.MTypeId(0x4e435542)
-MakeNurbCylinder = om.MTypeId(0x4e43594c)
-MakeNurbPlane = om.MTypeId(0x4e504c4e)
-MakeNurbSphere = om.MTypeId(0x4e535048)
-MakeNurbTorus = om.MTypeId(0x4e544f52)
-MakeNurbsSquare = om.MTypeId(0x4e535152)
-MakeTextCurves = om.MTypeId(0x4e545843)
-MakeThreePointCircularArc = om.MTypeId(0x4e334341)
-MakeTwoPointCircularArc = om.MTypeId(0x4e324341)
-Mandelbrot = om.MTypeId(0x52544d41)
-Mandelbrot3D = om.MTypeId(0x52544d33)
-Manip2DContainer = om.MTypeId(0x554d3243)
-ManipContainer = om.MTypeId(0x554d4343)
-Marble = om.MTypeId(0x52544d52)
-MarkerManip = om.MTypeId(0x554d4d41)
-MaterialFacade = om.MTypeId(0x524d4643)
-MaterialInfo = om.MTypeId(0x444d5449)
-MaterialOverride = om.MTypeId(0x58000387)
-Membrane = om.MTypeId(0x4d454d42)
 Mesh = om.MTypeId(0x444d5348)
-MeshVarGroup = om.MTypeId(0x4e4d5647)
-MotionPath = om.MTypeId(0x4d505448)
-MotionPathManip = om.MTypeId(0x554d4d41)
-MotionTrail = om.MTypeId(0x4d4f5452)
-MotionTrailShape = om.MTypeId(0x4d4f5348)
-Mountain = om.MTypeId(0x52544d54)
-MoveVertexManip = om.MTypeId(0x554d4650)
-Movie = om.MTypeId(0x52544d56)
-MpBirailSrf = om.MTypeId(0x4e4d4253)
-MultDoubleLinear = om.MTypeId(0x444d444c)
-MultMatrix = om.MTypeId(0x444d544d)
-MultilisterLight = om.MTypeId(0x4d554c4c)
-MultiplyDivide = om.MTypeId(0x524d4449)
-Mute = om.MTypeId(0x4d555445)
-NCloth = om.MTypeId(0x4e434c4f)
-NComponent = om.MTypeId(0x4e434d50)
-NParticle = om.MTypeId(0x4e504152)
-NRigid = om.MTypeId(0x4e524744)
-NearestPointOnCurve = om.MTypeId(0x4e504f43)
-Network = om.MTypeId(0x4e54574b)
-NewtonField = om.MTypeId(0x594e4557)
-NewtonManip = om.MTypeId(0x554d4958)
-Noise = om.MTypeId(0x52544e33)
-NonLinear = om.MTypeId(0x464e4c44)
-NormalConstraint = om.MTypeId(0x444e4332)
-Nucleus = om.MTypeId(0x4e535953)
 NurbsCurve = om.MTypeId(0x4e435256)
-NurbsCurveToBezier = om.MTypeId(0x4e525442)
 NurbsSurface = om.MTypeId(0x4e535246)
-NurbsTessellate = om.MTypeId(0x4e544553)
-NurbsToSubdiv = om.MTypeId(0x534e5453)
-NurbsToSubdivProc = om.MTypeId(0x534e5450)
-ObjectAttrFilter = om.MTypeId(0x4f464154)
-ObjectBinFilter = om.MTypeId(0x4f4b464c)
-ObjectFilter = om.MTypeId(0x4f464c54)
-ObjectMultiFilter = om.MTypeId(0x4f4d464c)
-ObjectNameFilter = om.MTypeId(0x4f4e464c)
-ObjectRenderFilter = om.MTypeId(0x4f52464c)
-ObjectScriptFilter = om.MTypeId(0x4f53464c)
-ObjectSet = om.MTypeId(0x4f425354)
-ObjectTypeFilter = om.MTypeId(0x4f54464c)
-Ocean = om.MTypeId(0x52544f43)
-OceanShader = om.MTypeId(0x524f5053)
-OffsetCos = om.MTypeId(0x4e4f4353)
-OffsetCurve = om.MTypeId(0x4e4f4355)
-OffsetSurface = om.MTypeId(0x4e4f5355)
-OldBlindDataBase = om.MTypeId(0x42444454)
-OldGeometryConstraint = om.MTypeId(0x44474d43)
-OldNormalConstraint = om.MTypeId(0x444e5243)
-OldTangentConstraint = om.MTypeId(0x44544e43)
-OpticalFX = om.MTypeId(0x4f504658)
-OrientConstraint = om.MTypeId(0x444f5243)
-OrientationMarker = om.MTypeId(0x4f52544d)
-PairBlend = om.MTypeId(0x4150424c)
-ParamDimension = om.MTypeId(0x52444d4e)
-ParentConstraint = om.MTypeId(0x44504152)
-Particle = om.MTypeId(0x59504152)
-ParticleAgeMapper = om.MTypeId(0x50414d41)
-ParticleCloud = om.MTypeId(0x50434c44)
-ParticleColorMapper = om.MTypeId(0x50434d41)
-ParticleIncandMapper = om.MTypeId(0x50494d41)
-ParticleSamplerInfo = om.MTypeId(0x5053494e)
-ParticleTranspMapper = om.MTypeId(0x50544d41)
-Partition = om.MTypeId(0x5052544e)
-PassContributionMap = om.MTypeId(0x5053434d)
-PassMatrix = om.MTypeId(0x4450534d)
-PfxHair = om.MTypeId(0x50464841)
-PfxToon = om.MTypeId(0x5046544f)
-Phong = om.MTypeId(0x5250484f)
-PhongE = om.MTypeId(0x52504845)
-PivotAndOrientManip = om.MTypeId(0x50414f4d)
-Place2dTexture = om.MTypeId(0x52504c32)
-Place3dTexture = om.MTypeId(0x52504c44)
-PlanarProjManip = om.MTypeId(0x554d5050)
-PlanarTrimSurface = om.MTypeId(0x4e504c54)
-PlusMinusAverage = om.MTypeId(0x52504d41)
-PointConstraint = om.MTypeId(0x44505443)
-PointEmitter = om.MTypeId(0x59454d49)
-PointLight = om.MTypeId(0x504f4954)
-PointMatrixMult = om.MTypeId(0x44504d4d)
-PointOnCurveInfo = om.MTypeId(0x4e504349)
-PointOnCurveManip = om.MTypeId(0x554d5043)
-PointOnLineManip = om.MTypeId(0x554d504c)
-PointOnPolyConstraint = om.MTypeId(0x44505043)
-PointOnSurfManip = om.MTypeId(0x554d5353)
-PointOnSurfaceInfo = om.MTypeId(0x4e505349)
-PointOnSurfaceManip = om.MTypeId(0x554d5053)
-PoleVectorConstraint = om.MTypeId(0x44505643)
-PolyAppend = om.MTypeId(0x50415050)
-PolyAppendVertex = om.MTypeId(0x50415056)
-PolyAutoProj = om.MTypeId(0x50415550)
-PolyAverageVertex = om.MTypeId(0x50415656)
-PolyBevel = om.MTypeId(0x5042564c)
-PolyBevel2 = om.MTypeId(0x50425632)
-PolyBevel3 = om.MTypeId(0x50425633)
-PolyBlindData = om.MTypeId(0x4d424454)
-PolyBoolOp = om.MTypeId(0x50424f50)
-PolyBridgeEdge = om.MTypeId(0x50425245)
-PolyCBoolOp = om.MTypeId(0x50435642)
-PolyChipOff = om.MTypeId(0x50434849)
-PolyCircularize = om.MTypeId(0x50435243)
-PolyClean = om.MTypeId(0x504c434c)
-PolyCloseBorder = om.MTypeId(0x50434c4f)
-PolyCollapseEdge = om.MTypeId(0x50434f45)
-PolyCollapseF = om.MTypeId(0x50434f46)
-PolyColorDel = om.MTypeId(0x5043444c)
-PolyColorMod = om.MTypeId(0x50434d4f)
-PolyColorPerVertex = om.MTypeId(0x50435056)
-PolyCone = om.MTypeId(0x50434f4e)
-PolyConnectComponents = om.MTypeId(0x50434353)
-PolyContourProj = om.MTypeId(0x50434e50)
-PolyCopyUV = om.MTypeId(0x50435556)
-PolyCrease = om.MTypeId(0x50435253)
-PolyCreaseEdge = om.MTypeId(0x50435345)
-PolyCreateFace = om.MTypeId(0x50435245)
-PolyCube = om.MTypeId(0x50435542)
-PolyCut = om.MTypeId(0x50504354)
-PolyCylProj = om.MTypeId(0x50435950)
-PolyCylinder = om.MTypeId(0x5043594c)
-PolyDelEdge = om.MTypeId(0x50444545)
-PolyDelFacet = om.MTypeId(0x50444546)
-PolyDelVertex = om.MTypeId(0x50444556)
-PolyDuplicateEdge = om.MTypeId(0x50445545)
-PolyEdgeToCurve = om.MTypeId(0x50544356)
-PolyEditEdgeFlow = om.MTypeId(0x50534546)
-PolyExtrudeEdge = om.MTypeId(0x50455845)
-PolyExtrudeFace = om.MTypeId(0x50455846)
-PolyExtrudeVertex = om.MTypeId(0x50455856)
-PolyFlipEdge = om.MTypeId(0x50464c45)
-PolyFlipUV = om.MTypeId(0x50465556)
-PolyHelix = om.MTypeId(0x48454c49)
-PolyHoleFace = om.MTypeId(0x50484645)
-PolyLayoutUV = om.MTypeId(0x504c5556)
-PolyMapCut = om.MTypeId(0x504d4143)
-PolyMapDel = om.MTypeId(0x504d4144)
-PolyMapSew = om.MTypeId(0x504d4153)
-PolyMapSewMove = om.MTypeId(0x5053454d)
-PolyMergeEdge = om.MTypeId(0x504d4545)
-PolyMergeFace = om.MTypeId(0x504d4546)
-PolyMergeUV = om.MTypeId(0x504d4755)
-PolyMergeVert = om.MTypeId(0x504d5645)
-PolyMirror = om.MTypeId(0x504d4952)
-PolyMoveEdge = om.MTypeId(0x504d4f45)
-PolyMoveFace = om.MTypeId(0x504d4f46)
-PolyMoveFacetUV = om.MTypeId(0x504d4655)
-PolyMoveUV = om.MTypeId(0x504d5556)
-PolyMoveVertex = om.MTypeId(0x504d4f56)
-PolyNormal = om.MTypeId(0x504e4f52)
-PolyNormalPerVertex = om.MTypeId(0x504e5056)
-PolyNormalizeUV = om.MTypeId(0x504e5556)
-PolyOptUvs = om.MTypeId(0x504f5556)
-PolyPassThru = om.MTypeId(0x50595054)
-PolyPinUV = om.MTypeId(0x50505556)
-PolyPipe = om.MTypeId(0x50504950)
-PolyPlanarProj = om.MTypeId(0x50504c50)
-PolyPlane = om.MTypeId(0x504d4553)
-PolyPlatonicSolid = om.MTypeId(0x534f4c49)
-PolyPoke = om.MTypeId(0x5050504b)
-PolyPrimitiveMisc = om.MTypeId(0x4d495343)
-PolyPrism = om.MTypeId(0x50505249)
-PolyProj = om.MTypeId(0x5050524f)
-PolyProjectCurve = om.MTypeId(0x50504356)
-PolyPyramid = om.MTypeId(0x50505952)
-PolyQuad = om.MTypeId(0x50515541)
-PolyReduce = om.MTypeId(0x50524544)
-PolyRemesh = om.MTypeId(0x50524d48)
-PolyRetopo = om.MTypeId(0x5052464d)
-PolySeparate = om.MTypeId(0x50534550)
-PolySewEdge = om.MTypeId(0x50535745)
-PolySmooth = om.MTypeId(0x50534d54)
-PolySmoothFace = om.MTypeId(0x50534d46)
-PolySmoothProxy = om.MTypeId(0x50534d50)
-PolySoftEdge = om.MTypeId(0x50534f45)
-PolySphProj = om.MTypeId(0x50535050)
-PolySphere = om.MTypeId(0x50535048)
-PolySpinEdge = om.MTypeId(0x50535051)
-PolySplit = om.MTypeId(0x5053504c)
-PolySplitEdge = om.MTypeId(0x50534544)
-PolySplitRing = om.MTypeId(0x50535052)
-PolySplitVert = om.MTypeId(0x50535645)
-PolyStraightenUVBorder = om.MTypeId(0x50535442)
-PolySubdEdge = om.MTypeId(0x50535545)
-PolySubdFace = om.MTypeId(0x50535546)
-PolyToSubdiv = om.MTypeId(0x50534453)
-PolyTorus = om.MTypeId(0x50544f52)
-PolyTransfer = om.MTypeId(0x50544652)
-PolyTriangulate = om.MTypeId(0x50545249)
-PolyTweak = om.MTypeId(0x5054574b)
-PolyTweakUV = om.MTypeId(0x50545556)
-PolyUVRectangle = om.MTypeId(0x50555652)
-PolyUnite = om.MTypeId(0x50554e49)
-PolyWedgeFace = om.MTypeId(0x50574643)
-PoseInterpolatorManager = om.MTypeId(0x5053444d)
-PositionMarker = om.MTypeId(0x504f534d)
-PostProcessList = om.MTypeId(0x50505354)
-ProjectCurve = om.MTypeId(0x4e504352)
-ProjectTangent = om.MTypeId(0x4e50544e)
-Projection = om.MTypeId(0x5250524a)
-ProjectionManip = om.MTypeId(0x554d4354)
-PropModManip = om.MTypeId(0x554d4354)
-PropMoveTriadManip = om.MTypeId(0x554d5054)
-ProxyManager = om.MTypeId(0x50584d47)
-PsdFileTex = om.MTypeId(0x50534454)
-QuadPtOnLineManip = om.MTypeId(0x554d504c)
-QuadShadingSwitch = om.MTypeId(0x53574834)
-RadialField = om.MTypeId(0x59524144)
-Ramp = om.MTypeId(0x52545241)
-RampShader = om.MTypeId(0x52525053)
-RbfSrf = om.MTypeId(0x4e524246)
-RebuildCurve = om.MTypeId(0x4e524243)
-RebuildSurface = om.MTypeId(0x4e524253)
-Record = om.MTypeId(0x52454344)
-Reference = om.MTypeId(0x5245464e)
-RelOverride = om.MTypeId(0x5800037a)
-RelUniqueOverride = om.MTypeId(0x580003a1)
-RemapColor = om.MTypeId(0x524d434c)
-RemapHsv = om.MTypeId(0x524d4853)
-RemapValue = om.MTypeId(0x524d564c)
-RenderBox = om.MTypeId(0x524e4258)
-RenderCone = om.MTypeId(0x524e434f)
-RenderGlobals = om.MTypeId(0x52474c42)
-RenderGlobalsList = om.MTypeId(0x5244474c)
-RenderLayer = om.MTypeId(0x524e444c)
-RenderLayerManager = om.MTypeId(0x524e4c4d)
-RenderPass = om.MTypeId(0x524e5053)
-RenderPassSet = om.MTypeId(0x52505353)
-RenderQuality = om.MTypeId(0x52515541)
-RenderRect = om.MTypeId(0x52524354)
-RenderSettingsChildCollection = om.MTypeId(0x580003a3)
-RenderSettingsCollection = om.MTypeId(0x58000395)
-RenderSetup = om.MTypeId(0x58000371)
-RenderSetupLayer = om.MTypeId(0x58000372)
-RenderSphere = om.MTypeId(0x524e5350)
-RenderTarget = om.MTypeId(0x524e5447)
-RenderedImageSource = om.MTypeId(0x52434953)
-ReorderUVSet = om.MTypeId(0x524f5553)
-Resolution = om.MTypeId(0x524c544e)
-ResultCurveTimeToAngular = om.MTypeId(0x52435441)
-ResultCurveTimeToLinear = om.MTypeId(0x5243544c)
-ResultCurveTimeToTime = om.MTypeId(0x52435454)
-ResultCurveTimeToUnitless = om.MTypeId(0x52435455)
-Reverse = om.MTypeId(0x52525653)
-ReverseCurve = om.MTypeId(0x4e525643)
-ReverseSurface = om.MTypeId(0x4e525653)
-Revolve = om.MTypeId(0x4e52564c)
-RgbToHsv = om.MTypeId(0x52523248)
-RigidBody = om.MTypeId(0x59524744)
-RigidConstraint = om.MTypeId(0x59435354)
-RigidSolver = om.MTypeId(0x59534c56)
-Rock = om.MTypeId(0x5254524b)
-RotateLimitsManip = om.MTypeId(0x554d524c)
-RotateManip = om.MTypeId(0x554d5241)
-RotateUV2dManip = om.MTypeId(0x5532524f)
-RoundConstantRadius = om.MTypeId(0x4e524352)
-Sampler = om.MTypeId(0x46534d50)
-SamplerInfo = om.MTypeId(0x5253494e)
-ScaleConstraint = om.MTypeId(0x44534343)
-ScaleLimitsManip = om.MTypeId(0x4c544d50)
-ScaleManip = om.MTypeId(0x554d4650)
-ScaleUV2dManip = om.MTypeId(0x55325343)
-ScreenAlignedCircleManip = om.MTypeId(0x5341434d)
-Script = om.MTypeId(0x53435250)
-ScriptManip = om.MTypeId(0x554d5343)
-Sculpt = om.MTypeId(0x46534350)
-SelectionListOperator = om.MTypeId(0x534c4f50)
-SequenceManager = om.MTypeId(0x53514d47)
-Sequencer = om.MTypeId(0x53514e43)
-SetRange = om.MTypeId(0x52524e47)
-ShaderGlow = om.MTypeId(0x5348474c)
-ShaderOverride = om.MTypeId(0x58000386)
-ShadingEngine = om.MTypeId(0x53484144)
-ShadingMap = om.MTypeId(0x53444d50)
-ShapeEditorManager = om.MTypeId(0x53444d4c)
-ShellTessellate = om.MTypeId(0x53544553)
-Shot = om.MTypeId(0x53484f54)
-ShrinkWrap = om.MTypeId(0x53575250)
-SimpleSelector = om.MTypeId(0x5800039e)
-SimpleTestNode = om.MTypeId(0x53544e44)
-SimpleVolumeShader = om.MTypeId(0x53565348)
-SingleShadingSwitch = om.MTypeId(0x53574831)
-SketchPlane = om.MTypeId(0x534b504e)
-SkinBinding = om.MTypeId(0x534b4244)
-SkinCluster = om.MTypeId(0x4653434c)
-SmoothCurve = om.MTypeId(0x4e534d43)
-SmoothTangentSrf = om.MTypeId(0x4e53544e)
-SnapUV2dManip = om.MTypeId(0x5532534e)
-Snapshot = om.MTypeId(0x534e5054)
-SnapshotShape = om.MTypeId(0x53534841)
-Snow = om.MTypeId(0x5254534e)
-SoftMod = om.MTypeId(0x4653534c)
-SoftModHandle = om.MTypeId(0x46535348)
-SolidFractal = om.MTypeId(0x52544633)
-SpBirailSrf = om.MTypeId(0x4e534253)
-SphericalProjManip = om.MTypeId(0x554d5350)
-SpotCylinderManip = om.MTypeId(0x53434d50)
-SpotLight = om.MTypeId(0x5350544c)
-SpotManip = om.MTypeId(0x554d4958)
-Spring = om.MTypeId(0x59535052)
-SquareSrf = om.MTypeId(0x4e535153)
-Stencil = om.MTypeId(0x52545354)
-StereoRigCamera = om.MTypeId(0x53524341)
-StitchAsNurbsShell = om.MTypeId(0x4e535348)
-StitchSrf = om.MTypeId(0x4e535453)
-Stroke = om.MTypeId(0x5354524b)
-StrokeGlobals = om.MTypeId(0x53544b47)
-Stucco = om.MTypeId(0x52533630)
-StyleCurve = om.MTypeId(0x4e535443)
-SubCurve = om.MTypeId(0x4e534243)
-SubSurface = om.MTypeId(0x4e535352)
-SubdAddTopology = om.MTypeId(0x53415459)
-SubdAutoProj = om.MTypeId(0x53415550)
-SubdBlindData = om.MTypeId(0x53424454)
-SubdCleanTopology = om.MTypeId(0x53435459)
-SubdHierBlind = om.MTypeId(0x53485242)
-SubdLayoutUV = om.MTypeId(0x534c5556)
-SubdMapCut = om.MTypeId(0x534d4143)
-SubdMapSewMove = om.MTypeId(0x5353454d)
-SubdPlanarProj = om.MTypeId(0x53504c50)
-SubdTweak = om.MTypeId(0x5354574b)
-SubdTweakUV = om.MTypeId(0x53545556)
-Subdiv = om.MTypeId(0x53445353)
-SubdivCollapse = om.MTypeId(0x53434c50)
-SubdivComponentId = om.MTypeId(0x53534944)
-SubdivReverseFaces = om.MTypeId(0x53525646)
-SubdivSurfaceVarGroup = om.MTypeId(0x53535647)
-SubdivToNurbs = om.MTypeId(0x5344534e)
-SubdivToPoly = om.MTypeId(0x53445350)
-SurfaceInfo = om.MTypeId(0x4e53494e)
-SurfaceLuminance = om.MTypeId(0x52534c55)
-SurfaceShader = om.MTypeId(0x52535348)
-SurfaceVarGroup = om.MTypeId(0x4e535647)
-SymmetryConstraint = om.MTypeId(0x44534d43)
-TangentConstraint = om.MTypeId(0x44544332)
-Tension = om.MTypeId(0x54454e53)
-TextButtonManip = om.MTypeId(0x554d5442)
-Texture3dManip = om.MTypeId(0x554d5458)
-TextureBakeSet = om.MTypeId(0x5442414b)
-TextureDeformer = om.MTypeId(0x54584446)
-TextureDeformerHandle = om.MTypeId(0x54444844)
-TextureToGeom = om.MTypeId(0x5454474f)
-Time = om.MTypeId(0x54494d45)
-TimeEditor = om.MTypeId(0x544d4544)
-TimeEditorAnimSource = om.MTypeId(0x54454153)
-TimeEditorClip = om.MTypeId(0x41434c43)
-TimeEditorClipBase = om.MTypeId(0x414c434c)
-TimeEditorClipEvaluator = om.MTypeId(0x4143524f)
-TimeEditorInterpolator = om.MTypeId(0x54454950)
-TimeEditorTracks = om.MTypeId(0x5445544b)
-TimeFunction = om.MTypeId(0x7466786e)
-TimeToUnitConversion = om.MTypeId(0x44544d55)
-TimeWarp = om.MTypeId(0x54495741)
-ToggleManip = om.MTypeId(0x554d5447)
-ToggleOnLineManip = om.MTypeId(0x55544f4c)
-ToolDrawManip = om.MTypeId(0x5454444d)
-ToolDrawManip2D = om.MTypeId(0x54444d32)
-ToonLineAttributes = om.MTypeId(0x544c4154)
-TrackInfoManager = om.MTypeId(0x54494d47)
-TransUV2dManip = om.MTypeId(0x55325452)
-TransferAttributes = om.MTypeId(0x54524154)
 Transform = om.MTypeId(0x5846524d)
 TransformGeometry = om.MTypeId(0x5447454f)
-TranslateLimitsManip = om.MTypeId(0x434e4d50)
-TranslateManip = om.MTypeId(0x554d4650)
-TranslateUVManip = om.MTypeId(0x554d5556)
-Trim = om.MTypeId(0x4e54524d)
-TrimWithBoundaries = om.MTypeId(0x4e545742)
-TriplanarProjManip = om.MTypeId(0x554d5452)
-TripleShadingSwitch = om.MTypeId(0x53574833)
-TrsInsertManip = om.MTypeId(0x554d4354)
-TrsManip = om.MTypeId(0x5554544d)
-TurbulenceField = om.MTypeId(0x59545552)
-TurbulenceManip = om.MTypeId(0x554d4958)
-Tweak = om.MTypeId(0x464d5054)
-UniformField = om.MTypeId(0x59554e49)
-UnitConversion = om.MTypeId(0x44554e54)
-UnitToTimeConversion = om.MTypeId(0x4455544d)
-Unknown = om.MTypeId(0x554e4b4e)
-UnknownDag = om.MTypeId(0x554e4b44)
-UnknownTransform = om.MTypeId(0x554e4b54)
-Untrim = om.MTypeId(0x4e555452)
-UseBackground = om.MTypeId(0x55534247)
-Uv2dManip = om.MTypeId(0x5556324d)
-UvChooser = om.MTypeId(0x55564348)
-VectorProduct = om.MTypeId(0x52564543)
-VertexBakeSet = om.MTypeId(0x5642414b)
-ViewColorManager = om.MTypeId(0x5657434d)
-VolumeAxisField = om.MTypeId(0x59565846)
-VolumeFog = om.MTypeId(0x52564647)
-VolumeLight = om.MTypeId(0x564f4c4c)
-VolumeNoise = om.MTypeId(0x52545633)
-VolumeShader = om.MTypeId(0x52565348)
-VortexField = om.MTypeId(0x59564f52)
-Water = om.MTypeId(0x52545741)
-WeightGeometryFilter = om.MTypeId(0x44574746)
-Wire = om.MTypeId(0x46574952)
-Wood = om.MTypeId(0x52545744)
-Wrap = om.MTypeId(0x46575250)
 WtAddMatrix = om.MTypeId(0x4457414d)

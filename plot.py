@@ -166,7 +166,7 @@ Test("API 2.0", "setAttr", lambda: om2SetAttr(5))
 Test("cmdx", "node.attr", lambda: node["tx"].read(), number=10000)
 Test("PyMEL", "node.attr", lambda: pynode.tx.get(), number=10000)
 
-Test("cmdx", "node.attr=5", lambda: node["tx"].write(5, type=cmdx.Double), number=10000)
+Test("cmdx", "node.attr=5", lambda: node["tx"].write(5), number=10000)
 Test("PyMEL", "node.attr=5", lambda: pynode.tx.set(5), number=10000)
 
 Test("mel", "createNode", lambda: mel.eval("createNode \"transform\""), New)
@@ -234,7 +234,9 @@ meladdattr = 'addAttr -ln "myAttr" -at double -dv 0 transform1;'
 Test("mel", "addAttr", lambda: mel.eval(meladdattr), number=1, repeat=1000, teardown=teardown)
 Test("cmds", "addAttr", lambda: cmds.addAttr(path, longName="myAttr", attributeType="double", defaultValue=0), number=1, repeat=1000, teardown=teardown)
 Test("cmdx", "addAttr", lambda: cmdx.addAttr(node, longName="myAttr", attributeType=cmdx.Double, defaultValue=0), number=1, repeat=1000, teardown=teardown)
-Test("PyMel", "addAttr", lambda: pm.addAttr(path, longName="myAttr", attributeType="double", defaultValue=0), number=1, repeat=1000, teardown=teardown)
+Test("PyMEL", "addAttr", lambda: pm.addAttr(path, longName="myAttr", attributeType="double", defaultValue=0), number=1, repeat=1000, teardown=teardown)
+
+Test("cmdx", "node.addAttr", lambda: node.addAttr(cmdx.Double("myAttr")), number=1, repeat=1000, teardown=teardown)
 
 #
 # Render performance characteristics as bar charts
@@ -309,23 +311,32 @@ def horizontal(data, dirname):
         chart.render_to_file(fname)
 
 
-def average(data):
+def average(x, y, data):
     data = deepcopy(data)
 
     times_faster = list()
+    print("|         | Times       | Task")
+    print("|:--------|:------------|:------------")
     for task, methods in data.items():
-        a = methods["PyMEL"]["percall"]
-        b = methods["cmdx"]["percall"]
+        try:
+            a = methods[x]["percall"]
+            b = methods[y]["percall"]
+        except KeyError:
+            continue
+
         faster = a / float(b)
-        print("cmdx is %sx faster" % faster)
+        print("| cmdx is | %.1fx faster | %s" % (faster, task))
         times_faster.append(faster)
 
     average = sum(times_faster) / len(times_faster)
-    return average
+    return round(average, 2)
 
 
 # Draw plots
 dirname = os.path.join(os.path.dirname(cmdx.__file__), "plots")
 stacked(data, dirname)
 horizontal(data, dirname)
-print(average(data))
+avg = average("PyMEL", "cmdx", data)
+print("- cmdx is on average %.2fx faster than PyMEL" % avg)
+avg = average("cmds", "cmdx", data)
+print("- cmdx is on average %.2fx faster than cmds" % avg)
