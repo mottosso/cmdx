@@ -18,6 +18,39 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See [API Documentation]() for usage 
 
+**Table of contents**
+
+- [Syntax](#syntax)
+- [Performance](#performance)
+- [Interoperability](#interoperability)
+- [Units](#units)
+- [Node Creation](#node-creation)
+- [Attribute Query and Assignment](#attribute-query-and-assignment)
+- [Connections](#connections)
+- [FAQ](#faq)
+- [Comparison](#comparison)
+  - [MEL](#mel)
+  - [PyMEL](#pymel)
+  - [cmds](#cmds)
+  - [API 1.0](#api-1-0)
+  - [API 2.0](#api-2-0)
+- [YAGNI](#yagni)
+- [Timings](#timings)
+- [Measurements](#measurements)
+  - [Overall Performance](#overall-performance)
+  - [`import`](#import)
+  - [`createNode`](#createNode)
+  - [`getAttr`](#getAttr)
+  - [`setAttr`](#setAttr)
+  - [`connectAttr`](#connectAttr)
+  - [`long`](#long)
+  - [`node`](#node-attr-attr)
+  - [`ls`](#ls)
+- [Evolution](#evolution)
+- [References](#references)
+- [Notes](#notes)
+  - [MDagModifier](#mdagmodifier)
+
 <br>
 
 ### Syntax
@@ -162,10 +195,6 @@ The following units are currently supported.
 
 <br>
 
-### Optimising for Readability
-
-<br>
-
 ### Node Creation
 
 Nodes are created much like with `maya.cmds`.
@@ -279,6 +308,10 @@ sphere
 
 ### FAQ
 
+> Why is PyMEL slow?
+
+...
+
 > Doesn't PyMEL also use the Maya API?
 
 Yes and no. Some functionality, such as [`listRelatives`](https://github.com/LumaPictures/pymel/blob/eb984107952cde052a3ecdb473e66c7db7deb3b7/pymel/core/general.py#L1026) call on `cmds.listRelatives` and later convert the output to instances of `PyNode`. This performs at best as well as `cmds`, with the added overhead of converting the transient path to a `PyNode`.
@@ -291,7 +324,7 @@ Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.Op
 
 This section explores the relationship between `cmdx` and (1) MEL, (2) cmds, (3) PyMEL and (4) API 1/2.
 
-**MEL**
+##### MEL
 
 Maya's Embedded Language (MEL) makes for a compact scene description format.
 
@@ -309,7 +342,7 @@ From there, it was given expressions, functions, branching logic and was made in
 
 `cmds` is tedious and `pymel` is slow. `cmds` is also a victim of its own success. Like MEL, it works with relative paths and the current selection; this facilitates the compact file format, whereby a node is created, and then any references to this node is implicit in each subsequent line. Long attribute names have a short equivalent and paths need only be given at enough specificity to not be ambiguous given everything else that was previously created. Great for scene a file format, not so great for code that operates on-top of this scene file.
 
-**PyMEL**
+##### PyMEL
 
 PyMEL is 31,000 lines of code, the bulk of which implements backwards compatibility to `maya.cmds` versions of Maya as far back as 2008, the rest reiterates the Maya API.
 
@@ -426,49 +459,6 @@ Surprisingly, `MEL` is typically outdone by `cmds`. Unsurprisingly, `PyMEL` perf
 
 <br>
 
-#### MDagModifier
-
-`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`. 
-
-```python
-from maya.api import OpenMaya as om
-
-mod = om.MDagModifier()
-
-def prepare():
-    New()
-    for i in range(10):
-        mobj = mod.createNode(cmdx.Transform)
-        mod.renameNode(mobj, "node%d" % i)
-
-def createManyExclusive():
-    mod.doIt()
-
-
-def createManyInclusive():
-    mod = om.MDagModifier()
-
-    for i in range(10):
-        mobj = mod.createNode(cmdx.Transform)
-        mod.renameNode(mobj, "node%d" % i)
-
-    mod.doIt()
-
-def createMany(number=10):
-    for i in range(number):
-        cmdx.createNode(cmdx.Transform, name="node%d" % i)
-
-Test("API 2.0", "createNodeBulkInclusive", createManyInclusive, number=1, repeat=100, setup=New)
-Test("API 2.0", "createNodeBulkExclusive", createManyExclusive, number=1, repeat=100, setup=prepare)
-Test("cmdx", "createNodeBulk", createMany, number=1, repeat=100, setup=New)
-
-# createNodeBulkInclusive API 2.0: 145.2 ms (627.39 µs/call)
-# createNodeBulkExclusive API 2.0: 132.8 ms (509.58 µs/call)
-# createNodeBulk cmdx: 150.5 ms (620.12 µs/call)
-```
-
-<br>
-
 #### Overall Performance
 
 Shorter is better.
@@ -545,3 +535,50 @@ These are some of the resources used to create this project.
 
 - http://austinjbaker.com/mplugs-setting-values
 - https://nccastaff.bournemouth.ac.uk/jmacey/RobTheBloke/www/mayaapi.html
+
+<br>
+
+### Notes
+
+Additional thoughts.
+
+#### MDagModifier
+
+`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`. 
+
+```python
+from maya.api import OpenMaya as om
+
+mod = om.MDagModifier()
+
+def prepare():
+    New()
+    for i in range(10):
+        mobj = mod.createNode(cmdx.Transform)
+        mod.renameNode(mobj, "node%d" % i)
+
+def createManyExclusive():
+    mod.doIt()
+
+
+def createManyInclusive():
+    mod = om.MDagModifier()
+
+    for i in range(10):
+        mobj = mod.createNode(cmdx.Transform)
+        mod.renameNode(mobj, "node%d" % i)
+
+    mod.doIt()
+
+def createMany(number=10):
+    for i in range(number):
+        cmdx.createNode(cmdx.Transform, name="node%d" % i)
+
+Test("API 2.0", "createNodeBulkInclusive", createManyInclusive, number=1, repeat=100, setup=New)
+Test("API 2.0", "createNodeBulkExclusive", createManyExclusive, number=1, repeat=100, setup=prepare)
+Test("cmdx", "createNodeBulk", createMany, number=1, repeat=100, setup=New)
+
+# createNodeBulkInclusive API 2.0: 145.2 ms (627.39 µs/call)
+# createNodeBulkExclusive API 2.0: 132.8 ms (509.58 µs/call)
+# createNodeBulk cmdx: 150.5 ms (620.12 µs/call)
+```
