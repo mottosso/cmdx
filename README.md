@@ -132,9 +132,10 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 
 | Goal            | Description
 |:----------------|:-------------
-| Fast            | Faster than PyMEL, and cmds.
+| Fast            | Faster than PyMEL, and cmds
 | Lightweight     | A single Python module, implementing critical parts well, leaving the rest to `cmds`
-| Persistent      | References to nodes don't break
+| Persistent      | References to nodes do not break
+| Do not crash    | Working with low-level Maya API calls make it susceptible to crashes; cmdx should protect against this, without sacrificing performance
 | External        | Shipped alongside your code, not alongside Maya; you control the version, features and fixes.
 | Vendorable      | Embed an appropriate version of `cmdx` alongside your own project
 | PEP8            | Continuous integration ensures that every commit follows the consistency of PEP8
@@ -215,6 +216,27 @@ The following units are currently supported.
   - `Feet`
   - `Miles`
   - `Yards`
+
+<br>
+
+### Undo
+
+With every command made through `maya.cmds`, the undo history is populated such that you can undo a *block* of commands all at once. `cmdx` doesn't do this, which makes it faster, but also impossible to undo. Any node created or attribute changed is permanent, which is why it is that much more important that you take care of the creations and changes that you make.
+
+In the future, `cmdx` will expose a context manager to faciliate situations where you are willing to trade the ability to undo for performance.
+
+It may look something like this.
+
+```pytyhon
+import cmdx
+
+with cmdx.undoBlock() as block:
+  node1 = block.createNode("decomposeMatrix")
+  node2 = block.createNode("transform")
+  node3 = block.createNode("transform")
+  block.connect(node1, node2)
+  block.setAttr(node3["tx"], 5)
+```
 
 <br>
 
@@ -637,4 +659,20 @@ Test("cmdx", "createNodeBulk", createMany, number=1, repeat=100, setup=New)
 # createNodeBulkInclusive API 2.0: 145.2 ms (627.39 µs/call)
 # createNodeBulkExclusive API 2.0: 132.8 ms (509.58 µs/call)
 # createNodeBulk cmdx: 150.5 ms (620.12 µs/call)
+```
+
+<br>
+
+### Contributing
+
+Dealing with Maya version incompatibilities is done by falling back to `cmds` where relevant. There will be a performance hit, but MUST be functionally identical.
+
+**Example**
+
+```python
+def descendents(self):
+  if __maya_version__ <= 2015:
+    # use maya.cmds functionality
+  else:
+    # use API 2.0
 ```
