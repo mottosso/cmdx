@@ -30,6 +30,18 @@ First = 0
 Last = -1
 
 
+class _Space(int):
+    pass
+
+
+# Spaces
+World = _Space(om.MSpace.kWorld)
+Object = _Space(om.MSpace.kObject)
+Transform = _Space(om.MSpace.kTransform)
+PostTransform = _Space(om.MSpace.kPostTransform)
+PreTransform = _Space(om.MSpace.kPreTransform)
+
+
 class _Unit(int):
     """A Maya unit, for unit-attributes such as Angle and Distance
 
@@ -406,7 +418,12 @@ class Node(object):
         """
 
         for plug in self._fn.getConnections():
-            node = plug.node()
+            mobject = plug.node()
+
+            if mobject.hasFn(om.MFn.kDagNode):
+                node = DagNode(mobject)
+            else:
+                node = Node(mobject)
 
             if not type or type == node._fn.typeName:
                 yield Plug(node, plug, unit)
@@ -520,6 +537,14 @@ class DagNode(Node):
 
         return self.__class__(root.node()) if root else self
 
+    def translation(self, space=Transform):
+        transform = om.MFnTransform(self._fn.getPath())
+        return transform.translation(space)
+
+    def rotation(self, space=Transform):
+        transform = om.MFnTransform(self._fn.getPath())
+        return transform.rotation(space)
+
     # Alias
     root = assembly
 
@@ -604,6 +629,10 @@ class DagNode(Node):
                 yield node
 
             it.next()
+
+
+class ObjectSet(Node):
+    """Support list-type operations on objectSets"""
 
 
 class Plug(object):
@@ -758,7 +787,14 @@ class Plug(object):
     def connect(self, other):
         mod = om.MDGModifier()
         mod.connect(self._mplug, other._mplug)
-        mod.doIt()
+
+        try:
+            mod.doIt()
+        except RuntimeError:
+            raise ValueError(
+                "Could not connect '%s' -> '%s'"
+                % (self.path(), other.path())
+            )
 
     def connections(self, source=True, destination=True, type=None, unit=None):
         """Yield plugs connected to self
@@ -916,7 +952,8 @@ def _plug_to_python(plug, unit=None):
         return plug.asShort()
 
     elif type == om.MFn.kMessageAttribute:
-        return None
+        # In order to comply with `if plug:`
+        return True
 
     elif type == om.MFn.kTimeAttribute:
         return plug.asShort()
