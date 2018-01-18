@@ -19,7 +19,7 @@ if not IGNORE_VERSION:
 self = sys.modules[__name__]
 log = logging.getLogger("cmdx")
 
-NotExistError = type("NotExistError", (KeyError,), {})
+ExistError = type("ExistError", (KeyError,), {})
 AlreadyExistError = type("AlreadyExistError", (KeyError,), {})
 
 # Reusable objects, for performance
@@ -31,7 +31,7 @@ Last = -1
 
 
 class _Space(int):
-    pass
+    """Facilitate use of isinstance(space, _Space())"""
 
 
 # Spaces
@@ -158,7 +158,12 @@ class Node(object):
         try:
             plug = self._fn.findPlug(key, False)
         except RuntimeError:
-            raise NotExistError(key)
+            try:
+                path = self.path()
+            except AttributeError:
+                path = self.name()
+
+            raise ExistError("%s.%s" % (path, key))
 
         return Plug(self, plug, unit=unit)
 
@@ -590,7 +595,7 @@ class DagNode(Node):
         for index in range(self._fn.childCount()):
             mobject = self._fn.child(index)
 
-            if not mobject.hasFn(filter):
+            if filter is not None and not mobject.hasFn(filter):
                 continue
 
             fn = Fn(mobject)
@@ -610,7 +615,35 @@ class DagNode(Node):
         pass
 
     def descendents(self, type=om.MFn.kInvalid):
-        assert __maya_version__ >= 2017, "Requires Maya 2017 or newer"
+        if __maya_version__ >= 2017:
+            return self._descendents_2017(type)
+        else:
+            return self._descendents_2015(type)
+
+    def _descendents_2015(self, type=None):
+        """Recursive, depth-first search; compliant with MItDag of 2017+"""
+        def _descendents(node, type=None, children=None):
+            children = children or list()
+            children.append(node)
+            for child in node.children(filter=None):
+                _descendents(child, type, children)
+
+            return children
+
+        # Support filtering by typeName
+        typeName = None
+        if isinstance(type, str):
+            typeName = type
+            type = om.MFn.kInvalid
+
+        descendents = _descendents(self, type)
+
+        for child in descendents:
+            if not typeName or typeName == child._fn.typeName:
+                yield child
+
+    def _descendents_2017(self, type=om.MFn.kInvalid):
+        """Faster and more efficient dependency graph traversal"""
         typeName = None
 
         # Support filtering by typeName
