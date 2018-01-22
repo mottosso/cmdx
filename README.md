@@ -219,7 +219,13 @@ The following units are currently supported.
 
 <br>
 
-### Undo
+### Limitations
+
+All of this performance is great and all, but why hasn't anyone thought of this before? Are there no consequences?
+
+I'm sure someone has, and yes there are.
+
+#### Undo
 
 With every command made through `maya.cmds`, the undo history is populated such that you can undo a *block* of commands all at once. `cmdx` doesn't do this, which makes it faster, but also impossible to undo. Any node created or attribute changed is permanent, which is why it is that much more important that you take care of the creations and changes that you make.
 
@@ -237,6 +243,10 @@ with cmdx.undoBlock() as block:
   block.connect(node1, node2)
   block.setAttr(node3["tx"], 5)
 ```
+
+#### Crashes
+
+...
 
 <br>
 
