@@ -614,6 +614,9 @@ class DagNode(Node):
     def siblings(self):
         pass
 
+    def descendent(self, type=om.MFn.kInvalid):
+        return next(self.descendents(type), None)
+
     def descendents(self, type=om.MFn.kInvalid):
         if __maya_version__ >= 2017:
             return self._descendents_2017(type)
@@ -801,10 +804,12 @@ class Plug(object):
         except RuntimeError:
             raise
 
-        except TypeError:
+        except TypeError as e:
             # Expected errors
-            log.warning("'%s': failed to read attribute" % self.path())
-            return None
+            raise TypeError(
+                "'%s': failed to read attribute: %s"
+                % (self.path(), e)
+            )
 
     def write(self, value):
         try:
@@ -813,9 +818,11 @@ class Plug(object):
         except RuntimeError:
             raise
 
-        except TypeError:
-            log.warning("'%s': failed to write attribute" % self.path())
-            return None
+        except TypeError as e:
+            raise TypeError(
+                "'%s': failed to write attribute: %s"
+                % (self.path(), e)
+            )
 
     def connect(self, other):
         mod = om.MDGModifier()
@@ -829,7 +836,12 @@ class Plug(object):
                 % (self.path(), other.path())
             )
 
-    def connections(self, source=True, destination=True, type=None, unit=None):
+    def connections(self,
+                    source=True,
+                    destination=True,
+                    type=None,
+                    plugs=True,
+                    unit=None):
         """Yield plugs connected to self
 
         Arguments:
@@ -850,10 +862,19 @@ class Plug(object):
                 node = Node(mobject)
 
             if not type or type == node._fn.typeName:
-                yield Plug(node, plug, unit)
+                yield Plug(node, plug, unit) if plugs else node
 
-    def connection(self, source=True, destination=True, type=None, unit=None):
-        return next(self.connections(source, destination, type, unit), None)
+    def connection(self,
+                   source=True,
+                   destination=True,
+                   type=None,
+                   plug=True,
+                   unit=None):
+        return next(self.connections(source,
+                                     destination,
+                                     type=type,
+                                     plugs=plug,
+                                     unit=unit), None)
 
     def source(self, unit=None):
         cls = self.__class__
@@ -1128,7 +1149,8 @@ def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
 
     try:
         mobj = fn.create(type, **kwargs)
-    except RuntimeError:
+    except RuntimeError as e:
+        log.debug(str(e))
         raise TypeError("Unrecognized node type '%s'" % type)
 
     if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
