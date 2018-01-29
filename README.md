@@ -30,6 +30,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Units](#units)
 - [Node Creation](#node-creation)
 - [Attribute Query and Assignment](#attribute-query-and-assignment)
+  - [Cached](#cached)
+  - [Time](#time)
 - [Connections](#connections)
 - [FAQ](#faq)
 - [Comparison](#comparison)
@@ -124,6 +126,10 @@ cmdx.delete(joe)
 
 See [Measurements](#measurements) for performance statistics and comparisons between MEL, cmds, cmdx, PyMEL, API 1.0 and 2.0.
 
+**How?**
+
+The fastest you can possibly get with Python inside Maya is through the Maya Python API 2.0. `cmdx` is a thin wrapper around this library that provides a more accessible and readable interface, whilst avoiding as much overhead as possible.
+
 <br>
 
 ### Goals
@@ -150,11 +156,11 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 
 Commands such as `menuItem`, `inViewMessage` and `move` are left out and considered a convenience; not sensitive to performance-critical tasks such as generating nodes, setting or connecting attributes etc.
 
-Hence interoperability looks like this.
+Hence interoperability, where necessary, looks like this.
 
 ```python
-import cmdx
 from maya import cmds
+import cmdx
 
 group = cmds.group(name="group", empty=True)
 cmds.move(group, 0, 50, 0)
@@ -162,6 +168,27 @@ group = cmdx.encode(group)
 group["rotateX", cmdx.Radians] = 3.14
 cmds.select(cmdx.decode(group))
 ```
+
+An alternative to `cmdx.decode` is to simply cast it to `str`, which will convert a `cmdx` node into the equivalent shortest path.
+
+```python
+cmds.select(str(group))
+```
+
+Another aspect of `cmdx` that differ from `cmds` is the number arguments to functions, such as `listConnections` and `ls`.
+
+```python
+from maya import cmds
+import cmdx
+
+node = cmdx.createNode("transform")
+cmds.listConnections(str(node), source=True)
+cmdx.listConnections(str(node), source=True)
+TypeError: listConnections() got an unexpected keyword argument 'source'
+```
+
+
+The reason for this limitation is because the functions `cmds` 
 
 - See [API Documentation]() for which members are available in `cmdx`
 - Submit an [issue](issues) or [pull-request](#fork) with commands you miss
@@ -333,6 +360,36 @@ For familiarity, an attribute may also be accessed by string concatenation.
 attr = node + ".tx"
 ```
 
+#### Cached
+
+Sometimes, a value is queried when you know it hasn't changed since your last query. By passing `cmdx.Cached` to any attribute, the previously computed value is returned, without the round-trip the the Maya API.
+
+```python
+import cmdx
+node = cmdx.createNode("transform")
+node["tx"] = 5
+assert node["tx"] == 5
+node["tx"] = 10
+assert node["tx", cmdx.Cached] == 5
+assert node["tx"] == 10
+```
+
+Using `cmdx.Cached` is a lot faster than recomputing the value, sometimes by several orders of magnitude depending on the type of value being queried.
+
+#### Time
+
+The `time` argument of `cmdx.getAttr` enables a query to yield results relative a specific point in time. The `time` argument of `Plug.read` offers this same convenience, only faster.
+
+```python
+import cmdx
+from maya import cmds
+node = cmdx.createNode("transform")
+
+cmds.setKeyframe(str(node), attribute="tx", time=[1, 100], value=0.0)
+cmds.setKeyframe(str(node), attribute="tx", time=[50], value=10.0)
+cmds.keyTangent(str(node), attribute="tx", time=(1, 100), outTangentType="linear")
+```
+
 <br>
 
 ### Compound and Array Attributes
@@ -394,6 +451,52 @@ Legacy syntax is also supported, and is almost as fast - the overhead is one add
 cmdx.connectAttr(a + ".translateX", b + ".translateX")
 ```
 
+### Iterators
+
+Any method on a `Node` returning multiple values do so in the form of an iterator.
+
+```python
+a = cmdx.createNode("transform")
+b = cmdx.createNode("transform", parent=a)
+c = cmdx.createNode("transform", parent=a)
+
+for child in a.children():
+   pass
+```
+
+Because it is an iterator, it is important to keep in mind that you cannot index into it, nor compare it with a list or tuple.
+
+```python
+a.children()[0]
+ERROR
+
+a.children() == [b, c]
+False  # The iterator does not equal the list, no matter the content
+```
+
+From a performance perspective, returning all values from an iterator is equally fast as returning them all at once, as `cmds` does, so you may wonder why do it this way? 
+
+It's because an iterator only spends time computing the values requested, so returning any number *less than* the total number yields performance benefits.
+
+```python
+i = a.children()
+assert next(i) == b
+assert next(i) == c
+```
+
+For convenience, every iterator features a corresponding "singular" version of said iterator for readability.
+
+```python
+assert a.child() == b
+```
+
+**More iterators**
+
+- `a.children()`
+- `a.connections()`
+- `a.siblings()`
+- `a.descendents()`
+
 <br>
 
 ### FAQ
@@ -431,8 +534,8 @@ Maya's Embedded Language (MEL) makes for a compact scene description format.
 
 ```python
 createNode transform -n "myNode"
-	setAttr .tx 12
-	setAttr .ty 9
+  setAttr .tx 12
+  setAttr .ty 9
 ```
 
 On creation, a node is "selected" which is leveraged by subsequent commands, commands that also reference attributes via their "short" name to further reduce file sizes.

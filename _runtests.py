@@ -15,6 +15,12 @@ if __name__ == "__main__":
         "--verbose",
         "--with-doctest",
 
+        "--with-coverage",
+        "--cover-html",
+        "--cover-package", "cmdx",
+        "--cover-erase",
+        "--cover-tests",
+
         "tests.py",
         "cmdx.py",
     ])

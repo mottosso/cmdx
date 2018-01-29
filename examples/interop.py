@@ -8,4 +8,4 @@ node = cmds.rename(node, "MyNode")
 node = cmdx.encode(node)
 node["rotate"] = (0, 45, 0)
 
-cmds.select(cmdx.decode(node))
+cmds.select(str(node))

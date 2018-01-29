@@ -19,6 +19,10 @@ if not IGNORE_VERSION:
 self = sys.modules[__name__]
 log = logging.getLogger("cmdx")
 
+TimeUnit = om.MTime.uiUnit()
+DistanceUnit = om.MDistance.uiUnit()
+AngleUnit = om.MAngle.uiUnit()
+
 ExistError = type("ExistError", (KeyError,), {})
 AlreadyExistError = type("AlreadyExistError", (KeyError,), {})
 
@@ -80,6 +84,9 @@ Feet = _Unit(om.MDistance, om.MDistance.kFeet)
 Miles = _Unit(om.MDistance, om.MDistance.kMiles)
 Yards = _Unit(om.MDistance, om.MDistance.kYards)
 
+_Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
+Cached = _Cached()
+
 
 class Node(object):
     """A Maya dependency node
@@ -94,9 +101,9 @@ class Node(object):
         True
         >>> transform = createNode("transform")
         >>> transform["tx"] = 5
-        >>> transform >> decompose
+        >>> transform["worldMatrix"][0] >> decompose["inputMatrix"]
         >>> decompose["outputTranslate"]
-        (5.0, 0, 0)
+        (5.0, 0.0, 0.0)
 
     """
 
@@ -104,10 +111,17 @@ class Node(object):
 
     def __eq__(self, other):
         """MObject supports this operator explicitly"""
-        return self._mobject == other._mobject
+        try:
+            # Better to ask forgivness than permission
+            return self._mobject == other._mobject
+        except AttributeError:
+            return str(self) == str(other)
 
-    def __neq__(self, other):
-        return self._mobject != other._mobject
+    def __ne__(self, other):
+        try:
+            return self._mobject != other._mobject
+        except AttributeError:
+            return str(self) != str(other)
 
     def __str__(self):
         return self.name()
@@ -152,8 +166,21 @@ class Node(object):
         """
 
         unit = None
+        cached = False
         if isinstance(key, (list, tuple)):
-            key, unit = key
+            key, items = key[0], key[1:]
+
+            for item in items:
+                if isinstance(item, _Unit):
+                    unit = item
+                elif isinstance(item, _Cached):
+                    cached = True
+
+        if cached:
+            try:
+                return CachedPlug(self._cache[key, unit])
+            except KeyError:
+                log.warning("No previous value found")
 
         try:
             plug = self._fn.findPlug(key, False)
@@ -165,7 +192,7 @@ class Node(object):
 
             raise ExistError("%s.%s" % (path, key))
 
-        return Plug(self, plug, unit=unit)
+        return Plug(self, plug, unit=unit, key=key)
 
     def __setitem__(self, key, value):
         """Support item assignment of new attributes or values
@@ -227,6 +254,9 @@ class Node(object):
         self._mobject = mobject
         self._fn = self._Fn(mobject)
 
+        # {"attr": {"dirty": False, "value": 0.1}}
+        self._cache = dict()
+
     def name(self):
         """Return the name of this node
 
@@ -239,16 +269,8 @@ class Node(object):
 
         return self._fn.name()
 
-    def uuid(self):
-        """Return UUID of node
-
-        Example:
-            >>> node = createNode("transform")
-            >>> uuid = node.uuid()
-
-        """
-
-        return self._fn.uuid()
+    # Alias
+    path = name
 
     def connect(self, other):
         """Attempt to automatically connect one node to another
@@ -262,9 +284,13 @@ class Node(object):
             >>> node1 = createNode("transform")
             >>> node2 = createNode("transform")
             >>> node1 >> node2
-            >>> for connection in node1["t"].connections():
+            >>> for connection in node1["t"].connections(plugs=True):
             ...   assert connection == node2["t"]
             ...
+            >>> node1 >> node1
+            Traceback (most recent call last):
+            ...
+            TypeError: Cannot connect node to itself
 
         """
 
@@ -388,6 +414,16 @@ class Node(object):
         Arguments:
             attr (str): Name of attribute to check
 
+        Example:
+            >>> node = createNode("transform")
+            >>> node.hasAttr("mysteryAttribute")
+            False
+            >>> node.hasAttr("translateX")
+            True
+            >>> node["myAttr"] = Double()  # Dynamic attribute
+            >>> node.hasAttr("myAttr")
+            True
+
         """
 
         return self._fn.hasAttribute(attr)
@@ -413,12 +449,29 @@ class Node(object):
         attribute = attr._mplug.attribute()
         self._fn.removeAttribute(attribute)
 
-    def connections(self, type=None, unit=None):
+    def connections(self, type=None, unit=None, plugs=False):
         """Yield plugs of node with a connection to any other plug
 
         Arguments:
             unit (int, optional): Return plug in this unit,
                 e.g. Meters or Radians
+            type (str, optional): Restrict output to nodes of this type,
+                e.g. "transform" or "mesh"
+            plugs (bool, optional): Return plugs, rather than nodes
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = createNode("transform", name="A")
+            >>> b = createNode("multDoubleLinear", name="B")
+            >>> a["nodeState"] << b["nodeState"]
+            >>> list(a.connections()) == [b]
+            True
+            >>> list(b.connections()) == [a]
+            True
+            >>> a.connection() == b
+            True
+            >>> a.connection(plugs=True) == b["nodeState"]
+            True
 
         """
 
@@ -431,19 +484,24 @@ class Node(object):
                 node = Node(mobject)
 
             if not type or type == node._fn.typeName:
-                yield Plug(node, plug, unit)
+                plug = Plug(node, plug, unit)
+                for connection in plug.connections(plugs=plugs):
+                    yield connection
 
-    def connection(self, type=None, unit=None):
-        return next(self.connections(type, unit), None)
+    def connection(self, type=None, unit=None, plugs=False):
+        """Singular version of :func:`connections()`"""
+        return next(self.connections(type, unit, plugs), None)
 
 
 class DagNode(Node):
     """A Maya DAG node
 
     The difference between this and Node is that a DagNode
-    can have children and a parent.
+    can have one or more children and one parent (multiple
+    parents not supported).
 
     Example:
+        >>> _ = cmds.file(new=True, force=True)
         >>> parent = createNode("transform")
         >>> child = createNode("transform", parent=parent)
         >>> child.parent() == parent
@@ -453,7 +511,8 @@ class DagNode(Node):
         >>> parent.child() == child
         True
         >>> sibling = createNode("transform", parent=parent)
-        >>> list(parent.siblings()) == [child, sibling]
+        >>> child.sibling() == sibling
+        True
         >>> shape = createNode("mesh", parent=child)
         >>> child.shape() == shape
         True
@@ -489,14 +548,15 @@ class DagNode(Node):
         """Return shortest unique path to node
 
         Example:
-            >>> parent = createNode("transform", "myParent")
-            >>> child = createNode("transform", "myChild", parent=parent)
+            >>> _ = cmds.file(new=True, force=True)
+            >>> parent = createNode("transform", name="myParent")
+            >>> child = createNode("transform", name="myChild", parent=parent)
             >>> child.shortestPath()
             u'myChild'
-            >>> child = createNode("transform", "myChild")
+            >>> child = createNode("transform", name="myChild")
             >>> # Now `myChild` could refer to more than a single node
             >>> child.shortestPath()
-            u'myParent|myChild'
+            u'|myChild'
 
         """
 
@@ -566,6 +626,7 @@ class DagNode(Node):
             True
             >>> not child.parent(type="camera")
             True
+            >>> parent.parent()
 
         """
 
@@ -580,12 +641,26 @@ class DagNode(Node):
         if not type or type == fn.typeName:
             return cls(mobject)
 
-    def children(self, type=None, filter=om.MFn.kTransform):
+    def children(self, type=None, filter=None):
         """Return children of node
 
         Arguments:
             type (str, optional): Return only children that match this type
             filter (int, optional): Return only children with this function set
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = createNode("transform", "a")
+            >>> b = createNode("transform", "b", parent=a)
+            >>> c = createNode("transform", "c", parent=a)
+            >>> d = createNode("mesh", "d", parent=c)
+            >>> list(a.children()) == [b, c]
+            True
+            >>> a.child() == b
+            True
+            >>> a.child(type="mesh")
+            >>> c.child(type="mesh") == d
+            True
 
         """
 
@@ -612,59 +687,93 @@ class DagNode(Node):
         return next(self.shapes(type), None)
 
     def siblings(self):
-        pass
+        parent = self.parent()
+
+        if parent is not None:
+            for child in parent.children():
+                if child != self:
+                    yield child
+
+    def sibling(self):
+        return next(self.siblings(), None)
+
+    # Module-level expression; this isn't evaluated
+    # at run-time, for that extra performance boost.
+    if __maya_version__ >= 2017:
+        def descendents(self, type=om.MFn.kInvalid):
+            """ Faster and more efficient dependency graph traversal"""
+            typeName = None
+
+            # Support filtering by typeName
+            if isinstance(type, str):
+                typeName = type
+                type = om.MFn.kInvalid
+
+            it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
+            it.reset(self._mobject, om.MItDag.kDepthFirst, type)
+            it.next()  # Skip self
+
+            while not it.isDone():
+                mobj = it.currentItem()
+                node = DagNode(mobj)
+
+                if not typeName or typeName == node._fn.typeName:
+                    yield node
+
+                it.next()
+
+    else:
+        def descendents(self, type=None):
+            """Recursive, depth-first search; compliant with MItDag of 2017+"""
+            def _descendents(node, type=None, children=None):
+                children = children or list()
+                children.append(node)
+                for child in node.children(filter=None):
+                    _descendents(child, type, children)
+
+                return children
+
+            # Support filtering by typeName
+            typeName = None
+            if isinstance(type, str):
+                typeName = type
+                type = om.MFn.kInvalid
+
+            descendents = _descendents(self, type)[1:]  # Skip self
+
+            for child in descendents:
+                if not typeName or typeName == child._fn.typeName:
+                    yield child
 
     def descendent(self, type=om.MFn.kInvalid):
+        """Singular version of :func:`descendents()`
+
+        A recursive, depth-first search
+
+        a
+        |
+        b---d
+        |   |
+        c   e
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = createNode("transform", "a")
+            >>> b = createNode("transform", "b", parent=a)
+            >>> c = createNode("transform", "c", parent=b)
+            >>> d = createNode("transform", "d", parent=b)
+            >>> e = createNode("transform", "e", parent=d)
+            >>> a.descendent() == a.child()
+            True
+            >>> list(a.descendents()) == [b, c, d, e]
+            True
+            >>> f = createNode("mesh", "f", parent=e)
+            >>> list(a.descendents(type="mesh")) == [f]
+            True
+
+        """
+
         return next(self.descendents(type), None)
-
-    def descendents(self, type=om.MFn.kInvalid):
-        if __maya_version__ >= 2017:
-            return self._descendents_2017(type)
-        else:
-            return self._descendents_2015(type)
-
-    def _descendents_2015(self, type=None):
-        """Recursive, depth-first search; compliant with MItDag of 2017+"""
-        def _descendents(node, type=None, children=None):
-            children = children or list()
-            children.append(node)
-            for child in node.children(filter=None):
-                _descendents(child, type, children)
-
-            return children
-
-        # Support filtering by typeName
-        typeName = None
-        if isinstance(type, str):
-            typeName = type
-            type = om.MFn.kInvalid
-
-        descendents = _descendents(self, type)
-
-        for child in descendents:
-            if not typeName or typeName == child._fn.typeName:
-                yield child
-
-    def _descendents_2017(self, type=om.MFn.kInvalid):
-        """Faster and more efficient dependency graph traversal"""
-        typeName = None
-
-        # Support filtering by typeName
-        if isinstance(type, str):
-            typeName = type
-            type = om.MFn.kInvalid
-
-        it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
-        it.reset(self._mobject, om.MItDag.kDepthFirst, type)
-
-        while not it.isDone():
-            mobj = it.currentItem()
-            node = DagNode(mobj)
-
-            if not typeName or typeName == node._fn.typeName:
-                yield node
-
-            it.next()
 
 
 class ObjectSet(Node):
@@ -673,39 +782,113 @@ class ObjectSet(Node):
 
 class Plug(object):
     def __abs__(self):
+        """Return absolute value of plug
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["tx"] = -10
+            >>> abs(node["tx"])
+            10.0
+
+        """
+
         return abs(self.read())
 
     def __bool__(self):
-        """if plug:"""
+        """if plug:
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["tx"] = 10
+            >>> if node["tx"]:
+            ...   True
+            ...
+            True
+
+        """
+
         return bool(self.read())
 
     # Python 3
     __nonzero__ = __bool__
 
     def __float__(self):
+        """Return plug as floating point value
+
+        Example:
+            >>> node = createNode("transform")
+            >>> float(node["visibility"])
+            1.0
+
+        """
+
         return float(self.read())
 
     def __int__(self):
+        """Return plug as int
+
+        Example:
+            >>> node = createNode("transform")
+            >>> int(node["visibility"])
+            1
+
+        """
+
         return int(self.read())
 
     def __eq__(self, other):
+        """Compare plug to `other`
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["visibility"] == True
+            True
+            >>> node["visibility"] == node["nodeState"]
+            False
+            >>> node["visibility"] != node["nodeState"]
+            True
+
+        """
+
         if isinstance(other, Plug):
             other = other.read()
         return self.read() == other
 
-    def __neq__(self, other):
+    def __ne__(self, other):
         if isinstance(other, Plug):
             other = other.read()
         return self.read() != other
 
     def __div__(self, other):
-        """Python 2.x division"""
+        """Python 2.x division
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["tx"] = 5
+            >>> node["ty"] = 2
+            >>> node["tx"] / node["ty"]
+            2.5
+
+        """
+
         if isinstance(other, Plug):
             other = other.read()
         return self.read() / other
 
     def __floordiv__(self, other):
-        """Integer division, e.g. self // other"""
+        """Integer division, e.g. self // other
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["tx"] = 5
+            >>> node["ty"] = 2
+            >>> node["tx"] // node["ty"]
+            2.0
+            >>> node["tx"] // 2
+            2.0
+
+        """
+
         if isinstance(other, Plug):
             other = other.read()
         return self.read() // other
@@ -717,8 +900,36 @@ class Plug(object):
         return self.read() / other
 
     def __add__(self, other):
+        """Support legacy add string to plug
+
+        Note:
+            Adding to short name is faster, e.g. node["t"] + "x",
+            than adding to longName, e.g. node["translate"] + "X"
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["tx"] = 5
+            >>> node["translate"] + "X"
+            5.0
+            >>> node["t"] + "x"
+            5.0
+            >>> try:
+            ...   node["t"] + node["r"]
+            ... except TypeError:
+            ...   error = True
+            ...
+            >>> error
+            True
+
+        """
+
         if isinstance(other, str):
-            return self._node[self.name() + other]
+            try:
+                # E.g. node["t"] + "x"
+                return self._node[self.name() + other]
+            except ExistError:
+                # E.g. node["translate"] + "X"
+                return self._node[self.name(long=True) + other]
 
         raise TypeError(
             "unsupported operand type(s) for +: 'Plug' and '%s'"
@@ -726,6 +937,15 @@ class Plug(object):
         )
 
     def __str__(self):
+        """Return value as str
+
+        Example:
+            >>> node = createNode("transform")
+            >>> str(node["tx"])
+            '0.0'
+
+        """
+
         return str(self.read())
 
     def __repr__(self):
@@ -740,29 +960,62 @@ class Plug(object):
         other.connect(self)
 
     def __iter__(self):
+        """Iterate over value as a tuple
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translate"] = (0, 1, 2)
+            >>> for index, axis in enumerate(node["translate"]):
+            ...   assert axis == float(index)
+            ...
+
+        """
+
         for value in self.read():
             yield value
 
     def __getitem__(self, index):
+        """Read from child of array or compound plug
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translate"][0].read()
+            0.0
+            >>> node["visibility"][0]
+            Traceback (most recent call last):
+            ...
+            TypeError: transform13.visibility does not support indexing
+
+        """
         cls = self.__class__
 
         if self._mplug.isArray:
-            index = self._mplug.elementByLogicalIndex(index)
-            return cls(self._node, index, self._unit)
+            item = self._mplug.elementByLogicalIndex(index)
+            return cls(self._node, item, self._unit)
 
         elif self._mplug.isCompound:
-            index = self._mplug.child(index)
-            return cls(self._node, index, self._unit)
+            item = self._mplug.child(index)
+            return cls(self._node, item, self._unit)
 
         else:
-            raise TypeError("%s does not support indexing "
-                            "(it is neither array nor "
-                            "compound attribute)" % self.path())
+            raise TypeError(
+                "%s does not support indexing" % self.path()
+            )
 
     def __setitem__(self, index, value):
+        """Write to child of array or compound plug
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translate"][0] = 5
+            >>> node["tx"]
+            5.0
+
+        """
+
         self[index].write(value)
 
-    def __init__(self, node, mplug, unit=None):
+    def __init__(self, node, mplug, unit=None, key=None):
         """A Maya plug
 
         Arguments:
@@ -777,8 +1030,21 @@ class Plug(object):
         self._node = node
         self._mplug = mplug
         self._unit = unit
+        self._cached = None
+        self._key = key
 
     def type(self):
+        """Retrieve API type of plug as string
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translate"].type()
+            'kAttribute3Double'
+            >>> node["translateX"].type()
+            'kDoubleLinearAttribute'
+
+        """
+
         return self._mplug.attribute().apiTypeStr
 
     def path(self):
@@ -788,41 +1054,51 @@ class Plug(object):
             useFullAttributePath=True
         )
 
-    def name(self):
+    def name(self, long=False):
         return self._mplug.partialName(
             includeNodeName=False,
-            useLongNames=False,
+            useLongNames=long,
             useFullAttributePath=True
         )
 
-    def read(self, unit=None):
+    def read(self, unit=None, time=None):
         unit = unit if unit is not None else self._unit
+        context = None
+
+        if time is not None:
+            context = om.MDGContext(om.MTime(time, TimeUnit))
 
         try:
-            return _plug_to_python(self._mplug, unit)
+            value = _plug_to_python(
+                self._mplug,
+                unit=unit,
+                context=context
+            )
+
+            # Store cached value
+            self._node._cache[self._key, unit] = value
+
+            return value
 
         except RuntimeError:
             raise
 
-        except TypeError as e:
+        except TypeError:
             # Expected errors
-            raise TypeError(
-                "'%s': failed to read attribute: %s"
-                % (self.path(), e)
-            )
+            log.error("'%s': failed to read attribute" % self.path())
+            raise
 
     def write(self, value):
         try:
-            return _python_to_plug(value, self)
+            _python_to_plug(value, self)
+            self._cached = value
 
         except RuntimeError:
             raise
 
-        except TypeError as e:
-            raise TypeError(
-                "'%s': failed to write attribute: %s"
-                % (self.path(), e)
-            )
+        except TypeError:
+            log.error("'%s': failed to write attribute" % self.path())
+            raise
 
     def connect(self, other):
         mod = om.MDGModifier()
@@ -840,7 +1116,7 @@ class Plug(object):
                     source=True,
                     destination=True,
                     type=None,
-                    plugs=True,
+                    plugs=False,
                     unit=None):
         """Yield plugs connected to self
 
@@ -868,7 +1144,7 @@ class Plug(object):
                    source=True,
                    destination=True,
                    type=None,
-                   plug=True,
+                   plug=False,
                    unit=None):
         return next(self.connections(source,
                                      destination,
@@ -892,27 +1168,68 @@ class Plug(object):
         return self._node
 
 
-def _plug_to_python(plug, unit=None):
+class CachedPlug(Plug):
+    def __init__(self, value):
+        self._value = value
+
+    def read(self):
+        return self._value
+
+
+def _plug_to_python(plug, unit=None, context=None):
     """Convert native `plug` to Python type
 
     Arguments:
         plug (om.MPlug): Native Maya plug
+        unit (int, optional): Return value in this unit, e.g. Meters
+        context (om.MDGContext, optional): Return value in this context
 
     """
 
-    if plug.isCompound:
-        return tuple(
-            _plug_to_python(plug.child(index), unit)
-            for index in range(plug.numChildren())
+    if context is None:
+        context = om.MDGContext.kNormal
+
+    # Multi attributes
+    #   _____
+    #  |     |
+    #  |     ||
+    #  |     ||
+    #  |_____||
+    #   |_____|
+    #
+    if plug.isArray and plug.isCompound:
+        # E.g. locator["worldPosition"]
+        return _plug_to_python(
+            plug.elementByLogicalIndex(0), unit, context
         )
 
     elif plug.isArray:
-        # E.g. transform["worldMatrix"]
+        # E.g. transform["worldMatrix"][0]
+        # E.g. locator["worldPosition"][0]
+        count = plug.numElements()
+        if count:
+            return tuple(
+                _plug_to_python(
+                    plug.elementByLogicalIndex(index),
+                    unit,
+                    context
+                )
+                for index in range(count)
+            )
+
+    elif plug.isCompound:
         return tuple(
-            _plug_to_python(plug.elementByLogicalIndex(index), unit)
-            for index in range(plug.numElements())
+            _plug_to_python(plug.child(index), unit, context)
+            for index in range(plug.numChildren())
         )
 
+    # Simple attributes
+    #   _____
+    #  |     |
+    #  |     |
+    #  |     |
+    #  |_____|
+    #
     attr = plug.attribute()
     type = attr.apiType()
     if type == om.MFn.kTypedAttribute:
@@ -924,10 +1241,15 @@ def _plug_to_python(plug, unit=None):
 
         elif innerType == om.MFnData.kMatrix:
             # E.g. transform["worldMatrix"][0]
-            return tuple(om.MFnMatrixData(plug.asMObject()).matrix())
+            if plug.isArray:
+                plug = plug.elementByLogicalIndex(0)
+
+            return tuple(
+                om.MFnMatrixData(plug.asMObject(context)).matrix()
+            )
 
         elif innerType == om.MFnData.kString:
-            return plug.asString()
+            return plug.asString(context)
 
         elif innerType == om.MFnData.kInvalid:
             # E.g. time1.timewarpIn_Hidden
@@ -939,43 +1261,47 @@ def _plug_to_python(plug, unit=None):
                             % innerType)
 
     elif type == om.MFn.kMatrixAttribute:
-        return tuple(om.MFnMatrixData(plug.asMObject()).matrix())
+        return tuple(om.MFnMatrixData(plug.asMObject(context)).matrix())
+
+    elif type == om.MFnData.kDoubleArray:
+        raise TypeError("%s: kDoubleArray is not supported" % plug)
 
     elif type in (om.MFn.kDoubleLinearAttribute,
                   om.MFn.kFloatLinearAttribute):
+
         if unit is None:
-            return plug.asMDistance().asUnits(om.MDistance.uiUnit())
+            return plug.asMDistance(context).asUnits(DistanceUnit)
         elif unit == Millimeters:
-            return plug.asMDistance().asMillimeters()
+            return plug.asMDistance(context).asMillimeters()
         elif unit == Centimeters:
-            return plug.asMDistance().asCentimeters()
+            return plug.asMDistance(context).asCentimeters()
         elif unit == Meters:
-            return plug.asMDistance().asMeters()
+            return plug.asMDistance(context).asMeters()
         elif unit == Kilometers:
-            return plug.asMDistance().asKilometers()
+            return plug.asMDistance(context).asKilometers()
         elif unit == Inches:
-            return plug.asMDistance().asInches()
+            return plug.asMDistance(context).asInches()
         elif unit == Feet:
-            return plug.asMDistance().asFeet()
+            return plug.asMDistance(context).asFeet()
         elif unit == Miles:
-            return plug.asMDistance().asMiles()
+            return plug.asMDistance(context).asMiles()
         elif unit == Yards:
-            return plug.asMDistance().asYards()
+            return plug.asMDistance(context).asYards()
         else:
             raise TypeError("Unsupported unit '%d'" % unit)
 
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
         if unit is None:
-            return plug.asMAngle().asUnits(om.MAngle.uiUnit())
+            return plug.asMAngle(context).asUnits(om.MAngle.uiUnit())
         elif unit == Degrees:
-            return plug.asMAngle().asDegrees()
+            return plug.asMAngle(context).asDegrees()
         elif unit == Radians:
-            return plug.asMAngle().asRadians()
+            return plug.asMAngle(context).asRadians()
         elif unit == AngularSeconds:
-            return plug.asMAngle().asAngSeconds()
+            return plug.asMAngle(context).asAngSeconds()
         elif unit == AngularMinutes:
-            return plug.asMAngle().asAngMinutes()
+            return plug.asMAngle(context).asAngMinutes()
         else:
             raise TypeError("Unsupported unit '%d'" % unit)
 
@@ -984,18 +1310,18 @@ def _plug_to_python(plug, unit=None):
         innerType = om.MFnNumericAttribute(attr).numericType()
 
         if innerType == om.MFnNumericData.kBoolean:
-            return plug.asBool()
+            return plug.asBool(context)
 
         elif innerType in (om.MFnNumericData.kShort,
                            om.MFnNumericData.kInt,
                            om.MFnNumericData.kLong,
                            om.MFnNumericData.kByte):
-            return plug.asInt()
+            return plug.asInt(context)
 
         elif innerType in (om.MFnNumericData.kFloat,
                            om.MFnNumericData.kDouble,
                            om.MFnNumericData.kAddr):
-            return plug.asDouble()
+            return plug.asDouble(context)
 
         else:
             raise TypeError("Unsupported numeric type: %s"
@@ -1003,14 +1329,14 @@ def _plug_to_python(plug, unit=None):
 
     # Enum
     elif type == om.MFn.kEnumAttribute:
-        return plug.asShort()
+        return plug.asShort(context)
 
     elif type == om.MFn.kMessageAttribute:
         # In order to comply with `if plug:`
         return True
 
     elif type == om.MFn.kTimeAttribute:
-        return plug.asShort()
+        return plug.asShort(context)
 
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
@@ -1289,86 +1615,28 @@ def listRelatives(node,
         return list(node.children(type=type))
 
 
-def listConnections(attr,
-                    source=False,
-                    destination=True,
-                    connections=False,
-                    exactType=False,
-                    plugs=False,
-                    shapes=True,
-                    skipConversionNodes=False,
-                    type=None):
-    """List connections to `attr`
+def listConnections(attr):
+    """List connections of `attr`
 
     Arguments:
         attr (Plug or Node):
-        connections (bool, optional): List plugs from both
-            source and destination
-        destination (bool, optional): List plugs from the destination side
-        source (bool, optional): List plugs from the source side
-        shapes (bool, optional): Return shapes, rather than transforms
-        type (str, optional): When returning nodes, only return nodes
-            of this node type; e.g. "transform"
-        exactType (bool, optional): Unused; always True
-        skipConversionNodes (bool, optional): Unused; always False
 
     Example:
         >>> node1 = createNode("transform")
-        >>> node2 = createNode("transform")
-        >>> node1["tx"] >> node2["tx"]
+        >>> node2 = createNode("mesh", parent=node1)
+        >>> node1["v"] >> node2["v"]
         >>> listConnections(node1) == [node2]
         True
-        >>> listConnections(node1 + ".tx") == [node2]
+        >>> listConnections(node1 + ".v") == [node2]
         True
-        >>> listConnections(node1["tx"]) == [node2]
+        >>> listConnections(node1["v"]) == [node2]
         True
-        >>> listConnections(node1["tx"], type="transform") == [node2]
-        True
-        >>> listConnections(node1["tx"], type="transform", shapes=False) == []
+        >>> listConnections(node2) == [node1]
         True
 
     """
 
-    if connections:
-        destination, source = True, True
-
-    if isinstance(attr, Plug):
-        its = [attr.connections(
-            destination=destination,
-            source=source,
-        )]
-
-    elif isinstance(attr, Node):
-        # Return connections to all
-        # connected attributes of Node
-        its = iter(
-            a.connections(
-                destination=destination,
-                source=source
-            )
-            for a in attr.connections()
-        )
-
-    else:
-        raise TypeError("Invalid type '%s'" % type(attr))
-
-    output = list()
-    for it in its:
-        for plug in it:
-
-            if plugs:
-                output.append(plug)
-                continue
-
-            node = plug.node()
-
-            if not shapes and node._mobject.hasFn(om.MFn.kShape):
-                node = node.parent()
-
-            if not type or type == node._fn.typeName:
-                output.append(node)
-
-    return output
+    return list(node for node in attr.connections())
 
 
 def connectAttr(src, dst):
@@ -1511,7 +1779,7 @@ class _AbstractAttribute(dict):
             # Support Attribute -> string comparison
             return self["name"] == other
 
-    def __neq__(self, other):
+    def __ne__(self, other):
         try:
             return self["name"] != other["name"]
         except AttributeError:
