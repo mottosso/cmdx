@@ -1139,7 +1139,6 @@ class Plug(object):
             True
             >>> a["ihi"]
             2
-            >>> a["ihi"].connection(plug=True)
 
         """
 
