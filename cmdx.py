@@ -748,13 +748,15 @@ class DagNode(Node):
     def descendent(self, type=om.MFn.kInvalid):
         """Singular version of :func:`descendents()`
 
-        A recursive, depth-first search
+        A recursive, depth-first search.
 
-        a
-        |
-        b---d
-        |   |
-        c   e
+        .. code-block:: python
+
+            a
+            |
+            b---d
+            |   |
+            c   e
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1574,11 +1576,7 @@ def listRelatives(node,
                   type=None,
                   children=False,
                   allDesdencents=False,
-                  fullPath=True,
                   parent=False,
-                  path=True,
-                  noIntermediate=False,
-                  allParents=False,
                   shapes=False):
     """List relatives of `node`
 
@@ -1657,56 +1655,6 @@ def connectAttr(src, dst):
     src.connect(dst)
 
 
-def ls(selection=False, type=om.MFn.kInvalid):
-    nodes = list()
-
-    if selection:
-        return self.selection(type)
-
-    it = om.MItDependencyNodes(type)
-    while not it.isDone():
-        mobj = it.thisNode()
-
-        if mobj.hasFn(om.MFn.kDagNode):
-            nodes.append(DagNode(mobj))
-        else:
-            nodes.append(Node(mobj))
-
-        it.next()
-
-    return nodes
-
-
-def selection(type=None):
-    # TODO: Needs a faster solution without `cmds`
-    kwargs = {"selection": True, "long": True}
-
-    if type:
-        kwargs["type"] = type
-
-    return [
-        encode(path) for path in cmds.ls(**kwargs)
-    ]
-
-    nodes = list()
-    selectionList = om.MGlobal.getActiveSelectionList()
-
-    if not selectionList.length() > 0:
-        return nodes
-
-    it = om.MItSelectionList(selectionList, om.MFn.kDagNode)
-
-    while not it.isDone():
-        mobj = it.currentItem()
-
-        if mobj.hasFn(om.MFn.kDagNode):
-            nodes.append(DagNode(mobj))
-        else:
-            nodes.append(Node(mobj))
-
-        it.next()
-
-
 def delete(*nodes):
     mod = om.MDGModifier()
 
@@ -1714,15 +1662,6 @@ def delete(*nodes):
         mod.deleteNode(node._mobject)
 
     mod.doIt()
-
-
-def select(nodes, replace=True):
-    if not isinstance(nodes, (tuple, list)):
-        nodes = [nodes]
-
-    # TODO: Needs a faster solution without `cmds`
-    nodes = [decode(node) for node in nodes]
-    cmds.select(nodes, replace=replace)
 
 
 def parent(children, parent, relative=True, absolute=False):
