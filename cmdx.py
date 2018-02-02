@@ -184,7 +184,7 @@ class Node(object):
 
         try:
             plug = self._fn.findPlug(key, False)
-        except RuntimeError:
+        except (TypeError, RuntimeError):
             try:
                 path = self.path()
             except AttributeError:
@@ -641,7 +641,7 @@ class DagNode(Node):
         if not type or type == fn.typeName:
             return cls(mobject)
 
-    def children(self, type=None, filter=None):
+    def children(self, type=None, filter=om.MFn.kTransform):
         """Return children of node
 
         Arguments:
@@ -658,8 +658,8 @@ class DagNode(Node):
             True
             >>> a.child() == b
             True
-            >>> a.child(type="mesh")
-            >>> c.child(type="mesh") == d
+            >>> c.child(type="mesh")
+            >>> c.child(type="mesh", filter=None) == d
             True
 
         """
@@ -677,8 +677,8 @@ class DagNode(Node):
             if not type or type == fn.typeName:
                 yield cls(mobject)
 
-    def child(self, type=None):
-        return next(self.children(type), None)
+    def child(self, type=None, filter=om.MFn.kTransform):
+        return next(self.children(type, filter), None)
 
     def shapes(self, type=None):
         return self.children(type, om.MFn.kShape)
@@ -978,13 +978,14 @@ class Plug(object):
         """Read from child of array or compound plug
 
         Example:
-            >>> node = createNode("transform")
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node = createNode("transform", name="mynode")
             >>> node["translate"][0].read()
             0.0
             >>> node["visibility"][0]
             Traceback (most recent call last):
             ...
-            TypeError: transform13.visibility does not support indexing
+            TypeError: mynode.visibility does not support indexing
 
         """
         cls = self.__class__
