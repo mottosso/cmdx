@@ -463,14 +463,12 @@ class Node(object):
             >>> _ = cmds.file(new=True, force=True)
             >>> a = createNode("transform", name="A")
             >>> b = createNode("multDoubleLinear", name="B")
-            >>> a["nodeState"] << b["nodeState"]
+            >>> a["ihi"] << b["ihi"]
             >>> list(a.connections()) == [b]
             True
             >>> list(b.connections()) == [a]
             True
             >>> a.connection() == b
-            True
-            >>> a.connection(plugs=True) == b["nodeState"]
             True
 
         """
@@ -488,9 +486,9 @@ class Node(object):
                 for connection in plug.connections(plugs=plugs):
                     yield connection
 
-    def connection(self, type=None, unit=None, plugs=False):
+    def connection(self, type=None, unit=None, plug=False):
         """Singular version of :func:`connections()`"""
-        return next(self.connections(type, unit, plugs), None)
+        return next(self.connections(type, unit, plug), None)
 
 
 class DagNode(Node):
@@ -1130,6 +1128,19 @@ class Plug(object):
                 default is True
             unit (int, optional): Return plug in this unit, e.g. Meters
 
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = createNode("transform", name="A")
+            >>> b = createNode("multDoubleLinear", name="B")
+            >>> a["ihi"] << b["ihi"]
+            >>> a["ihi"].connection() == b
+            True
+            >>> b["ihi"].connection() == a
+            True
+            >>> a["ihi"]
+            2
+            >>> a["ihi"].connection(plug=True)
+
         """
 
         for plug in self._mplug.connectedTo(source, destination):
@@ -1149,6 +1160,7 @@ class Plug(object):
                    type=None,
                    plug=False,
                    unit=None):
+        """Return first connection from :func:`connections()`"""
         return next(self.connections(source,
                                      destination,
                                      type=type,
@@ -1189,6 +1201,8 @@ def _plug_to_python(plug, unit=None, context=None):
 
     """
 
+    assert not plug.isNull, "'%s' was null" % plug
+
     if context is None:
         context = om.MDGContext.kNormal
 
@@ -1200,6 +1214,7 @@ def _plug_to_python(plug, unit=None, context=None):
     #  |_____||
     #   |_____|
     #
+
     if plug.isArray and plug.isCompound:
         # E.g. locator["worldPosition"]
         return _plug_to_python(
