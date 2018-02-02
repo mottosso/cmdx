@@ -103,7 +103,6 @@ cmdx.delete(joe)
 - `connectAttr`
 - `listRelatives`
 - `listConnections`
-- `ls`
 
 **Attribute Types**
 
@@ -717,14 +716,6 @@ pynode.tx().set(5)
 ![](plots/node.attr.svg)
 
 ![](plots/node.attr=5.svg)
-
-#### ls
-
-Both `cmdx` and PyMEL wrap results in an object-oriented interface to resulting nodes.
-
-This one is great, as it tests the `__init__` of the internal class used to encapsulate a Maya node.
-
-![](plots/ls.svg)
 
 <br>
 

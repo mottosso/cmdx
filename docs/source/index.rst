@@ -37,7 +37,6 @@ The basics from `maya.cmds` are included.
 .. autofunction:: setAttr
 .. autofunction:: addAttr
 .. autofunction:: connectAttr
-.. autofunction:: ls
 .. autofunction:: listRelatives
 .. autofunction:: listConnections
 
