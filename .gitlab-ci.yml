@@ -1,0 +1,43 @@
+tests:maya2015:
+  stage: test
+  image: mottosso/maya:2015sp6
+  dependencies:
+    - monte
+  script:
+    - wget https://bootstrap.pypa.io/get-pip.py &&
+      mayapy get-pip.py &&
+      mayapy -m pip install
+        nose
+        nose-exclude
+        coverage
+        sphinx
+        six
+        sphinxcontrib-napoleon
+        python-coveralls
+    - mayapy --version
+    - echo $CI_PIPELINE_ID
+    - echo $CI_JOB_ID
+    - mayapy _runtests.py
+    - mayapy _builddocs.py
+
+tests:maya2017:
+  stage: test
+  image: mottosso/maya:2017
+  dependencies:
+    - monte
+  script:
+    - wget https://bootstrap.pypa.io/get-pip.py &&
+      mayapy get-pip.py &&
+      mayapy -m pip install
+        nose
+        nose-exclude
+        coverage
+        sphinx
+        six
+        sphinxcontrib-napoleon
+        python-coveralls
+    - mayapy --version
+    - echo $CI_PIPELINE_ID
+    - echo $CI_JOB_ID
+    - mayapy _runtests.py
+    - mayapy _builddocs.py
