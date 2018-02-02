@@ -40,6 +40,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
   - [cmds](#cmds)
   - [API 1.0](#api-1-0)
   - [API 2.0](#api-2-0)
+  - [MRV](#third-party)
+  - [metan](#third-party)
 - [YAGNI](#yagni)
 - [Timings](#timings)
 - [Measurements](#measurements)
@@ -580,6 +582,20 @@ DOS Batch                        2              0              0              2
 SUM:                            69           9769          22410          31253
 -------------------------------------------------------------------------------
 ```
+
+<br>
+
+### Third-party
+
+Another wrapping of the Maya API is [MRV](http://pythonhosted.org/MRV/), written by independent developer Sebastian Thiel for Maya 8.5-2011, and [Metan](https://github.com/utatsuya/metan)
+
+- http://pythonhosted.org/MRV/
+- https://github.com/utatsuya/metan
+
+Unlike `cmdx` and PyMEL, MRV (and seemingly Metan) exposes the Maya API as directly as possible.
+
+See the [Comparison page](http://pythonhosted.org/MRV/compare/index.html) for more details.
+
 <br>
 
 ### YAGNI
