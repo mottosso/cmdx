@@ -50,12 +50,14 @@ def test_getattrimplicit():
 def test_getattrcomplex():
     """Complex getAttr"""
     node = cmdx.createNode("transform")
-    assert_equals(node["worldMatrix"], (
+    assert_equals(node["worldMatrix"], ((
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ))
+    ),))
+
+    # Note the returned tuple in the above
 
     assert_equals(node["worldMatrix"][0], (
         1.0, 0.0, 0.0, 0.0,
