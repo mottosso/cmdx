@@ -104,17 +104,6 @@ def reload_pymel():
     pymel.core  # avoid linter warning
 
 
-New()
-
-node = cmdx.createNode("transform", name="Node")
-path = node.path()
-pynode = pm.PyNode(path)
-api1node = om1.MFnDagNode().create("transform")
-api2node = om2.MFnDagNode().create("transform")
-api1mfn = om1.MFnDagNode(api1node)
-api2mfn = om2.MFnDagNode(api2node)
-
-
 def om1GetAttr():
     """Fastest way of getting an attribute with API 2.0"""
     plug = api2mfn.findPlug("translateX", False)
@@ -139,9 +128,29 @@ def om2SetAttr(value):
     return plug.setDouble(value)
 
 
+New()
+
 Test("cmdx", "import", lambda: reload(cmdx), number=100)
 Test("cmds", "import", lambda: reload(cmds), number=100)
 Test("PyMEL", "import", reload_pymel, number=1)
+
+New()
+
+node = cmdx.createNode("transform", name="Node")
+path = node.path()
+pynode = pm.PyNode(path)
+api1node = om1.MFnDagNode().create("transform")
+api2node = om2.MFnDagNode().create("transform")
+api1mfn = om1.MFnDagNode(api1node)
+api2mfn = om2.MFnDagNode(api2node)
+
+node = cmdx.createNode("transform", name="Node")
+path = node.path()
+pynode = pm.PyNode(path)
+api1node = om1.MFnDagNode().create("transform")
+api2node = om2.MFnDagNode().create("transform")
+api1mfn = om1.MFnDagNode(api1node)
+api2mfn = om2.MFnDagNode(api2node)
 
 Test("cmds", "long", lambda: cmds.ls(path, long=True))
 Test("cmdx", "long", lambda: node.path())
@@ -190,20 +199,20 @@ Test("cmds", "listRelatives", lambda: cmds.listRelatives(path, children=True))
 Test("cmdx", "listRelatives", lambda: cmdx.listRelatives(parent, children=True))
 Test("PyMEL", "listRelatives", lambda: pm.listRelatives(pynode, children=True))
 
-New(lambda: [cmds.createNode("transform") for _ in range(100)])
+New()
 
-def lsapi(om):
-    it = om.MItDependencyNodes()
-    while not it.isDone():
-        it.thisNode()
-        it.next()
+root = cmdx.createNode("transform")
+parent = root
+path = root.path()
+pynode = pm.PyNode(path)
 
-Test("mel", "ls", lambda: mel.eval("ls"))
-Test("cmds", "ls", lambda: cmds.ls())
-Test("cmdx", "ls", lambda: list(cmdx.ls()))
-Test("PyMEL", "ls", lambda: pm.ls())
-Test("API 1.0", "ls", lambda: lsapi(om1))
-Test("API 2.0", "ls", lambda: lsapi(om2))
+for x in range(100):
+    parent = cmdx.createNode("transform", parent=parent)
+
+Test("mel", "allDescendents", lambda: mel.eval('listRelatives -allDescendents "transform1"'))
+Test("cmds", "allDescendents", lambda: cmds.listRelatives(path, allDescendents=True))
+Test("cmdx", "allDescendents", lambda: cmdx.listRelatives(root, allDescendents=True))
+Test("PyMEL", "allDescendents", lambda: pm.listRelatives(pynode, allDescendents=True))
 
 New()
 
