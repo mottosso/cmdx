@@ -659,11 +659,16 @@ class DagNode(Node):
             >>> c.child(type="mesh")
             >>> c.child(type="mesh", filter=None) == d
             True
+            >>> c.child(type=("mesh", "transform"), filter=None) == d
+            True
 
         """
 
         cls = self.__class__
         Fn = self._fn.__class__
+
+        if type and not isinstance(type, (tuple, list)):
+            type = (type,)
 
         for index in range(self._fn.childCount()):
             mobject = self._fn.child(index)
@@ -672,7 +677,7 @@ class DagNode(Node):
                 continue
 
             fn = Fn(mobject)
-            if not type or type == fn.typeName:
+            if not type or fn.typeName in type:
                 yield cls(mobject)
 
     def child(self, type=None, filter=om.MFn.kTransform):
@@ -698,8 +703,9 @@ class DagNode(Node):
     # Module-level expression; this isn't evaluated
     # at run-time, for that extra performance boost.
     if __maya_version__ >= 2017:
-        def descendents(self, type=om.MFn.kInvalid):
+        def descendents(self, type=None):
             """ Faster and more efficient dependency graph traversal"""
+            type = type or om.MFn.kInvalid
             typeName = None
 
             # Support filtering by typeName
@@ -967,12 +973,32 @@ class Plug(object):
             >>> node["translate"] = (0, 1, 2)
             >>> for index, axis in enumerate(node["translate"]):
             ...   assert axis == float(index)
+            ...   assert isinstance(axis, Plug)
             ...
+            >>> a = createNode("transform")
+            >>> a["myArray"] = Message(array=True)
+            >>> b = createNode("transform")
+            >>> c = createNode("transform")
+            >>> a["myArray"][0] << b["message"]
+            >>> a["myArray"][1] << c["message"]
+            >>> a["myArray"][0] in list(a["myArray"])
+            True
+            >>> a["myArray"][1] in list(a["myArray"])
+            True
 
         """
 
-        for value in self.read():
-            yield value
+        if self._mplug.isArray:
+            for index in range(self._mplug.evaluateNumElements()):
+                yield self[index]
+
+        elif self._mplug.isCompound:
+            for index in range(self._mplug.numChildren()):
+                yield self[index]
+
+        else:
+            for value in self.read():
+                yield value
 
     def __getitem__(self, index):
         """Read from child of array or compound plug
@@ -1113,6 +1139,18 @@ class Plug(object):
                 % (self.path(), other.path())
             )
 
+    def disconnect(self, other):
+        mod = om.MDGModifier()
+        mod.disconnect(self._mplug, other._mplug)
+
+        try:
+            mod.doIt()
+        except RuntimeError:
+            raise ValueError(
+                "Could not disconnect '%s' -> '%s'"
+                % (self.path(), other.path())
+            )
+
     def connections(self,
                     source=True,
                     destination=True,
@@ -1223,16 +1261,14 @@ def _plug_to_python(plug, unit=None, context=None):
     elif plug.isArray:
         # E.g. transform["worldMatrix"][0]
         # E.g. locator["worldPosition"][0]
-        count = plug.numElements()
-        if count:
-            return tuple(
-                _plug_to_python(
-                    plug.elementByLogicalIndex(index),
-                    unit,
-                    context
-                )
-                for index in range(count)
+        return tuple(
+            _plug_to_python(
+                plug.elementByLogicalIndex(index),
+                unit,
+                context
             )
+            for index in range(plug.evaluateNumElements())
+        )
 
     elif plug.isCompound:
         return tuple(
@@ -1589,7 +1625,7 @@ def addAttr(node,
 def listRelatives(node,
                   type=None,
                   children=False,
-                  allDesdencents=False,
+                  allDescendents=False,
                   parent=False,
                   shapes=False):
     """List relatives of `node`
@@ -1615,7 +1651,7 @@ def listRelatives(node,
     if not isinstance(node, DagNode):
         return None
 
-    elif allDesdencents:
+    elif allDescendents:
         return list(node.descendents(type=type))
 
     elif shapes:
