@@ -2,6 +2,8 @@
 from nose.tools import (
     with_setup,
     assert_equals,
+    assert_raises,
+    assert_is,
     assert_almost_equals,
 )
 
@@ -17,6 +19,7 @@ def new_scene():
 
 @with_setup(new_scene)
 def test_createNode():
+    """cmdx.createNode works"""
     node = cmdx.createNode("transform")
     parent = cmdx.createNode("transform", name="MyNode")
     assert_equals(parent.name(), "MyNode")
@@ -105,6 +108,7 @@ def test_getattrtime():
 
 @with_setup(new_scene)
 def test_getcached():
+    """Returning a cached plug works"""
     node = cmdx.createNode("transform")
     assert_equals(node["translate"], (0.0, 0.0, 0.0))
     assert_equals(node["rotate"], (0.0, 0.0, 0.0))
@@ -113,3 +117,20 @@ def test_getcached():
     node["tx"] = 10
     assert_equals(node["tx", cmdx.Cached], 5)
     assert_equals(node["tx"], 10)
+
+
+@with_setup(new_scene)
+def test_nodereuse():
+    """Node re-use works ok"""
+
+    nodeA = cmdx.createNode("transform", name="myNode")
+    nodeB = cmdx.createNode("transform", parent=nodeA)
+    assert_is(cmdx.encode("|myNode"), nodeA)
+    assert_is(nodeB.parent(), nodeA)
+
+    cmds.file(new=True, force=True)
+
+    # Even if it's available for re-use, it will still throw
+    # a ValueError on account of trying to fetch an MObject
+    # from a non-existing node.
+    assert_raises(ValueError, cmdx.encode, "|myNode")

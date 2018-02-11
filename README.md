@@ -26,6 +26,9 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Syntax](#syntax)
 - [Performance](#performance)
 - [Goals](#goals)
+- [Query Reduction](#query-reduction)
+  - [Node Reuse](#node-reuse)
+  - [Plug Reuse](#plug-reuse)
 - [Interoperability](#interoperability)
 - [Units](#units)
 - [Node Creation](#node-creation)
@@ -148,6 +151,60 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 | PEP8            | Continuous integration ensures that every commit follows the consistency of PEP8
 | Examples        | No feature is without examples
 | No side effects | Importing `cmdx` has no affect any other module
+
+<br>
+
+### Query Reduction
+
+Beyond making queries faster is making less of them.
+
+Any interaction with the Maya API carries the overhead of translating from Python to C++ and, most of the time, back to Python again. So in order to make `cmdx` fast, it must facilitate re-use of queries where re-use makes sense.
+
+#### Node Reuse
+
+Any node created or queried via `cmdx` is kept around until the next time the same node is returned, regardless of the exact manner in which it was queried.
+
+For example, when `encode`d or returned as children of another node.
+
+```python
+node = cmdx.createNode("transform", name="parent")
+assert cmdx.encode("|parent") is node
+```
+
+This property survives function calls too.
+
+```python
+def function1():
+  return cmdx.createNode("transform", name="parent")
+
+def function2():
+  return cmdx.encode("|parent")
+
+assert function1() is function2()
+```
+
+In fact, regardless of how a node is queried, there is only ever a single instance in `cmdx` of it. This is great for repeated queries to nodes and means nodes can contain an additional level of state, beyond the one found in Maya. A property which is used for, amongst other things, optimising *plug reuse*.
+
+#### Plug Reuse
+
+```python
+node = cmdx.createNode("transform")
+node["translateX"]  # Maya's API `findPlug` is called
+node["translateX"]  # Previously found plug is returned
+node["translateX"]  # Previously found plug is returned
+node["translateX"]  # ...
+```
+
+Whenever an attribute is queried, a number of things happen.
+
+1. An `MObject` is retrieved via string-comparison
+2. A relevant plug is found via another string-comparison
+3. A value is retrieved, wrapped in a Maya API object, e.g. MDistance
+4. The object is cast to Python object, e.g. MDistance to `float`
+
+This isn't just 4 interactions with the Maya API, it's also 3 interactions with the *Maya scenegraph*. An interaction of this nature triggers the propagation and handling of the dirty flag, which in turn triggers a virtually unlimited number of additional function calls; both internally to Maya - i.e. the `compute()` method - and in any Python that might be listening - e.g. arbitrary callbacks.
+
+With module level caching, a repeated query to either an `MObject` or `MPlug` is handled entirely in Python, saving on both time and computational resources.
 
 <br>
 

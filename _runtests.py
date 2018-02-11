@@ -22,6 +22,7 @@ if __name__ == "__main__":
         "--cover-tests",
 
         "tests.py",
+        "test_performance.py",
         "cmdx.py",
     ])
 

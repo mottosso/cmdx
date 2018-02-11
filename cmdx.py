@@ -9,6 +9,8 @@ from maya.api import OpenMaya as om
 
 IGNORE_VERSION = bool(os.getenv("CMDX_IGNORE_VERSION"))
 SAFEMODE = bool(os.getenv("CMDX_SAFEMODE"))
+DISABLE_NODE_REUSE = SAFEMODE or bool(os.getenv("CMDX_DISABLE_NODE_REUSE"))
+DISABLE_PLUG_REUSE = SAFEMODE or bool(os.getenv("CMDX_DISABLE_PLUG_REUSE"))
 
 __version__ = "0.1.0"
 __maya_version__ = int(cmds.about(version=True))
@@ -110,6 +112,9 @@ class Node(object):
 
     _Fn = om.MFnDependencyNode
 
+    # Module-level cache of previously created instances of Node
+    _Cache = dict()
+
     def __eq__(self, other):
         """MObject supports this operator explicitly"""
         try:
@@ -151,60 +156,66 @@ class Node(object):
 
         return self[other.strip(".")]
 
-    def findPlug(self, name, cached=False):
-        """Cache previously found plugs, for performance
+    # Module-level branch; evaluated on import
+    if DISABLE_PLUG_REUSE:
+        def findPlug(self, name):
+            """Always lookup plug by name"""
+            return self.fn.findPlug(name, False)
 
-        Part of the time taken in querying an attribute is the
-        act of finding a plug given its name as a string.
+    else:
+        def findPlug(self, name, cached=False):
+            """Cache previously found plugs, for performance
 
-        This causes a 25% reduction in time taken for repeated
-        attribute queries. Though keep in mind that state is stored
-        in the `cmdx` object which currently does not survive rediscovery.
-        That is, if a node is created and later discovered through a call
-        to `encode`, then the original and discovered nodes carry one
-        state each.
+            Part of the time taken in querying an attribute is the
+            act of finding a plug given its name as a string.
 
-        Additional challenges include storing the same plug for both
-        long and short name of said attribute, which is currently not
-        the case.
+            This causes a 25% reduction in time taken for repeated
+            attribute queries. Though keep in mind that state is stored
+            in the `cmdx` object which currently does not survive rediscovery.
+            That is, if a node is created and later discovered through a call
+            to `encode`, then the original and discovered nodes carry one
+            state each.
 
-        Arguments:
-            name (str): Name of plug to find
-            cached (bool, optional): Return cached plug, or
-                throw an exception. Default to False, which
-                means it will run Maya's findPlug() and cache
-                the result.
-            safe (bool, optional): Always find the plug through
-                Maya's API, defaults to False. This will not perform
-                any caching and is intended for use during debugging
-                to spot whether caching is causing trouble.
+            Additional challenges include storing the same plug for both
+            long and short name of said attribute, which is currently not
+            the case.
 
-        Example:
-            >>> node = createNode("transform")
-            >>> node.findPlug("translateX", cached=True)
-            Traceback (most recent call last):
-            ...
-            KeyError: "'translateX' not cached"
-            >>> plug1 = node.findPlug("translateX")
-            >>> isinstance(plug1, om.MPlug)
-            True
-            >>> plug1 is node.findPlug("translateX")
-            True
-            >>> plug1 is node.findPlug("translateX", cached=True)
-            True
+            Arguments:
+                name (str): Name of plug to find
+                cached (bool, optional): Return cached plug, or
+                    throw an exception. Default to False, which
+                    means it will run Maya's findPlug() and cache
+                    the result.
+                safe (bool, optional): Always find the plug through
+                    Maya's API, defaults to False. This will not perform
+                    any caching and is intended for use during debugging
+                    to spot whether caching is causing trouble.
 
-        """
+            Example:
+                >>> node = createNode("transform")
+                >>> node.findPlug("translateX", cached=True)
+                Traceback (most recent call last):
+                ...
+                KeyError: "'translateX' not cached"
+                >>> plug1 = node.findPlug("translateX")
+                >>> isinstance(plug1, om.MPlug)
+                True
+                >>> plug1 is node.findPlug("translateX")
+                True
+                >>> plug1 is node.findPlug("translateX", cached=True)
+                True
 
-        if not SAFEMODE:
+            """
+
             try:
                 return self._state["plugs"][name]
             except KeyError:
                 if cached:
                     raise KeyError("'%s' not cached" % name)
 
-        plug = self._fn.findPlug(name, False)
-        self._state["plugs"][name] = plug
-        return plug
+            plug = self.fn.findPlug(name, False)
+            self._state["plugs"][name] = plug
+            return plug
 
     def __getitem__(self, key):
         """Get plug from self
@@ -306,15 +317,49 @@ class Node(object):
     def __delitem__(self, key):
         self.deleteAttr(key)
 
+    if not DISABLE_NODE_REUSE:
+        def __new__(cls, mobject):
+            """Re-use previous instances of Node
+
+            This enables persistent state of each node, even when
+            a node is discovered at a later time, such as via
+            :func:`DagNode.parent()` or :func:`DagNode.descendents()`
+
+            Example:
+                >>> nodeA = createNode("transform", name="myNode")
+                >>> nodeB = createNode("transform", parent=nodeA)
+                >>> encode("|myNode") is nodeA
+                True
+                >>> nodeB.parent() is nodeA
+                True
+
+            """
+
+            handle = om.MObjectHandle(mobject)
+            hsh = handle.hashCode()
+
+            try:
+                return cls._Cache[hsh]
+            except KeyError:
+                pass
+
+            self = super(Node, cls).__new__(cls, mobject)
+            cls._Cache[hsh] = self
+            return self
+
     def __init__(self, mobject):
         self._mobject = mobject
-        self._fn = self._Fn(mobject)
-
-        # {"attr": {"dirty": False, "value": 0.1}}
+        self._fn = None  # Lazily assigned
         self._cache = dict()
         self._state = {
             "plugs": dict(),
         }
+
+    @property
+    def fn(self):
+        if self._fn is None:
+            self._fn = self._Fn(self._mobject)
+        return self._fn
 
     def name(self):
         """Return the name of this node
@@ -326,7 +371,7 @@ class Node(object):
 
         """
 
-        return self._fn.name()
+        return self.fn.name()
 
     # Alias
     path = name
@@ -423,9 +468,9 @@ class Node(object):
         """Return dictionary of all attributes"""
 
         attrs = {}
-        count = self._fn.attributeCount()
+        count = self.fn.attributeCount()
         for index in range(count):
-            obj = self._fn.attribute(index)
+            obj = self.fn.attribute(index)
             plug = self.findPlug(obj)
 
             try:
@@ -445,7 +490,7 @@ class Node(object):
 
     def type(self):
         """Return type name"""
-        return self._fn.typeName
+        return self.fn.typeName
 
     def addAttr(self, attr):
         """Add a new dynamic attribute to node
@@ -465,7 +510,7 @@ class Node(object):
         if isinstance(attr, _AbstractAttribute):
             attr = attr.create()
 
-        self._fn.addAttribute(attr)
+        self.fn.addAttribute(attr)
 
     def hasAttr(self, attr):
         """Return whether or not `attr` exists
@@ -485,7 +530,7 @@ class Node(object):
 
         """
 
-        return self._fn.hasAttribute(attr)
+        return self.fn.hasAttribute(attr)
 
     def deleteAttr(self, attr):
         """Delete `attr` from node
@@ -506,7 +551,7 @@ class Node(object):
             attr = self[attr]
 
         attribute = attr._mplug.attribute()
-        self._fn.removeAttribute(attribute)
+        self.fn.removeAttribute(attribute)
 
     def connections(self, type=None, unit=None, plugs=False):
         """Yield plugs of node with a connection to any other plug
@@ -532,7 +577,7 @@ class Node(object):
 
         """
 
-        for plug in self._fn.getConnections():
+        for plug in self.fn.getConnections():
             mobject = plug.node()
 
             if mobject.hasFn(om.MFn.kDagNode):
@@ -540,7 +585,7 @@ class Node(object):
             else:
                 node = Node(mobject)
 
-            if not type or type == node._fn.typeName:
+            if not type or type == node.fn.typeName:
                 plug = Plug(node, plug, unit)
                 for connection in plug.connections(plugs=plugs):
                     yield connection
@@ -599,7 +644,7 @@ class DagNode(Node):
 
         """
 
-        return self._fn.fullPathName()
+        return self.fn.fullPathName()
 
     def shortestPath(self):
         """Return shortest unique path to node
@@ -617,7 +662,7 @@ class DagNode(Node):
 
         """
 
-        return self._fn.partialPathName()
+        return self.fn.partialPathName()
 
     def addChild(self, child, index=Last):
         """Add `child` to self
@@ -634,7 +679,7 @@ class DagNode(Node):
 
         """
 
-        self._fn.addChild(child._mobject, index)
+        self.fn.addChild(child._mobject, index)
 
     def assembly(self):
         """Return the top-level parent of node
@@ -651,7 +696,7 @@ class DagNode(Node):
 
         """
 
-        path = self._fn.getPath()
+        path = self.fn.getPath()
 
         root = None
         for level in range(path.length() - 1):
@@ -660,11 +705,11 @@ class DagNode(Node):
         return self.__class__(root.node()) if root else self
 
     def translation(self, space=Transform):
-        transform = om.MFnTransform(self._fn.getPath())
+        transform = om.MFnTransform(self.fn.getPath())
         return transform.translation(space)
 
     def rotation(self, space=Transform):
-        transform = om.MFnTransform(self._fn.getPath())
+        transform = om.MFnTransform(self.fn.getPath())
         return transform.rotation(space)
 
     # Alias
@@ -687,13 +732,13 @@ class DagNode(Node):
 
         """
 
-        mobject = self._fn.parent(0)
+        mobject = self.fn.parent(0)
 
         if mobject.apiType() == om.MFn.kWorld:
             return
 
         cls = self.__class__
-        fn = self._fn.__class__(mobject)
+        fn = self.fn.__class__(mobject)
 
         if not type or type == fn.typeName:
             return cls(mobject)
@@ -724,13 +769,13 @@ class DagNode(Node):
         """
 
         cls = self.__class__
-        Fn = self._fn.__class__
+        Fn = self.fn.__class__
 
         if type and not isinstance(type, (tuple, list)):
             type = (type,)
 
-        for index in range(self._fn.childCount()):
-            mobject = self._fn.child(index)
+        for index in range(self.fn.childCount()):
+            mobject = self.fn.child(index)
 
             if filter is not None and not mobject.hasFn(filter):
                 continue
@@ -780,7 +825,7 @@ class DagNode(Node):
                 mobj = it.currentItem()
                 node = DagNode(mobj)
 
-                if not typeName or typeName == node._fn.typeName:
+                if not typeName or typeName == node.fn.typeName:
                     yield node
 
                 it.next()
@@ -805,7 +850,7 @@ class DagNode(Node):
             descendents = _descendents(self, type)[1:]  # Skip self
 
             for child in descendents:
-                if not typeName or typeName == child._fn.typeName:
+                if not typeName or typeName == child.fn.typeName:
                     yield child
 
     def descendent(self, type=om.MFn.kInvalid):
@@ -1247,7 +1292,7 @@ class Plug(object):
             else:
                 node = Node(mobject)
 
-            if not type or type == node._fn.typeName:
+            if not type or type == node.fn.typeName:
                 yield Plug(node, plug, unit) if plugs else node
 
     def connection(self,
