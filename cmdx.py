@@ -8,6 +8,7 @@ from maya import cmds
 from maya.api import OpenMaya as om
 
 IGNORE_VERSION = bool(os.getenv("CMDX_IGNORE_VERSION"))
+SAFEMODE = bool(os.getenv("CMDX_SAFEMODE"))
 
 __version__ = "0.1.0"
 __maya_version__ = int(cmds.about(version=True))
@@ -150,6 +151,61 @@ class Node(object):
 
         return self[other.strip(".")]
 
+    def findPlug(self, name, cached=False):
+        """Cache previously found plugs, for performance
+
+        Part of the time taken in querying an attribute is the
+        act of finding a plug given its name as a string.
+
+        This causes a 25% reduction in time taken for repeated
+        attribute queries. Though keep in mind that state is stored
+        in the `cmdx` object which currently does not survive rediscovery.
+        That is, if a node is created and later discovered through a call
+        to `encode`, then the original and discovered nodes carry one
+        state each.
+
+        Additional challenges include storing the same plug for both
+        long and short name of said attribute, which is currently not
+        the case.
+
+        Arguments:
+            name (str): Name of plug to find
+            cached (bool, optional): Return cached plug, or
+                throw an exception. Default to False, which
+                means it will run Maya's findPlug() and cache
+                the result.
+            safe (bool, optional): Always find the plug through
+                Maya's API, defaults to False. This will not perform
+                any caching and is intended for use during debugging
+                to spot whether caching is causing trouble.
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node.findPlug("translateX", cached=True)
+            Traceback (most recent call last):
+            ...
+            KeyError: "'translateX' not cached"
+            >>> plug1 = node.findPlug("translateX")
+            >>> isinstance(plug1, om.MPlug)
+            True
+            >>> plug1 is node.findPlug("translateX")
+            True
+            >>> plug1 is node.findPlug("translateX", cached=True)
+            True
+
+        """
+
+        if not SAFEMODE:
+            try:
+                return self._state["plugs"][name]
+            except KeyError:
+                if cached:
+                    raise KeyError("'%s' not cached" % name)
+
+        plug = self._fn.findPlug(name, False)
+        self._state["plugs"][name] = plug
+        return plug
+
     def __getitem__(self, key):
         """Get plug from self
 
@@ -183,8 +239,8 @@ class Node(object):
                 log.warning("No previous value found")
 
         try:
-            plug = self._fn.findPlug(key, False)
-        except (TypeError, RuntimeError):
+            plug = self.findPlug(key)
+        except RuntimeError:
             try:
                 path = self.path()
             except AttributeError:
@@ -241,7 +297,7 @@ class Node(object):
                         raise AlreadyExistError(key)
 
         try:
-            plug = self._fn.findPlug(key, False)
+            plug = self.findPlug(key)
         except RuntimeError:
             raise KeyError(key)
 
@@ -256,6 +312,9 @@ class Node(object):
 
         # {"attr": {"dirty": False, "value": 0.1}}
         self._cache = dict()
+        self._state = {
+            "plugs": dict(),
+        }
 
     def name(self):
         """Return the name of this node
@@ -367,7 +426,7 @@ class Node(object):
         count = self._fn.attributeCount()
         for index in range(count):
             obj = self._fn.attribute(index)
-            plug = self._fn.findPlug(obj, False)
+            plug = self.findPlug(obj)
 
             try:
                 value = Plug(self, plug).read()
