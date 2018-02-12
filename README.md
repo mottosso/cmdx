@@ -16,7 +16,7 @@ If you fit in either of these groups, then `cmdx` is for you.
 On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictures/pymel), and 2.5x faster than `maya.cmds` at common tasks; at best, it is 1,300x faster than PyMEL.
 
 - See [Measurements](#measurements) and [Timings](#timings) for details
-- See [API Documentation]() for usage 
+- See [API Documentation](/api) for usage 
 
 <br>
 <br>
@@ -836,20 +836,4 @@ Test("cmdx", "createNodeBulk", createMany, number=1, repeat=100, setup=New)
 # createNodeBulkInclusive API 2.0: 145.2 ms (627.39 µs/call)
 # createNodeBulkExclusive API 2.0: 132.8 ms (509.58 µs/call)
 # createNodeBulk cmdx: 150.5 ms (620.12 µs/call)
-```
-
-<br>
-
-### Contributing
-
-Dealing with Maya version incompatibilities is done by falling back to `cmds` where relevant. There will be a performance hit, but MUST be functionally identical.
-
-**Example**
-
-```python
-def descendents(self):
-  if __maya_version__ <= 2015:
-    # use maya.cmds functionality
-  else:
-    # use API 2.0
 ```
