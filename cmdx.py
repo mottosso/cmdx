@@ -338,10 +338,11 @@ class Node(object):
             handle = om.MObjectHandle(mobject)
             hsh = handle.hashCode()
 
-            try:
-                return cls._Cache[hsh]
-            except KeyError:
-                pass
+            if handle.isValid():
+                try:
+                    return cls._Cache[hsh]
+                except KeyError:
+                    pass
 
             self = super(Node, cls).__new__(cls, mobject)
             cls._Cache[hsh] = self
@@ -704,13 +705,9 @@ class DagNode(Node):
 
         return self.__class__(root.node()) if root else self
 
-    def translation(self, space=Transform):
-        transform = om.MFnTransform(self.fn.getPath())
-        return transform.translation(space)
-
-    def rotation(self, space=Transform):
-        transform = om.MFnTransform(self.fn.getPath())
-        return transform.rotation(space)
+    def transformation(self, space=Transform):
+        plug = self["worldMatrix"][0] if space == World else self["matrix"]
+        return om.MFnMatrixData(plug._mplug.asMObject()).transformation()
 
     # Alias
     root = assembly
