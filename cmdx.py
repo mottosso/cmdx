@@ -318,12 +318,17 @@ class Node(object):
         self.deleteAttr(key)
 
     if not DISABLE_NODE_REUSE:
-        def __new__(cls, mobject):
+        def __new__(cls, mobject, exists=True):
             """Re-use previous instances of Node
 
             This enables persistent state of each node, even when
             a node is discovered at a later time, such as via
             :func:`DagNode.parent()` or :func:`DagNode.descendents()`
+
+            Arguments:
+                mobject (MObject): Maya API object to wrap
+                exists (bool, optional): Whether or not to search for
+                    an existing Python instance of this node
 
             Example:
                 >>> nodeA = createNode("transform", name="myNode")
@@ -338,7 +343,7 @@ class Node(object):
             handle = om.MObjectHandle(mobject)
             hsh = handle.hashCode()
 
-            if handle.isValid():
+            if exists and handle.isValid():
                 try:
                     return cls._Cache[hsh]
                 except KeyError:
@@ -348,7 +353,7 @@ class Node(object):
             cls._Cache[hsh] = self
             return self
 
-    def __init__(self, mobject):
+    def __init__(self, mobject, exists=True):
         self._mobject = mobject
         self._fn = None  # Lazily assigned
         self._cache = dict()
@@ -1634,9 +1639,9 @@ def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
         raise TypeError("Unrecognized node type '%s'" % type)
 
     if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
-        return DagNode(mobj)
+        return DagNode(mobj, exists=False)
     else:
-        return Node(mobj)
+        return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None):
