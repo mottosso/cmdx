@@ -2,15 +2,33 @@
 import os
 import sys
 import json
+import time
 import logging
+from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om
 
+PY3 = sys.version_info[0] == 3
+
+# Bypass assertion error on unsupported Maya versions
 IGNORE_VERSION = bool(os.getenv("CMDX_IGNORE_VERSION"))
+
+# Output profiling information to console
+# CAREFUL! This will flood your console. Use sparingly.
+TIMINGS = bool(os.getenv("CMDX_TIMINGS"))
+
+# Do not perform any caching of nodes or plugs
 SAFEMODE = bool(os.getenv("CMDX_SAFEMODE"))
-DISABLE_NODE_REUSE = SAFEMODE or bool(os.getenv("CMDX_DISABLE_NODE_REUSE"))
-DISABLE_PLUG_REUSE = SAFEMODE or bool(os.getenv("CMDX_DISABLE_PLUG_REUSE"))
+
+# Opt-in performance boosters
+ENABLE_NODE_REUSE = not SAFEMODE and bool(os.getenv("CMDX_ENABLE_NODE_REUSE"))
+ENABLE_PLUG_REUSE = not SAFEMODE and bool(os.getenv("CMDX_ENABLE_PLUG_REUSE"))
+
+if PY3:
+    string_types = str,
+else:
+    string_types = basestring,
 
 __version__ = "0.1.0"
 __maya_version__ = int(cmds.about(version=True))
@@ -18,6 +36,40 @@ __maya_version__ = int(cmds.about(version=True))
 # TODO: Lower this requirement
 if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
+
+
+def with_timing(text="{func}() {time:.2f} ns"):
+    """Append timing information to a function
+
+    Example:
+        @with_timing()
+        def function():
+            pass
+
+    """
+
+    def timings_decorator(func):
+        if not TIMINGS:
+            return func
+
+        @wraps(func)
+        def func_wrapper(*args, **kwargs):
+            t0 = time.clock()
+
+            try:
+                return func(*args, **kwargs)
+            finally:
+                t1 = time.clock()
+                duration = (t1 - t0) * 10 ** 6  # microseconds
+
+                log.debug(
+                    text.format(func=func.__name__,
+                                time=duration)
+                )
+
+        return func_wrapper
+    return timings_decorator
+
 
 self = sys.modules[__name__]
 log = logging.getLogger("cmdx")
@@ -157,14 +209,12 @@ class Node(object):
         return self[other.strip(".")]
 
     # Module-level branch; evaluated on import
-    if DISABLE_PLUG_REUSE:
-        def findPlug(self, name):
-            """Always lookup plug by name"""
-            return self.fn.findPlug(name, False)
-
-    else:
+    if ENABLE_PLUG_REUSE:
+        @with_timing("findPlug() reuse {time:.4f} ns")
         def findPlug(self, name, cached=False):
             """Cache previously found plugs, for performance
+
+            Cost: 4.9 microseconds/call
 
             Part of the time taken in querying an attribute is the
             act of finding a plug given its name as a string.
@@ -215,7 +265,23 @@ class Node(object):
 
             plug = self.fn.findPlug(name, False)
             self._state["plugs"][name] = plug
+
             return plug
+
+    else:
+        @with_timing("findPlug() no reuse {time:.4f} ns")
+        def findPlug(self, name):
+            """Always lookup plug by name
+
+            Cost: 27.7 microseconds/call
+
+            """
+
+            return self.fn.findPlug(name, False)
+
+    def clear(self):
+        """Clear state"""
+        self._state["plugs"].clear()
 
     def __getitem__(self, key):
         """Get plug from self
@@ -317,9 +383,12 @@ class Node(object):
     def __delitem__(self, key):
         self.deleteAttr(key)
 
-    if not DISABLE_NODE_REUSE:
+    if ENABLE_NODE_REUSE:
+        @with_timing()
         def __new__(cls, mobject, exists=True):
             """Re-use previous instances of Node
+
+            Cost: 10.7 microseconds
 
             This enables persistent state of each node, even when
             a node is discovered at a later time, such as via
@@ -353,6 +422,7 @@ class Node(object):
             cls._Cache[hsh] = self
             return self
 
+    @with_timing()
     def __init__(self, mobject, exists=True):
         self._mobject = mobject
         self._fn = None  # Lazily assigned
@@ -710,9 +780,16 @@ class DagNode(Node):
 
         return self.__class__(root.node()) if root else self
 
-    def transformation(self, space=Transform):
+    def transform(self, space=Object):
+        """Return MTransformationMatrix"""
+        # assert self._mobject.hasFn(om.MFn.kTransform), (
+        #     "%s does not inherit a Transform node" % self
+        # )
+
         plug = self["worldMatrix"][0] if space == World else self["matrix"]
         return om.MFnMatrixData(plug._mplug.asMObject()).transformation()
+
+        # return om.MFnTransform(self.fn.getPath())
 
     # Alias
     root = assembly
@@ -740,9 +817,8 @@ class DagNode(Node):
             return
 
         cls = self.__class__
-        fn = self.fn.__class__(mobject)
 
-        if not type or type == fn.typeName:
+        if not type or type == self.fn.__class__(mobject).typeName:
             return cls(mobject)
 
     def children(self, type=None, filter=om.MFn.kTransform):
@@ -890,6 +966,10 @@ class DagNode(Node):
 
 class ObjectSet(Node):
     """Support list-type operations on objectSets"""
+
+
+class Transform(object):
+    pass
 
 
 class Plug(object):
@@ -1538,6 +1618,10 @@ def _python_to_plug(value, plug):
     elif isinstance(value, om.MTime):
         plug._mplug.setMTime(value)
 
+    elif isinstance(value, om.MVector):
+        for index, value in enumerate(value):
+            _python_to_plug(value, plug[index])
+
     # Compound values
 
     elif isinstance(value, (tuple, list)):
@@ -1569,6 +1653,8 @@ def encode(path):
         path (str): Absolute or relative path to DAG or DG node
 
     """
+
+    assert isinstance(path, string_types), "%s was not string" % path
 
     selectionList = om.MSelectionList()
 
