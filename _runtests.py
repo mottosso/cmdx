@@ -10,6 +10,9 @@ if __name__ == "__main__":
     standalone.initialize()
     cmds.loadPlugin("matrixNodes", quiet=True)
 
+    os.environ["CMDX_ENABLE_NODE_REUSE"] = "1"
+    os.environ["CMDX_ENABLE_PLUG_REUSE"] = "1"
+
     argv = sys.argv[:]
     argv.extend([
         "--verbose",
