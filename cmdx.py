@@ -25,6 +25,10 @@ SAFEMODE = bool(os.getenv("CMDX_SAFEMODE"))
 ENABLE_NODE_REUSE = not SAFEMODE and bool(os.getenv("CMDX_ENABLE_NODE_REUSE"))
 ENABLE_PLUG_REUSE = not SAFEMODE and bool(os.getenv("CMDX_ENABLE_PLUG_REUSE"))
 
+# Node reuse depends on this member
+if not hasattr(om, "MObjectHandle"):
+    ENABLE_NODE_REUSE = False
+
 if PY3:
     string_types = str,
 else:
@@ -782,14 +786,8 @@ class DagNode(Node):
 
     def transform(self, space=Object):
         """Return MTransformationMatrix"""
-        # assert self._mobject.hasFn(om.MFn.kTransform), (
-        #     "%s does not inherit a Transform node" % self
-        # )
-
         plug = self["worldMatrix"][0] if space == World else self["matrix"]
         return om.MFnMatrixData(plug._mplug.asMObject()).transformation()
-
-        # return om.MFnTransform(self.fn.getPath())
 
     # Alias
     root = assembly
@@ -858,8 +856,7 @@ class DagNode(Node):
             if filter is not None and not mobject.hasFn(filter):
                 continue
 
-            fn = Fn(mobject)
-            if not type or fn.typeName in type:
+            if not type or Fn(mobject).typeName in type:
                 yield cls(mobject)
 
     def child(self, type=None, filter=om.MFn.kTransform):
@@ -884,9 +881,14 @@ class DagNode(Node):
 
     # Module-level expression; this isn't evaluated
     # at run-time, for that extra performance boost.
-    if __maya_version__ >= 2017:
+    if hasattr(om, "MItDag"):
         def descendents(self, type=None):
-            """ Faster and more efficient dependency graph traversal"""
+            """Faster and more efficient dependency graph traversal
+
+            Requires Maya 2017+
+
+            """
+
             type = type or om.MFn.kInvalid
             typeName = None
 
