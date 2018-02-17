@@ -18,6 +18,10 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See [API Documentation](/api) for usage 
 
+**Maya 2015 SP6 or higher recommended**
+
+`cmdx` utilises the `MObjectHandle` of API 2.0, which was introduced in one of the later service packs for Maya 2015. Some optimisations will not be available in earler versions of Maya, primarily [node reuse](#node-reuse).
+
 <br>
 <br>
 
@@ -162,6 +166,8 @@ Any interaction with the Maya API carries the overhead of translating from Pytho
 
 #### Node Reuse
 
+> Opt-in `CMDX_ENABLE_NODE_REUSE`
+
 Any node created or queried via `cmdx` is kept around until the next time the same node is returned, regardless of the exact manner in which it was queried.
 
 For example, when `encode`d or returned as children of another node.
@@ -186,6 +192,8 @@ assert function1() is function2()
 In fact, regardless of how a node is queried, there is only ever a single instance in `cmdx` of it. This is great for repeated queries to nodes and means nodes can contain an additional level of state, beyond the one found in Maya. A property which is used for, amongst other things, optimising *plug reuse*.
 
 #### Plug Reuse
+
+> Opt-in `CMDX_ENABLE_PLUG_REUSE`
 
 ```python
 node = cmdx.createNode("transform")
