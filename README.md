@@ -320,22 +320,11 @@ I'm sure someone has, and yes there are.
 
 #### Undo
 
-With every command made through `maya.cmds`, the undo history is populated such that you can undo a *block* of commands all at once. `cmdx` doesn't do this, which makes it faster, but also impossible to undo. Any node created or attribute changed is permanent, which is why it is that much more important that you take care of the creations and changes that you make.
+With every command made through `maya.cmds`, the undo history is populated such that you can undo a *block* of commands all at once. `cmdx` doesn't do this, which is how it remains fast, but also impossible to undo. Any node created or attribute changed is *permanent*, which is why it is that much more important that you take care of the creations and changes that you make.
 
-In the future, `cmdx` will expose a context manager to faciliate situations where you are willing to trade the ability to undo for performance.
+For undoable operations, see the section on using [`Modifier`](#modifier).
 
-It may look something like this.
-
-```pytyhon
-import cmdx
-
-with cmdx.undoBlock() as block:
-  node1 = block.createNode("decomposeMatrix")
-  node2 = block.createNode("transform")
-  node3 = block.createNode("transform")
-  block.connect(node1, node2)
-  block.setAttr(node3["tx"], 5)
-```
+<br>
 
 #### Crashes
 
@@ -562,6 +551,41 @@ assert a.child() == b
 - `a.connections()`
 - `a.siblings()`
 - `a.descendents()`
+
+<br>
+
+### Modifier
+
+`cmdx` is designed to make bulk operations fast, such as making exporters, importers and rigging frameworks. It is not ideal for interactive tools.
+
+However, in order to smooth out the line between what is a bulk operation and what is interactive, `cmdx` provides the `Modifier` which is a fast alternative to `cmds` that *retains undo*.
+
+For example.
+
+```pytyhon
+import cmdx
+
+with cmdx.Modifier() as mod:
+    node1 = mod.createNode("decomposeMatrix", name="Decompose")
+    node2 = mod.createNode("transform")
+    node3 = mod.createNode("transform", parent=node2)
+    mod.connect(node2 + ".worldMatrix", node1 + ".inputMatrix")
+    mod.connect(node1 + ".outputTranslate", node3 + ".translate")
+```
+
+Now when calling `undo`, the above lines will be undone as you'd expect.
+
+If you prefer, modern syntax still works here.
+
+```python
+with cmdx.Modifier() as mod:
+    parent = mod.createNode("transform", name="MyParemt")
+    child = mod.createNode("transform", parent=parent)
+    parent["translate"] = (1, 2, 3)
+    parent["rotate"] >> parent["rotate"]
+```
+
+This makes it easy to move a block of code into a modifier without changing things around. Perhaps to test performance, or to figure out whether undo support is necessary.
 
 <br>
 

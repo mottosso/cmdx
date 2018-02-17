@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import logging
+import contextlib
 from functools import wraps
 
 from maya import cmds
@@ -322,14 +323,9 @@ class Node(object):
         try:
             plug = self.findPlug(key)
         except RuntimeError:
-            try:
-                path = self.path()
-            except AttributeError:
-                path = self.name()
+            raise ExistError("%s.%s" % (self.path(), key))
 
-            raise ExistError("%s.%s" % (path, key))
-
-        return Plug(self, plug, unit=unit, key=key)
+        return Plug(self, plug, unit=unit, key=key, modifier=self._modifier)
 
     def __setitem__(self, key, value):
         """Support item assignment of new attributes or values
@@ -389,7 +385,7 @@ class Node(object):
 
     if ENABLE_NODE_REUSE:
         @with_timing()
-        def __new__(cls, mobject, exists=True):
+        def __new__(cls, mobject, exists=True, modifier=None):
             """Re-use previous instances of Node
 
             Cost: 10.7 microseconds
@@ -422,15 +418,16 @@ class Node(object):
                 except KeyError:
                     pass
 
-            self = super(Node, cls).__new__(cls, mobject)
+            self = super(Node, cls).__new__(cls, mobject, modifier=modifier)
             cls._Cache[hsh] = self
             return self
 
     @with_timing()
-    def __init__(self, mobject, exists=True):
+    def __init__(self, mobject, exists=True, modifier=None):
         self._mobject = mobject
         self._fn = None  # Lazily assigned
         self._cache = dict()
+        self._modifier = modifier
         self._state = {
             "plugs": dict(),
         }
@@ -1230,7 +1227,7 @@ class Plug(object):
 
         self[index].write(value)
 
-    def __init__(self, node, mplug, unit=None, key=None):
+    def __init__(self, node, mplug, unit=None, key=None, modifier=None):
         """A Maya plug
 
         Arguments:
@@ -1247,6 +1244,7 @@ class Plug(object):
         self._unit = unit
         self._cached = None
         self._key = key
+        self._modifier = modifier
 
     def type(self):
         """Retrieve API type of plug as string
@@ -1316,28 +1314,30 @@ class Plug(object):
             raise
 
     def connect(self, other):
-        mod = om.MDGModifier()
+        mod = self._modifier or om.MDGModifier()
         mod.connect(self._mplug, other._mplug)
 
-        try:
-            mod.doIt()
-        except RuntimeError:
-            raise ValueError(
-                "Could not connect '%s' -> '%s'"
-                % (self.path(), other.path())
-            )
+        if self._modifier is None:
+            try:
+                mod.doIt()
+            except RuntimeError:
+                raise ValueError(
+                    "Could not connect '%s' -> '%s'"
+                    % (self.path(), other.path())
+                )
 
     def disconnect(self, other):
-        mod = om.MDGModifier()
+        mod = self._modifier or om.MDGModifier()
         mod.disconnect(self._mplug, other._mplug)
 
-        try:
-            mod.doIt()
-        except RuntimeError:
-            raise ValueError(
-                "Could not disconnect '%s' -> '%s'"
-                % (self.path(), other.path())
-            )
+        if self._modifier is None:
+            try:
+                mod.doIt()
+            except RuntimeError:
+                raise ValueError(
+                    "Could not disconnect '%s' -> '%s'"
+                    % (self.path(), other.path())
+                )
 
     def connections(self,
                     source=True,
@@ -1685,6 +1685,71 @@ def decode(node):
         return node.shortestPath()
     except AttributeError:
         return node.name()
+
+
+class Modifier(object):
+    """Interactively edit an existing scenegraph with ability to undo
+
+    Example:
+        >>> with Modifier() as mod:
+        ...     node1 = mod.createNode("transform")
+        ...     node2 = mod.createNode("transform", parent=node1)
+        ...     mod.setAttr(node1, "translate", (1, 2, 3))
+        ...     value = mod.getAttr(node1, "translateX")
+        ...     mod.connect(node1 + ".translate", node2 + ".translate")
+        ...
+        >>> value
+        1.0
+        >>> node2["translate"][0]
+        1.0
+        >>> node2["translate"][1]
+        2.0
+        >>> with Modifier() as mod:
+        ...     node1 = mod.createNode("transform")
+        ...     node2 = mod.createNode("transform", parent=node1)
+        ...     node1["translate"] = (5, 6, 7)
+        ...     node1["translate"] >> node2["translate"]
+        ...
+        >>> node2["translate"][0]
+        5.0
+        >>> node2["translate"][1]
+        6.0
+
+    """
+
+    def __enter__(self):
+        self._modifier = om.MDagModifier()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._modifier.doIt()
+
+    def createNode(self, type, name=None, parent=None):
+        mobj = self._modifier.createNode(type)
+
+        if name is not None:
+            self._modifier.renameNode(mobj, name)
+
+        if parent is not None:
+            self._modifier.reparentNode(mobj, parent._mobject)
+
+        cls = DagNode if mobj.hasFn(om.MFn.kDagNode) else Node
+        return cls(mobj, exists=False, modifier=self._modifier)
+
+    def getAttr(self, node, key):
+        return node[key]
+
+    def setAttr(self, node, key, value):
+        node[key] = value
+
+    def connect(self, plug1, plug2):
+        plug1 >> plug2
+
+    def parent(self, node, parent=None):
+        self._modifier.reparentNode(node._mobject, parent)
+
+    def rename(self, node, name):
+        self._modifier.renameNode(node._mobject, parent)
 
 
 def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
