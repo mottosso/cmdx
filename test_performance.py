@@ -70,7 +70,7 @@ def environment(key, value=None):
 @contextlib.contextmanager
 def pop_environment(key):
     env = os.environ.copy()
-    os.environ.pop(key)
+    os.environ.pop(key, None)
     try:
         sys.modules.pop("cmdx")
         __import__("cmdx")
@@ -130,4 +130,4 @@ def test_rouge_mode():
         timings["createNode"]["rogue"]["percall"]
     )
 
-    assert_greater(rogue_vs_norogue, 0.75)
+    assert_greater(rogue_vs_norogue, 1.0)
