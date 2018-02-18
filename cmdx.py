@@ -907,32 +907,70 @@ class DagNode(Node):
 
             Requires Maya 2017+
 
+            Example:
+                >>> grandparent = createNode("transform")
+                >>> parent = createNode("transform", parent=grandparent)
+                >>> child = createNode("transform", parent=parent)
+                >>> mesh = createNode("mesh", parent=child)
+                >>> it = grandparent.descendents(type=Mesh)
+                >>> next(it) == mesh
+                True
+                >>> next(it)
+                Traceback (most recent call last):
+                ...
+                StopIteration
+
             """
 
             type = type or om.MFn.kInvalid
             typeName = None
 
             # Support filtering by typeName
-            if isinstance(type, str):
+            if isinstance(type, string_types):
                 typeName = type
                 type = om.MFn.kInvalid
 
             it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
-            it.reset(self._mobject, om.MItDag.kDepthFirst, type)
+            it.reset(
+                self._mobject,
+                om.MItDag.kDepthFirst,
+                om.MIteratorType.kMObject
+            )
+
             it.next()  # Skip self
 
             while not it.isDone():
                 mobj = it.currentItem()
                 node = DagNode(mobj)
 
-                if not typeName or typeName == node.fn.typeName:
-                    yield node
+                if typeName is None:
+                    if not type or type == node.fn.typeId:
+                        yield node
+                else:
+                    if not typeName or typeName == node.fn.typeName:
+                        yield node
 
                 it.next()
 
     else:
         def descendents(self, type=None):
-            """Recursive, depth-first search; compliant with MItDag of 2017+"""
+            """Recursive, depth-first search; compliant with MItDag of 2017+
+
+            Example:
+                >>> grandparent = createNode("transform")
+                >>> parent = createNode("transform", parent=grandparent)
+                >>> child = createNode("transform", parent=parent)
+                >>> mesh = createNode("mesh", parent=child)
+                >>> it = grandparent.descendents(type=Mesh)
+                >>> next(it) == mesh
+                True
+                >>> next(it)
+                Traceback (most recent call last):
+                ...
+                StopIteration
+
+            """
+
             def _descendents(node, type=None, children=None):
                 children = children or list()
                 children.append(node)
@@ -950,8 +988,12 @@ class DagNode(Node):
             descendents = _descendents(self, type)[1:]  # Skip self
 
             for child in descendents:
-                if not typeName or typeName == child.fn.typeName:
-                    yield child
+                if typeName is None:
+                    if not type or type == child.fn.typeId:
+                        yield child
+                else:
+                    if not typeName or typeName == child.fn.typeName:
+                        yield child
 
     def descendent(self, type=om.MFn.kInvalid):
         """Singular version of :func:`descendents()`
@@ -988,10 +1030,6 @@ class DagNode(Node):
 
 class ObjectSet(Node):
     """Support list-type operations on objectSets"""
-
-
-class Transform(object):
-    pass
 
 
 class Plug(object):
