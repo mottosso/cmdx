@@ -1,6 +1,14 @@
-<img height=140 src=https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png>
+---
+title: cmdx
+sitename: cmdx
+---
 
-Fast subset of `maya.cmds`
+<br>
+<br>
+
+<a href=/cmdx/><p align=center><img height=140 src=https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png></p></a>
+
+<p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a></p>
 
 <br>
 
@@ -16,17 +24,14 @@ If you fit in either of these groups, then `cmdx` is for you.
 On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictures/pymel), and 2.5x faster than `maya.cmds` at common tasks; at best, it is 1,300x faster than PyMEL.
 
 - See [Measurements](#measurements) and [Timings](#timings) for details
-- See [API Documentation](/api) for usage 
-
-**Maya 2015 SP6 or higher recommended**
-
-`cmdx` utilises the `MObjectHandle` of API 2.0, which was introduced in one of the later service packs for Maya 2015. Some optimisations will not be available in earler versions of Maya, primarily [node reuse](#node-reuse).
+- See [API Documentation](https://weightshift.io/cmdx/api) for usage 
 
 <br>
 <br>
 
 **Table of contents**
 
+- [System Requirements](#system-requirements)
 - [Syntax](#syntax)
 - [Performance](#performance)
 - [Goals](#goals)
@@ -40,6 +45,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
   - [Cached](#cached)
   - [Time](#time)
 - [Connections](#connections)
+- [Iterators](#iterators)
+- [Modifier](#modifier)
 - [FAQ](#faq)
 - [Comparison](#comparison)
   - [MEL](#mel)
@@ -62,9 +69,25 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
   - [`node`](#node-attr-attr)
   - [`ls`](#ls)
 - [Evolution](#evolution)
+- [Flags](#flags)
+  - [`CMDX_ENABLE_NODE_REUSE`](#cmdx_enable_node_reuse)
+  - [`CMDX_ENABLE_PLUG_REUSE`](#cmdx_enable_plug_reuse)
+  - [`CMDX_TIMINGS`](#cmdx_timings)
+  - [`CMDX_MEMORY_HOG_MODE`](#cmdx_memory_hog_mode)
+  - [`CMDX_IGNORE_VERSION`](#cmdx_ignore_version)
+  - [`CMDX_ROGUE_MODE`](#cmdx_rogue_mode)
+  - [`CMDX_SAFE_MODE`](#cmdx_safe_mode)
 - [References](#references)
 - [Notes](#notes)
   - [MDagModifier](#mdagmodifier)
+
+<br>
+
+### System Requirements
+
+`cmdx` runs on Maya 2015 SP3 and above.
+
+It *may* run on older versions too, but those are not being tested. To bypass the version check, see [`CMDX_IGNORE_VERSION`](#cmdx_ignore_version).
 
 <br>
 
@@ -150,11 +173,11 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 | Lightweight     | A single Python module, implementing critical parts well, leaving the rest to `cmds`
 | Persistent      | References to nodes do not break
 | Do not crash    | Working with low-level Maya API calls make it susceptible to crashes; cmdx should protect against this, without sacrificing performance
+| No side effects | Importing `cmdx` has no affect any other module
 | External        | Shipped alongside your code, not alongside Maya; you control the version, features and fixes.
 | Vendorable      | Embed an appropriate version of `cmdx` alongside your own project
 | PEP8            | Continuous integration ensures that every commit follows the consistency of PEP8
 | Examples        | No feature is without examples
-| No side effects | Importing `cmdx` has no affect any other module
 
 <br>
 
@@ -506,6 +529,8 @@ Legacy syntax is also supported, and is almost as fast - the overhead is one add
 cmdx.connectAttr(a + ".translateX", b + ".translateX")
 ```
 
+<br>
+
 ### Iterators
 
 Any method on a `Node` returning multiple values do so in the form of an iterator.
@@ -586,31 +611,6 @@ with cmdx.Modifier() as mod:
 ```
 
 This makes it easy to move a block of code into a modifier without changing things around. Perhaps to test performance, or to figure out whether undo support is necessary.
-
-<br>
-
-### FAQ
-
-> Why is it crashing?
-
-`cmdx` should never crash (if it does, please [submit a bug report!]()), but the cost of performance is safety. `maya.cmds` rarely causes a crash because it has safety procedures built in. It double checks to ensure that the object you operate on exists, and if it doesn't provides a safe warning message. This double-checking is part of what makes `maya.cmds` slow; conversely, the lack of it is part of why `cmdx` is so fast.
-
-Common causes of a crash is:
-
-- Use of a node that has been deleted
-- ... (add your issue here)
-
-This can happen when, for example, you experiment in the Script Editor, and retain access to nodes created from a different scene, or after the node has simply been deleted.
-
-> Why is PyMEL slow?
-
-...
-
-> Doesn't PyMEL also use the Maya API?
-
-Yes and no. Some functionality, such as [`listRelatives`](https://github.com/LumaPictures/pymel/blob/eb984107952cde052a3ecdb473e66c7db7deb3b7/pymel/core/general.py#L1026) call on `cmds.listRelatives` and later convert the output to instances of `PyNode`. This performs at best as well as `cmds`, with the added overhead of converting the transient path to a `PyNode`.
-
-Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.OpenMaya.MMatrix` class and would have come at virtually no cost, had it not inherited 2 additional layers of superclasses and implemented much of the [computationally expensive]() functionality in pure-Python.
 
 <br>
 
@@ -820,8 +820,112 @@ The next hard decision was to pivot from being a superset of `cmds` to a subset;
 
 These are some of the resources used to create this project.
 
-- http://austinjbaker.com/mplugs-setting-values
-- https://nccastaff.bournemouth.ac.uk/jmacey/RobTheBloke/www/mayaapi.html
+- [autinjbaker.com](http://austinjbaker.com/mplugs-setting-values)
+- [RobTheBloke](https://nccastaff.bournemouth.ac.uk/jmacey/RobTheBloke/www/mayaapi.html)
+
+<br>
+
+### FAQ
+
+> Why is it crashing?
+
+`cmdx` should never crash (if it does, please submit a bug report!), but the cost of performance is safety. `maya.cmds` rarely causes a crash because it has safety procedures built in. It double checks to ensure that the object you operate on exists, and if it doesn't provides a safe warning message. This double-checking is part of what makes `maya.cmds` slow; conversely, the lack of it is part of why `cmdx` is so fast.
+
+Common causes of a crash is:
+
+- Use of a node that has been deleted
+- ... (add your issue here)
+
+This can happen when, for example, you experiment in the Script Editor, and retain access to nodes created from a different scene, or after the node has simply been deleted.
+
+> Why is PyMEL slow?
+
+...
+
+> Doesn't PyMEL also use the Maya API?
+
+Yes and no. Some functionality, such as [`listRelatives`](https://github.com/LumaPictures/pymel/blob/eb984107952cde052a3ecdb473e66c7db7deb3b7/pymel/core/general.py#L1026) call on `cmds.listRelatives` and later convert the output to instances of `PyNode`. This performs at best as well as `cmds`, with the added overhead of converting the transient path to a `PyNode`.
+
+Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.OpenMaya.MMatrix` class and would have come at virtually no cost, had it not inherited 2 additional layers of superclasses and implemented much of the [computationally expensive]() functionality in pure-Python.
+
+<br>
+
+### Flags
+
+For performance and debugging reasons, parts of `cmdx` can be customised via environment variables.
+
+**Example**
+
+```bash
+$ set CMDX_ENABLE_NODE_REUSE=1
+$ mayapy
+```
+
+> NOTE: These can only be changed prior to importing or reloading `cmdx`, as they modify the physical layout of the code.
+
+#### `CMDX_ENABLE_NODE_REUSE`
+
+This opt-in variable enables `cmdx` to keep track of any nodes it has instantiated in the past and reuse its instantiation in order to save time. This will have a neglible impact on memory use (1 mb/1,000,000 nodes)
+
+```python
+node = cmdx.createNode("transform", name="myName")
+assert cmdx.encode("|myName") is node
+```
+
+#### `CMDX_ENABLE_PLUG_REUSE`
+
+Like node reuse, this will enable each node to only ever look-up a plug once and cache the results for later use. These two combined yields a 30-40% increase in performance.
+
+#### `CMDX_TIMINGS`
+
+Print timing information for performance critical sections of the code. For example, with node reuse, this will print the time taken to query whether an instance of a node already exists. It will also print the time taken to create a new instance of said node, such that they may be compared.
+
+> WARNING: Use sparingly, or else this can easily flood your console.
+
+#### `CMDX_MEMORY_HOG_MODE`
+
+Do not bother cleaning up after yourself. For example, callbacks registered to keep track of when a node is destroyed is typically cleaned up in order to avoid leaking memory. This however comes at a (neglible) cost which this flag prevents.
+
+#### `CMDX_IGNORE_VERSION`
+
+`cmdx` was written with Maya 2015 SP3 and above in mind and will check on import whether this is true to avoid unexpected side-effects. If you are sure an earlier version will work fine, this variable can be set to circumvent this check.
+
+If you find this to be true, feel free to submit a PR lowering this constant!
+
+#### `CMDX_ROGUE_MODE`
+
+In order to save on performance, `cmdx` holds onto `MObject` and `MFn*` instances. However this is discouraged in the Maya API documentation and can lead to a number of problems unless handled carefully.
+
+The carefulness of `cmdx` is how it monitors the destruction of any node via the `MNodeMessage.addNodeDestroyedCallback` and later uses the result in access to any attribute.
+
+For example, if a node has been created..
+
+```python
+node = cmdx.createNode("transform")
+```
+
+And a new scene created..
+
+```python
+cmds.file(new=True, force=True)
+```
+
+Then this reference is no longer valid..
+
+```python
+node.name()
+Traceback (most recent call last):
+...
+ExistError: "Cannot perform operation on deleted node"
+```
+
+Because of the above callback, this will throw a `cmdx.ExistError` (inherits `RuntimeError`).
+
+This callback, and checking of whether the callback has been called, comes at a cost which "Rogue Mode" circumvents. In Rogue Mode, the above would instead **cause an immediate and irreversible fatal crash**.
+
+#### `CMDX_SAFE_MODE`
+
+The existence of this variable disables any of the above optimisations and runs as safely as possible.
 
 <br>
 

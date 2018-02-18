@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
+import contextlib
+
 from nose.tools import (
     with_setup,
     assert_equals,
@@ -15,6 +19,30 @@ __maya_version__ = int(cmds.about(version=True))
 
 def new_scene():
     cmds.file(new=True, force=True)
+
+
+@contextlib.contextmanager
+def environment(key, value=None):
+    env = os.environ.copy()
+    os.environ[key] = value or "1"
+    try:
+        sys.modules.pop("cmdx")
+        __import__("cmdx")
+        yield
+    finally:
+        os.environ.update(env)
+
+
+@contextlib.contextmanager
+def pop_environment(key):
+    env = os.environ.copy()
+    os.environ.pop(key)
+    try:
+        sys.modules.pop("cmdx")
+        __import__("cmdx")
+        yield
+    finally:
+        os.environ.update(env)
 
 
 @with_setup(new_scene)
@@ -119,9 +147,29 @@ def test_getcached():
     assert_equals(node["tx"], 10)
 
 
+def test_plugreuse():
+    """Plug re-use works ok"""
+    node = cmdx.createNode("transform")
+    id(node["translate"]) == id(node["translate"])
+
+    with pop_environment("CMDX_ENABLE_PLUG_REUSE"):
+        node = cmdx.createNode("transform")
+        id(node["translate"]) != id(node["translate"])
+
+
 @with_setup(new_scene)
 def test_nodereuse():
     """Node re-use works ok"""
+
+    nodeA = cmdx.createNode("transform", name="myNode")
+    nodeB = cmdx.createNode("transform", parent=nodeA)
+    assert_is(cmdx.encode("|myNode"), nodeA)
+    assert_is(nodeB.parent(), nodeA)
+
+
+@with_setup(new_scene)
+def test_nodereuse_noexist():
+    """Node re-use works on non-existent nodes"""
 
     nodeA = cmdx.createNode("transform", name="myNode")
     nodeB = cmdx.createNode("transform", parent=nodeA)
@@ -134,3 +182,23 @@ def test_nodereuse():
     # a ValueError on account of trying to fetch an MObject
     # from a non-existing node.
     assert_raises(ValueError, cmdx.encode, "|myNode")
+
+    # Any operation on a deleted node raises RuntimeError
+    assert_raises(RuntimeError, getattr, nodeA, "name")
+    assert_raises(RuntimeError, lambda: nodeA.name())
+
+
+@with_setup(new_scene)
+def test_nodereuse_equalexist():
+    """Node re-use on new, same-name nodes"""
+
+    nodeA = cmdx.createNode("transform", name="myNode")
+    nodeB = cmdx.createNode("transform", parent=nodeA)
+    assert_is(cmdx.encode("|myNode"), nodeA)
+    assert_is(nodeB.parent(), nodeA)
+
+    cmds.file(new=True, force=True)
+
+    assert_raises(ValueError, cmdx.encode, "|myNode")
+    nodeC = cmdx.createNode("transform", name="myNode")
+    assert_is(cmdx.encode("|myNode"), nodeC)

@@ -4,7 +4,6 @@ import sys
 import json
 import time
 import logging
-import contextlib
 from functools import wraps
 
 from maya import cmds
@@ -20,34 +19,61 @@ IGNORE_VERSION = bool(os.getenv("CMDX_IGNORE_VERSION"))
 TIMINGS = bool(os.getenv("CMDX_TIMINGS"))
 
 # Do not perform any caching of nodes or plugs
-SAFEMODE = bool(os.getenv("CMDX_SAFEMODE"))
+SAFE_MODE = bool(os.getenv("CMDX_SAFE_MODE"))
+
+# Increase performance by not protecting against
+# fatal crashes (e.g. operations on deleted nodes)
+# This can be useful when you know for certain that a
+# series of operations will happen in isolation, such
+# as during an auto rigging build or export process.
+ROUGE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROUGE_MODE"))
+
+# Increase performance by not bothering to free up unused memory
+MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
 
 # Opt-in performance boosters
-ENABLE_NODE_REUSE = not SAFEMODE and bool(os.getenv("CMDX_ENABLE_NODE_REUSE"))
-ENABLE_PLUG_REUSE = not SAFEMODE and bool(os.getenv("CMDX_ENABLE_PLUG_REUSE"))
-
-# Node reuse depends on this member
-if not hasattr(om, "MObjectHandle"):
-    ENABLE_NODE_REUSE = False
+ENABLE_NODE_REUSE = not SAFE_MODE and bool(os.getenv("CMDX_ENABLE_NODE_REUSE"))
+ENABLE_PLUG_REUSE = not SAFE_MODE and bool(os.getenv("CMDX_ENABLE_PLUG_REUSE"))
 
 if PY3:
     string_types = str,
 else:
     string_types = basestring,
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __maya_version__ = int(cmds.about(version=True))
 
 # TODO: Lower this requirement
 if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
 
+self = sys.modules[__name__]
+log = logging.getLogger("cmdx")
 
-def with_timing(text="{func}() {time:.2f} ns"):
+# Node reuse depends on this member
+if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
+    log.warning("Disabling node reuse (OpenMaya.MObjectHandle not found)")
+    ENABLE_NODE_REUSE = False
+
+TimeUnit = om.MTime.uiUnit()
+DistanceUnit = om.MDistance.uiUnit()
+AngleUnit = om.MAngle.uiUnit()
+
+ExistError = type("ExistError", (RuntimeError,), {})
+
+# Reusable objects, for performance
+GlobalDagNode = om.MFnDagNode()
+GlobalDependencyNode = om.MFnDependencyNode()
+
+First = 0
+Last = -1
+
+
+def withTiming(text="{func}() {time:.2f} ns"):
     """Append timing information to a function
 
     Example:
-        @with_timing()
+        @withTiming()
         def function():
             pass
 
@@ -55,6 +81,8 @@ def with_timing(text="{func}() {time:.2f} ns"):
 
     def timings_decorator(func):
         if not TIMINGS:
+            # Do not wrap the function.
+            # This yields zero cost to runtime performance
             return func
 
         @wraps(func)
@@ -74,24 +102,6 @@ def with_timing(text="{func}() {time:.2f} ns"):
 
         return func_wrapper
     return timings_decorator
-
-
-self = sys.modules[__name__]
-log = logging.getLogger("cmdx")
-
-TimeUnit = om.MTime.uiUnit()
-DistanceUnit = om.MDistance.uiUnit()
-AngleUnit = om.MAngle.uiUnit()
-
-ExistError = type("ExistError", (KeyError,), {})
-AlreadyExistError = type("AlreadyExistError", (KeyError,), {})
-
-# Reusable objects, for performance
-GlobalDagNode = om.MFnDagNode()
-GlobalDependencyNode = om.MFnDependencyNode()
-
-First = 0
-Last = -1
 
 
 class _Space(int):
@@ -213,9 +223,221 @@ class Node(object):
 
         return self[other.strip(".")]
 
+    def __getitem__(self, key):
+        """Get plug from self
+
+        Arguments:
+            key (str, tuple): String lookup of attribute,
+                optionally pass tuple to include unit.
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translate"] = (1, 1, 1)
+            >>> node["translate", Meters]
+            (0.01, 0.01, 0.01)
+
+        """
+
+        unit = None
+        cached = False
+        if isinstance(key, (list, tuple)):
+            key, items = key[0], key[1:]
+
+            for item in items:
+                if isinstance(item, _Unit):
+                    unit = item
+                elif isinstance(item, _Cached):
+                    cached = True
+
+        if cached:
+            try:
+                return CachedPlug(self._state["values"][key, unit])
+            except KeyError:
+                log.warning("No previous value found")
+
+        try:
+            plug = self.findPlug(key)
+        except RuntimeError:
+            raise ExistError("%s.%s" % (self.path(), key))
+
+        return Plug(self, plug, unit=unit, key=key, modifier=self._modifier)
+
+    def __setitem__(self, key, value):
+        """Support item assignment of new attributes or values
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["myAttr"] = Double(default=1.0)
+            >>> node["myAttr"] == 1.0
+            True
+            >>> node["rotateX", Degrees] = 1.0
+            >>> node["rotateX"] = Degrees(1)
+            >>> node["rotateX", Degrees]
+            1.0
+            >>> round(node["rotateX", Radians], 3)
+            0.017
+            >>> delete(node)
+
+        """
+
+        if isinstance(value, Plug):
+            value = value.read()
+
+        unit = None
+        if isinstance(key, (list, tuple)):
+            key, unit = key
+
+            # Convert value to the given unit
+            if isinstance(value, (list, tuple)):
+                value = list(unit(v) for v in value)
+            else:
+                value = unit(value)
+
+        # Create a new attribute
+        elif isinstance(value, (tuple, list)):
+            if isinstance(value[0], type):
+                if issubclass(value[0], _AbstractAttribute):
+                    Attribute, kwargs = value
+                    attr = Attribute(key, **kwargs).create()
+
+                    try:
+                        return self.addAttr(attr)
+
+                    except RuntimeError:
+                        # NOTE: I can't be sure this is the only occasion
+                        # where this exception is thrown. Stay catious.
+                        raise ExistError(key)
+
+        try:
+            plug = self.findPlug(key)
+        except RuntimeError:
+            raise KeyError(key)
+
+        Plug(self, plug, unit=unit).write(value)
+
+    if MEMORY_HOG_MODE:
+        def onDestroyed(self, mobject):
+            self._destroyed = True
+
+    else:
+        def onDestroyed(self, mobject):
+            self._destroyed = True
+            cid = om.MMessage.currentCallbackId()
+            om.MMessage.removeCallback(cid)
+
+    def __delitem__(self, key):
+        self.deleteAttr(key)
+
+    if ENABLE_NODE_REUSE:
+        @withTiming()
+        def __new__(cls, mobject, exists=True, modifier=None):
+            """Re-use previous instances of Node
+
+            Cost: 10.7 microseconds
+
+            This enables persistent state of each node, even when
+            a node is discovered at a later time, such as via
+            :func:`DagNode.parent()` or :func:`DagNode.descendents()`
+
+            Arguments:
+                mobject (MObject): Maya API object to wrap
+                exists (bool, optional): Whether or not to search for
+                    an existing Python instance of this node
+
+            Example:
+                >>> nodeA = createNode("transform", name="myNode")
+                >>> nodeB = createNode("transform", parent=nodeA)
+                >>> encode("|myNode") is nodeA
+                True
+                >>> nodeB.parent() is nodeA
+                True
+
+            """
+
+            handle = om.MObjectHandle(mobject)
+            hsh = handle.hashCode()
+
+            if exists and handle.isValid():
+                try:
+                    node = cls._Cache[hsh]
+                    assert not node._destroyed
+                except KeyError:
+                    pass
+                except AssertionError:
+                    pass
+                else:
+                    return node
+
+            self = super(Node, cls).__new__(cls, mobject, modifier=modifier)
+            cls._Cache[hsh] = self
+
+            return self
+
+    if not ROUGE_MODE:
+        def __getattribute__(self, name):
+            """Confirm that the node being queried exists
+
+            Cost: 3%
+
+            This helps prevent fatal crashes from cases where an MObject
+            is being accessed past its lifetime. For example, if a node
+            is created in the Maya Script Editor, but then a new scene is
+            created. The result is a live reference to a node that no longer
+            exists. Attempting to access the function set of this node
+            results in a fatal crash.
+
+            """
+
+            if object.__getattribute__(self, "_destroyed"):
+                raise ExistError(
+                    "Cannot perform operation on deleted node"
+                )
+
+            # Default behaviour
+            return object.__getattribute__(self, name)
+
+    @withTiming()
+    def __init__(self, mobject, exists=True, modifier=None):
+        """Initialise Node
+
+        Private members:
+            mobject (om.MObject): Wrap this MObject
+            fn (om.MFnDependencyNode): The corresponding function set
+            modifier (om.MDagModifier, optional): Operations are
+                deferred to this modifier.
+            exists (bool): Has this node been destroyed by Maya?
+            state (dict): Optional state for performance
+
+        """
+
+        self._mobject = mobject
+        self._fn = None  # Lazily assigned
+        self._modifier = modifier
+        self._destroyed = False
+        self._state = {
+            "plugs": dict(),
+            "values": dict(),
+        }
+
+        if not ROUGE_MODE:
+            # Monitor node deletion, to prevent accidental
+            # use of MObject past its lifetime which may
+            # result in a fatal crash.
+            om.MNodeMessage.addNodeDestroyedCallback(
+                mobject,
+                self.onDestroyed,  # func
+                None  # clientData
+            )
+
+    @property
+    def fn(self):
+        if self._fn is None:
+            self._fn = self._Fn(self._mobject)
+        return self._fn
+
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
-        @with_timing("findPlug() reuse {time:.4f} ns")
+        @withTiming("findPlug() reuse {time:.4f} ns")
         def findPlug(self, name, cached=False):
             """Cache previously found plugs, for performance
 
@@ -274,7 +496,7 @@ class Node(object):
             return plug
 
     else:
-        @with_timing("findPlug() no reuse {time:.4f} ns")
+        @withTiming("findPlug() no reuse {time:.4f} ns")
         def findPlug(self, name):
             """Always lookup plug by name
 
@@ -287,156 +509,6 @@ class Node(object):
     def clear(self):
         """Clear state"""
         self._state["plugs"].clear()
-
-    def __getitem__(self, key):
-        """Get plug from self
-
-        Arguments:
-            key (str, tuple): String lookup of attribute,
-                optionally pass tuple to include unit.
-
-        Example:
-            >>> node = createNode("transform")
-            >>> node["translate"] = (1, 1, 1)
-            >>> node["translate", Meters]
-            (0.01, 0.01, 0.01)
-
-        """
-
-        unit = None
-        cached = False
-        if isinstance(key, (list, tuple)):
-            key, items = key[0], key[1:]
-
-            for item in items:
-                if isinstance(item, _Unit):
-                    unit = item
-                elif isinstance(item, _Cached):
-                    cached = True
-
-        if cached:
-            try:
-                return CachedPlug(self._cache[key, unit])
-            except KeyError:
-                log.warning("No previous value found")
-
-        try:
-            plug = self.findPlug(key)
-        except RuntimeError:
-            raise ExistError("%s.%s" % (self.path(), key))
-
-        return Plug(self, plug, unit=unit, key=key, modifier=self._modifier)
-
-    def __setitem__(self, key, value):
-        """Support item assignment of new attributes or values
-
-        Example:
-            >>> node = createNode("transform")
-            >>> node["myAttr"] = Double(default=1.0)
-            >>> node["myAttr"] == 1.0
-            True
-            >>> node["rotateX", Degrees] = 1.0
-            >>> node["rotateX"] = Degrees(1)
-            >>> node["rotateX", Degrees]
-            1.0
-            >>> round(node["rotateX", Radians], 3)
-            0.017
-            >>> delete(node)
-
-        """
-
-        if isinstance(value, Plug):
-            value = value.read()
-
-        unit = None
-        if isinstance(key, (list, tuple)):
-            key, unit = key
-
-            # Convert value to the given unit
-            if isinstance(value, (list, tuple)):
-                value = list(unit(v) for v in value)
-            else:
-                value = unit(value)
-
-        # Create a new attribute
-        elif isinstance(value, (tuple, list)):
-            if isinstance(value[0], type):
-                if issubclass(value[0], _AbstractAttribute):
-                    Attribute, kwargs = value
-                    attr = Attribute(key, **kwargs).create()
-
-                    try:
-                        return self.addAttr(attr)
-
-                    except RuntimeError:
-                        # NOTE: I can't be sure this is the only occasion
-                        # where this exception is thrown. Stay catious.
-                        raise AlreadyExistError(key)
-
-        try:
-            plug = self.findPlug(key)
-        except RuntimeError:
-            raise KeyError(key)
-
-        Plug(self, plug, unit=unit).write(value)
-
-    def __delitem__(self, key):
-        self.deleteAttr(key)
-
-    if ENABLE_NODE_REUSE:
-        @with_timing()
-        def __new__(cls, mobject, exists=True, modifier=None):
-            """Re-use previous instances of Node
-
-            Cost: 10.7 microseconds
-
-            This enables persistent state of each node, even when
-            a node is discovered at a later time, such as via
-            :func:`DagNode.parent()` or :func:`DagNode.descendents()`
-
-            Arguments:
-                mobject (MObject): Maya API object to wrap
-                exists (bool, optional): Whether or not to search for
-                    an existing Python instance of this node
-
-            Example:
-                >>> nodeA = createNode("transform", name="myNode")
-                >>> nodeB = createNode("transform", parent=nodeA)
-                >>> encode("|myNode") is nodeA
-                True
-                >>> nodeB.parent() is nodeA
-                True
-
-            """
-
-            handle = om.MObjectHandle(mobject)
-            hsh = handle.hashCode()
-
-            if exists and handle.isValid():
-                try:
-                    return cls._Cache[hsh]
-                except KeyError:
-                    pass
-
-            self = super(Node, cls).__new__(cls, mobject, modifier=modifier)
-            cls._Cache[hsh] = self
-            return self
-
-    @with_timing()
-    def __init__(self, mobject, exists=True, modifier=None):
-        self._mobject = mobject
-        self._fn = None  # Lazily assigned
-        self._cache = dict()
-        self._modifier = modifier
-        self._state = {
-            "plugs": dict(),
-        }
-
-    @property
-    def fn(self):
-        if self._fn is None:
-            self._fn = self._Fn(self._mobject)
-        return self._fn
 
     def name(self):
         """Return the name of this node
@@ -452,55 +524,6 @@ class Node(object):
 
     # Alias
     path = name
-
-    def connect(self, other):
-        """Attempt to automatically connect one node to another
-
-        This makes a "best guess" estimate on which plugs of which
-        node to connect. For example, connecting two Transform nodes
-        results in their transformation channels - translate, rotate
-        and scale - to be connected.
-
-        Example:
-            >>> node1 = createNode("transform")
-            >>> node2 = createNode("transform")
-            >>> node1 >> node2
-            >>> for connection in node1["t"].connections(plugs=True):
-            ...   assert connection == node2["t"]
-            ...
-            >>> node1 >> node1
-            Traceback (most recent call last):
-            ...
-            TypeError: Cannot connect node to itself
-
-        """
-
-        if self == other:
-            raise TypeError("Cannot connect node to itself")
-
-        this_type = self.type()
-        other_type = other.type()
-
-        if this_type == "transform" and other_type == "transform":
-            self["translate"] >> other["translate"]
-            self["rotate"] >> other["rotate"]
-            self["scale"] >> other["scale"]
-
-        elif this_type == "decomposeMatrix" and other_type == "transform":
-            self["outputTranslate"] >> other["translate"]
-            self["outputRotate"] >> other["rotate"]
-            self["outputScale"] >> other["scale"]
-
-        elif this_type == "transform" and other_type == "decomposeMatrix":
-            self["outputTranslate"] << other["translate"]
-            self["outputRotate"] << other["rotate"]
-            self["outputScale"] << other["scale"]
-
-        else:
-            raise TypeError(
-                "Could not determine how to connect %s -> %s"
-                % (this_type, other_type)
-            )
 
     def update(self, attrs):
         """Add `attrs` to self
@@ -1289,7 +1312,7 @@ class Plug(object):
             )
 
             # Store cached value
-            self._node._cache[self._key, unit] = value
+            self._node._state["values"][self._key, unit] = value
 
             return value
 

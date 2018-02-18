@@ -1,9 +1,16 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
 import timeit
+import contextlib
 
 from maya import cmds, mel, OpenMaya as om1
 from maya.api import OpenMaya as om2
 import cmdx
+
+from nose.tools import (
+    assert_greater,
+)
 
 timings = {}
 
@@ -12,25 +19,19 @@ def Compare(method,
             task,
             func,
             setup=None,
-            teardown=None,
-            number=100,
-            repeat=1,
+            number=1000,
+            repeat=4,
             precision=1,
             quiet=True):
 
-    results = list()
-
     setup = setup or (lambda: None)
-    teardown = teardown or (lambda: None)
 
     text = "%s %s: %.1f ms (%.2f {precision}/call)".format(
         precision="μs" if precision else "ms"
     )
 
-    for iteration in range(repeat):
-        setup()
-        results += [timeit.Timer(func).timeit(number)]
-        teardown()
+    results = timeit.Timer(func, setup=setup).repeat(
+        repeat=repeat, number=number)
 
     if not quiet:
         print(text % (
@@ -48,9 +49,33 @@ def Compare(method,
         "func": func,
         "number": number,
         "results": results,
-        "min": sum(results),
+        "min": min(results),
         "percall": min(results) / number
     }
+
+
+@contextlib.contextmanager
+def environment(key, value=None):
+    env = os.environ.copy()
+    os.environ[key] = value or "1"
+    try:
+        sys.modules.pop("cmdx")
+        __import__("cmdx")
+        yield
+    finally:
+        os.environ.update(env)
+
+
+@contextlib.contextmanager
+def pop_environment(key):
+    env = os.environ.copy()
+    os.environ.pop(key)
+    try:
+        sys.modules.pop("cmdx")
+        __import__("cmdx")
+        yield
+    finally:
+        os.environ.update(env)
 
 
 def New(setup=None):
@@ -65,10 +90,41 @@ def test_createNode_performance():
         ("mel", lambda: mel.eval("createNode \"transform\"")),
         ("cmds", lambda: cmds.createNode("transform")),
         ("cmdx", lambda: cmdx.createNode(cmdx.Transform)),
-        # ("PyMel", lambda: pm.createNode("transform")),
+        # ("PyMEL", lambda: pm.createNode("transform")),
         ("API 1.0", lambda: om1.MFnDagNode().create("transform")),
         ("API 2.0", lambda: om2.MFnDagNode().create("transform")),
     )
 
     for contender, test in versions:
         Compare(contender, "createNode", test, setup=New)
+
+    cmdx_vs_cmds = (
+        timings["createNode"]["cmds"]["percall"] /
+        timings["createNode"]["cmdx"]["percall"]
+    )
+
+    cmdx_vs_api = (
+        timings["createNode"]["API 2.0"]["percall"] /
+        timings["createNode"]["cmdx"]["percall"]
+    )
+
+    assert_greater(cmdx_vs_cmds, 0.6)  # at least 80% of cmds
+    assert_greater(cmdx_vs_api, 0.25)  # at least quarter of API 2.0
+
+
+def test_rouge_mode():
+    """CMDX_ROGUE_MODE is faster"""
+
+    node = cmdx.createNode("transform")
+    Compare("norogue", "createNode", node.name)
+
+    with environment("CMDX_ROGUE_MODE"):
+        node = cmdx.createNode("transform")
+        Compare("rogue", "createNode", node.name)
+
+    rogue_vs_norogue = (
+        timings["createNode"]["norogue"]["percall"] /
+        timings["createNode"]["rogue"]["percall"]
+    )
+
+    assert_greater(rogue_vs_norogue, 0.75)
