@@ -26,7 +26,7 @@ SAFE_MODE = bool(os.getenv("CMDX_SAFE_MODE"))
 # This can be useful when you know for certain that a
 # series of operations will happen in isolation, such
 # as during an auto rigging build or export process.
-ROUGE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROUGE_MODE"))
+ROGUE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROGUE_MODE"))
 
 # Increase performance by not bothering to free up unused memory
 MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
@@ -373,7 +373,7 @@ class Node(object):
 
             return self
 
-    if not ROUGE_MODE:
+    if not ROGUE_MODE:
         def __getattribute__(self, name):
             """Confirm that the node being queried exists
 
@@ -419,7 +419,7 @@ class Node(object):
             "values": dict(),
         }
 
-        if not ROUGE_MODE:
+        if not ROGUE_MODE:
             # Monitor node deletion, to prevent accidental
             # use of MObject past its lifetime which may
             # result in a fatal crash.
@@ -1470,6 +1470,7 @@ class Plug(object):
 
 
 class CachedPlug(Plug):
+    """Returned in place of an actual plug"""
     def __init__(self, value):
         self._value = value
 
@@ -1820,7 +1821,7 @@ def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
     with which to create new nodes in Maya.
 
     .. note:: Missing arguments `shared` and `skipSelect`
-    .. tip:: For performance, `type` may be given as a TypeId
+    .. tip:: For additional performance, `type` may be given as an MTypeId
 
     Arguments:
         type (str): Type name of new node, e.g. "transform"
