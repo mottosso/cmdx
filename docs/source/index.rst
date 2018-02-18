@@ -10,7 +10,7 @@
    :alt: `cmdx`
    :width: 200
    :align: center
-   :target: /
+   :target: /cmdx/
 
 .. centered:: *The fast subset of `maya.cmds`*
 
@@ -20,8 +20,6 @@
 ======
 
 `cmdx` is a Python module for fast scenegraph manipulation in Autodesk Maya.
-
-.. note:: Requires Maya 2015 or later
 
 |
 

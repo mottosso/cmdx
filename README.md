@@ -24,7 +24,7 @@ If you fit in either of these groups, then `cmdx` is for you.
 On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictures/pymel), and 2.5x faster than `maya.cmds` at common tasks; at best, it is 1,300x faster than PyMEL.
 
 - See [Measurements](#measurements) and [Timings](#timings) for details
-- See [API Documentation](https://weightshift.io/cmdx/api) for usage 
+- See [API Documentation](https://weightshift.io/cmdx/api/) for usage 
 
 <br>
 <br>
@@ -35,6 +35,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Syntax](#syntax)
 - [Performance](#performance)
 - [Goals](#goals)
+- [Overhead](#overhead)
 - [Query Reduction](#query-reduction)
   - [Node Reuse](#node-reuse)
   - [Plug Reuse](#plug-reuse)
@@ -181,6 +182,59 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 
 <br>
 
+### Overhead
+
+`cmdx` tracks node access via a Maya API callback. This callback is called on node destruction and carries an overhead to normal Maya operation when deleting nodes, most noticeably when creating a new scene (as it causes all nodes to be destroyed at once).
+
+In the most extreme circumstance, with 100,000 nodes tracked by `cmdx`, all nodes are destroyed in 4.4 seconds. Without this callback, the nodes are destroyed in 4.3 seconds.
+
+This accounts for an overhead of 1 ms/node destroyed.
+
+This overhead can be bypassed with [Rogue Mode](#cmdx_rogue_mode).
+
+**Test**
+
+To confirm this for yourself, run the below in your Script Editor; it should take about 30-60 seconds depending on your hardware.
+
+```python
+import time
+import timeit
+import cmdx
+
+import os
+
+def setup():
+   for i in range(100000):
+     cmdx.createNode("transform")
+
+def rogue():
+    os.environ["CMDX_ROGUE_MODE"] = "1"
+    cmds.file(new=True, force=True)
+    reload(cmdx)
+    setup()
+
+def nonrogue():
+    os.environ.pop("CMDX_ROGUE_MODE", None)
+    cmds.file(new=True, force=True)
+    reload(cmdx)
+    setup()
+
+t1 = timeit.Timer(
+    lambda: cmds.file(new=True, force=True),
+    setup=rogue
+).repeat(repeat=2, number=2)
+
+t2 = timeit.Timer(
+    lambda: cmds.file(new=True, force=True),
+    setup=nonrogue
+).repeat(repeat=4, number=1)
+
+print("rogue: %.3f ms" % (min(t1) * 1000))
+print("nonrogue: %.3f ms" % (min(t2) * 1000))
+```
+
+<br>
+
 ### Query Reduction
 
 Beyond making queries faster is making less of them.
@@ -279,7 +333,7 @@ TypeError: listConnections() got an unexpected keyword argument 'source'
 
 The reason for this limitation is because the functions `cmds` 
 
-- See [API Documentation]() for which members are available in `cmdx`
+- See [API Documentation](https://weightshift.io/cmdx/api/) for which members are available in `cmdx`
 - Submit an [issue](issues) or [pull-request](#fork) with commands you miss
 
 <br>
@@ -387,7 +441,7 @@ Only the most commonly used and performance sensitive types are available as exp
 - `TransformGeometry` 
 - `WtAddMatrix` 
 
-See [API Documentation]() for more.
+See [API Documentation](https://weightshift.io/cmdx/api/) for more.
 
 <br>
 
@@ -782,6 +836,10 @@ Both `cmdx` and PyMEL perform some amount of preprocessing on import.
 
 ![](plots/connectAttr.svg)
 
+#### allDescendents
+
+![](plots/allDescendents.svg)
+
 #### long
 
 Retrieving the long name of any node, e.g. `cmds.ls("node", long=True)`.
@@ -846,13 +904,15 @@ This can happen when, for example, you experiment in the Script Editor, and reta
 
 Yes and no. Some functionality, such as [`listRelatives`](https://github.com/LumaPictures/pymel/blob/eb984107952cde052a3ecdb473e66c7db7deb3b7/pymel/core/general.py#L1026) call on `cmds.listRelatives` and later convert the output to instances of `PyNode`. This performs at best as well as `cmds`, with the added overhead of converting the transient path to a `PyNode`.
 
-Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.OpenMaya.MMatrix` class and would have come at virtually no cost, had it not inherited 2 additional layers of superclasses and implemented much of the [computationally expensive]() functionality in pure-Python.
+Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.OpenMaya.MMatrix` class and would have come at virtually no cost, had it not inherited 2 additional layers of superclasses and implemented much of the [computationally expensive](https://github.com/LumaPictures/pymel/blob/0a9478f1cf61ae372f3f4a8116dec4f43529f4da/pymel/util/arrays.py#L2) functionality in pure-Python.
 
 <br>
 
 ### Flags
 
 For performance and debugging reasons, parts of `cmdx` can be customised via environment variables.
+
+> **IMPORTANT** - The below affects only the performance and memory characteristics of `cmdx`, it does not affects its functionality. That is to say, these can be switched on/off without affecting or require changes to your code.
 
 **Example**
 
