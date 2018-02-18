@@ -8,6 +8,7 @@ from maya import cmds, mel, OpenMaya as om1
 from maya.api import OpenMaya as om2
 import cmdx
 
+from flaky import flaky
 from nose.tools import (
     assert_greater,
 )
@@ -19,7 +20,7 @@ def Compare(method,
             task,
             func,
             setup=None,
-            number=1000,
+            number=200,
             repeat=4,
             precision=1,
             quiet=True):
@@ -83,6 +84,7 @@ def New(setup=None):
     (setup or (lambda: None))()
 
 
+@flaky
 def test_createNode_performance():
     """createNode cmdx vs cmds > 2x"""
 
@@ -112,6 +114,7 @@ def test_createNode_performance():
     assert_greater(cmdx_vs_api, 0.25)  # at least quarter of API 2.0
 
 
+@flaky
 def test_rouge_mode():
     """CMDX_ROGUE_MODE is faster"""
 

@@ -6,7 +6,6 @@ standalone.initialize()
 
 # Build with Sphinx
 main([
-    "",
     "docs/source",
     "docs/build",
     "-E",

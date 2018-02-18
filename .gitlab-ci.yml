@@ -8,10 +8,9 @@ tests:maya2015:
         nose
         nose-exclude
         coverage
+        flaky
         sphinx
-        six
         sphinxcontrib-napoleon
-        python-coveralls
     - mayapy --version
     - echo $CI_PIPELINE_ID
     - echo $CI_JOB_ID
@@ -27,11 +26,10 @@ tests:maya2017:
       mayapy -m pip install
         nose
         nose-exclude
+        flaky
         coverage
         sphinx
-        six
         sphinxcontrib-napoleon
-        python-coveralls
     - mayapy --version
     - echo $CI_PIPELINE_ID
     - echo $CI_JOB_ID

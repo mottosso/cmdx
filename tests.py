@@ -202,3 +202,38 @@ def test_nodereuse_equalexist():
     assert_raises(ValueError, cmdx.encode, "|myNode")
     nodeC = cmdx.createNode("transform", name="myNode")
     assert_is(cmdx.encode("|myNode"), nodeC)
+
+
+@with_setup(new_scene)
+def test_descendents():
+    """Returning all descendents works"""
+    gp = cmdx.createNode("transform")
+    p = cmdx.createNode("transform", parent=gp)
+    c = cmdx.createNode("transform", parent=p)
+
+    descendents = list(gp.descendents())
+    assert_equals(descendents, [p, c])
+
+
+@with_setup(new_scene)
+def test_descendents_typename():
+    """Returning only descendents of typeName works"""
+    gp = cmdx.createNode("transform")
+    p = cmdx.createNode("transform", parent=gp)
+    c = cmdx.createNode("transform", parent=p)
+    m = cmdx.createNode("mesh", parent=c)
+
+    descendents = list(gp.descendents(type="mesh"))
+    assert_equals(descendents, [m])
+
+
+@with_setup(new_scene)
+def test_descendents_typeid():
+    """Returning only descendents of typeName works"""
+    gp = cmdx.createNode("transform")
+    p = cmdx.createNode("transform", parent=gp)
+    c = cmdx.createNode("transform", parent=p)
+    m = cmdx.createNode("mesh", parent=c)
+
+    descendents = list(gp.descendents(type=cmdx.Mesh))
+    assert_equals(descendents, [m])
