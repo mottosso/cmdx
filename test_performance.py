@@ -130,4 +130,4 @@ def test_rouge_mode():
         timings["createNode"]["rogue"]["percall"]
     )
 
-    assert_greater(rogue_vs_norogue, 1.0)
+    assert_greater(rogue_vs_norogue, 0.9)
