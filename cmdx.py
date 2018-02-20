@@ -1839,7 +1839,10 @@ class Modifier(object):
         self._modifier.renameNode(node._mobject, parent)
 
 
-def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
+def createNode(type,
+               name=None,
+               parent=None,
+               undoable=False):
     """Create a new node
 
     This function forms the basic building block
@@ -1853,8 +1856,7 @@ def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
         name (str, optional): Sets the name of the newly-created node
         parent (Node, optional): Specifies the parent in the DAG under which
             the new node belongs
-        skipSelect (bool, optional): Unused; always True
-        shared (bool, optional): Unused; always False
+        undoable (bool, optional): Whether or not this node can be undone
 
     Example:
         >>> node = createNode("transform")  # Type as string
@@ -1869,19 +1871,23 @@ def createNode(type, name=None, parent=None, skipSelect=True, shared=False):
         kwargs["name"] = name
 
     if parent:
-        kwargs["parent"] = parent._mobject
+        kwargs["parent"] = str(parent) if undoable else parent._mobject
         fn = GlobalDagNode
 
-    try:
-        mobj = fn.create(type, **kwargs)
-    except RuntimeError as e:
-        log.debug(str(e))
-        raise TypeError("Unrecognized node type '%s'" % type)
+    if undoable:
+        return encode(cmds.createNode(type, **kwargs))
 
-    if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
-        return DagNode(mobj, exists=False)
     else:
-        return Node(mobj, exists=False)
+        try:
+            mobj = fn.create(type, **kwargs)
+        except RuntimeError as e:
+            log.debug(str(e))
+            raise TypeError("Unrecognized node type '%s'" % type)
+
+        if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
+            return DagNode(mobj, exists=False)
+        else:
+            return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None):
