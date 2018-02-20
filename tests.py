@@ -237,3 +237,27 @@ def test_descendents_typeid():
 
     descendents = list(gp.descendents(type=cmdx.Mesh))
     assert_equals(descendents, [m])
+
+
+def test_keyable():
+    """Plug.keyable = True works"""
+
+    node = cmdx.createNode("transform")
+
+    assert_equals(node["translateX"].keyable, True)
+    node["translateX"].keyable = False
+    assert_equals(node["translateX"].keyable, False)
+
+
+def test_channelBox():
+    """Plug.channelBox = True works"""
+
+    node = cmdx.createNode("transform")
+
+    assert_equals(node["translateX"].channelBox, False)
+    node["translateX"].channelBox = True
+    assert_equals(node["translateX"].channelBox, True)
+
+    assert_equals(node["translate"].channelBox, False)
+    node["translate"].channelBox = True
+    assert_equals(node["translate"].channelBox, True)

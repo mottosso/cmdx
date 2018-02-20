@@ -435,6 +435,9 @@ class Node(object):
             self._fn = self._Fn(self._mobject)
         return self._fn
 
+    def typeId(self):
+        return self.fn.typeId
+
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
         @withTiming("findPlug() reuse {time:.4f} ns")
@@ -1307,6 +1310,26 @@ class Plug(object):
         self._key = key
         self._modifier = modifier
 
+    @property
+    def locked(self):
+        return self._mplug.isLocked
+
+    @property
+    def channelBox(self):
+        return self._mplug.isChannelBox
+
+    @channelBox.setter
+    def channelBox(self, value):
+        om.MFnAttribute(self._mplug.attribute()).channelBox = value
+
+    @property
+    def keyable(self):
+        return self._mplug.isKeyable
+
+    @keyable.setter
+    def keyable(self, value):
+        om.MFnAttribute(self._mplug.attribute()).keyable = value
+
     def type(self):
         """Retrieve API type of plug as string
 
@@ -1401,9 +1424,9 @@ class Plug(object):
                 )
 
     def connections(self,
+                    type=None,
                     source=True,
                     destination=True,
-                    type=None,
                     plugs=False,
                     unit=None):
         """Yield plugs connected to self
@@ -1437,19 +1460,23 @@ class Plug(object):
             else:
                 node = Node(mobject)
 
-            if not type or type == node.fn.typeName:
-                yield Plug(node, plug, unit) if plugs else node
+            if isinstance(type, (tuple, list)):
+                if not type or node.fn.typeName in type:
+                    yield Plug(node, plug, unit) if plugs else node
+            else:
+                if not type or node.fn.typeName == type:
+                    yield Plug(node, plug, unit) if plugs else node
 
     def connection(self,
+                   type=None,
                    source=True,
                    destination=True,
-                   type=None,
                    plug=False,
                    unit=None):
         """Return first connection from :func:`connections()`"""
-        return next(self.connections(source,
-                                     destination,
-                                     type=type,
+        return next(self.connections(type=type,
+                                     source=source,
+                                     destination=destination,
                                      plugs=plug,
                                      unit=unit), None)
 
@@ -1787,13 +1814,11 @@ class Modifier(object):
         self._modifier.doIt()
 
     def createNode(self, type, name=None, parent=None):
-        mobj = self._modifier.createNode(type)
+        parent = parent._mobject if parent else om.MObject.kNullObj
+        mobj = self._modifier.createNode(type, parent)
 
         if name is not None:
             self._modifier.renameNode(mobj, name)
-
-        if parent is not None:
-            self._modifier.reparentNode(mobj, parent._mobject)
 
         cls = DagNode if mobj.hasFn(om.MFn.kDagNode) else Node
         return cls(mobj, exists=False, modifier=self._modifier)
