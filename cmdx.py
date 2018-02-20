@@ -1875,6 +1875,7 @@ def createNode(type,
         fn = GlobalDagNode
 
     if undoable:
+        kwargs["skipSelect"] = True
         return encode(cmds.createNode(type, **kwargs))
 
     else:
