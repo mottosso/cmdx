@@ -70,6 +70,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
   - [`node`](#node-attr-attr)
   - [`ls`](#ls)
 - [Evolution](#evolution)
+- [Debugging](#debugging)
 - [Flags](#flags)
   - [`CMDX_ENABLE_NODE_REUSE`](#cmdx_enable_node_reuse)
   - [`CMDX_ENABLE_PLUG_REUSE`](#cmdx_enable_plug_reuse)
@@ -905,6 +906,36 @@ This can happen when, for example, you experiment in the Script Editor, and reta
 Yes and no. Some functionality, such as [`listRelatives`](https://github.com/LumaPictures/pymel/blob/eb984107952cde052a3ecdb473e66c7db7deb3b7/pymel/core/general.py#L1026) call on `cmds.listRelatives` and later convert the output to instances of `PyNode`. This performs at best as well as `cmds`, with the added overhead of converting the transient path to a `PyNode`.
 
 Other functionality, such as `pymel.core.datatypes.Matrix` wrap the `maya.api.OpenMaya.MMatrix` class and would have come at virtually no cost, had it not inherited 2 additional layers of superclasses and implemented much of the [computationally expensive](https://github.com/LumaPictures/pymel/blob/0a9478f1cf61ae372f3f4a8116dec4f43529f4da/pymel/util/arrays.py#L2) functionality in pure-Python.
+
+<br>
+
+### Debugging
+
+Either whilst developing for or with `cmdx`, debugging can come in handy.
+
+For performance, you might be interested in [CMDX_TIMINGS](#cmdx_timings) below. For statistics on the various types of reuse, have a look at this.
+
+```python
+import cmdx
+cmdx.createNode("transform", name="MyTransform")
+cmdx.encode("|MyTransform")
+print(cmdx.NodeReuseCount)
+# 0
+
+cmdx.encode("|MyTransform")
+cmdx.encode("|MyTransform")
+
+print(cmdx.NodeReuseCount)
+# 2
+```
+
+**Available Statistics**
+
+Gathering these members are cheap and happens without setting any flags.
+
+- `cmdx.NodeReuseCount`
+- `cmdx.NodeInitCount`
+- `cmdx.PlugReuseCount`
 
 <br>
 

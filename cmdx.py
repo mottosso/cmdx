@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import logging
+import operator
 from functools import wraps
 
 from maya import cmds
@@ -50,6 +51,12 @@ if not IGNORE_VERSION:
 self = sys.modules[__name__]
 log = logging.getLogger("cmdx")
 
+# Accessible via `cmdx.NodeReuseCount` etc.
+Stats = self
+Stats.NodeInitCount = 0
+Stats.NodeReuseCount = 0
+Stats.PlugReuseCount = 0
+
 # Node reuse depends on this member
 if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
     log.warning("Disabling node reuse (OpenMaya.MObjectHandle not found)")
@@ -60,6 +67,7 @@ DistanceUnit = om.MDistance.uiUnit()
 AngleUnit = om.MAngle.uiUnit()
 
 ExistError = type("ExistError", (RuntimeError,), {})
+DoNothing = None
 
 # Reusable objects, for performance
 GlobalDagNode = om.MFnDagNode()
@@ -158,6 +166,56 @@ _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
 
+class Singleton(type):
+    """Re-use previous instances of Node
+
+    Cost: 14 microseconds
+
+    This enables persistent state of each node, even when
+    a node is discovered at a later time, such as via
+    :func:`DagNode.parent()` or :func:`DagNode.descendents()`
+
+    Arguments:
+        mobject (MObject): Maya API object to wrap
+        exists (bool, optional): Whether or not to search for
+            an existing Python instance of this node
+
+    Example:
+        >>> nodeA = createNode("transform", name="myNode")
+        >>> nodeB = createNode("transform", parent=nodeA)
+        >>> encode("|myNode") is nodeA
+        True
+        >>> nodeB.parent() is nodeA
+        True
+
+    """
+
+    _instances = {}
+
+    @withTiming()
+    def __call__(cls, mobject, exists=True, modifier=None):
+
+        handle = om.MObjectHandle(mobject)
+        hsh = handle.hashCode()
+
+        if exists and handle.isValid():
+            try:
+                node = cls._instances[hsh]
+                assert not node._destroyed
+            except KeyError:
+                pass
+            except AssertionError:
+                pass
+            else:
+                Stats.NodeReuseCount += 1
+                return node
+
+        # It didn't exist, let's create one
+        self = super(Singleton, cls).__call__(mobject, exists, modifier)
+        cls._instances[hsh] = self
+        return self
+
+
 class Node(object):
     """A Maya dependency node
 
@@ -176,6 +234,9 @@ class Node(object):
         (5.0, 0.0, 0.0)
 
     """
+
+    if ENABLE_NODE_REUSE:
+        __metaclass__ = Singleton
 
     _Fn = om.MFnDependencyNode
 
@@ -328,74 +389,6 @@ class Node(object):
     def __delitem__(self, key):
         self.deleteAttr(key)
 
-    if ENABLE_NODE_REUSE:
-        @withTiming()
-        def __new__(cls, mobject, exists=True, modifier=None):
-            """Re-use previous instances of Node
-
-            Cost: 10.7 microseconds
-
-            This enables persistent state of each node, even when
-            a node is discovered at a later time, such as via
-            :func:`DagNode.parent()` or :func:`DagNode.descendents()`
-
-            Arguments:
-                mobject (MObject): Maya API object to wrap
-                exists (bool, optional): Whether or not to search for
-                    an existing Python instance of this node
-
-            Example:
-                >>> nodeA = createNode("transform", name="myNode")
-                >>> nodeB = createNode("transform", parent=nodeA)
-                >>> encode("|myNode") is nodeA
-                True
-                >>> nodeB.parent() is nodeA
-                True
-
-            """
-
-            handle = om.MObjectHandle(mobject)
-            hsh = handle.hashCode()
-
-            if exists and handle.isValid():
-                try:
-                    node = cls._Cache[hsh]
-                    assert not node._destroyed
-                except KeyError:
-                    pass
-                except AssertionError:
-                    pass
-                else:
-                    return node
-
-            self = super(Node, cls).__new__(cls, mobject, modifier=modifier)
-            cls._Cache[hsh] = self
-
-            return self
-
-    if not ROGUE_MODE:
-        def __getattribute__(self, name):
-            """Confirm that the node being queried exists
-
-            Cost: 3%
-
-            This helps prevent fatal crashes from cases where an MObject
-            is being accessed past its lifetime. For example, if a node
-            is created in the Maya Script Editor, but then a new scene is
-            created. The result is a live reference to a node that no longer
-            exists. Attempting to access the function set of this node
-            results in a fatal crash.
-
-            """
-
-            if object.__getattribute__(self, "_destroyed"):
-                raise ExistError(
-                    "Cannot perform operation on deleted node"
-                )
-
-            # Default behaviour
-            return object.__getattribute__(self, name)
-
     @withTiming()
     def __init__(self, mobject, exists=True, modifier=None):
         """Initialise Node
@@ -411,7 +404,7 @@ class Node(object):
         """
 
         self._mobject = mobject
-        self._fn = None  # Lazily assigned
+        self._fn = self._Fn(mobject)
         self._modifier = modifier
         self._destroyed = False
         self._state = {
@@ -419,24 +412,19 @@ class Node(object):
             "values": dict(),
         }
 
-        if not ROGUE_MODE:
-            # Monitor node deletion, to prevent accidental
-            # use of MObject past its lifetime which may
-            # result in a fatal crash.
-            om.MNodeMessage.addNodeDestroyedCallback(
-                mobject,
-                self.onDestroyed,  # func
-                None  # clientData
-            )
+        Stats.NodeInitCount += 1
 
-    @property
-    def fn(self):
-        if self._fn is None:
-            self._fn = self._Fn(self._mobject)
-        return self._fn
+        # Monitor node deletion, to prevent accidental
+        # use of MObject past its lifetime which may
+        # result in a fatal crash.
+        om.MNodeMessage.addNodeDestroyedCallback(
+            mobject,
+            self.onDestroyed,  # func
+            None  # clientData
+        ) if not ROGUE_MODE else DoNothing
 
     def typeId(self):
-        return self.fn.typeId
+        return self._fn.typeId
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -488,12 +476,14 @@ class Node(object):
             """
 
             try:
-                return self._state["plugs"][name]
+                existing = self._state["plugs"][name]
+                Stats.PlugReuseCount += 1
+                return existing
             except KeyError:
                 if cached:
                     raise KeyError("'%s' not cached" % name)
 
-            plug = self.fn.findPlug(name, False)
+            plug = self._fn.findPlug(name, False)
             self._state["plugs"][name] = plug
 
             return plug
@@ -507,7 +497,7 @@ class Node(object):
 
             """
 
-            return self.fn.findPlug(name, False)
+            return self._fn.findPlug(name, False)
 
     def clear(self):
         """Clear state"""
@@ -523,7 +513,9 @@ class Node(object):
 
         """
 
-        return self.fn.name()
+        if self._destroyed:
+            raise ExistError("Cannot perform operation on deleted node")
+        return self._fn.name()
 
     # Alias
     path = name
@@ -571,9 +563,9 @@ class Node(object):
         """Return dictionary of all attributes"""
 
         attrs = {}
-        count = self.fn.attributeCount()
+        count = self._fn.attributeCount()
         for index in range(count):
-            obj = self.fn.attribute(index)
+            obj = self._fn.attribute(index)
             plug = self.findPlug(obj)
 
             try:
@@ -593,7 +585,7 @@ class Node(object):
 
     def type(self):
         """Return type name"""
-        return self.fn.typeName
+        return self._fn.typeName
 
     def addAttr(self, attr):
         """Add a new dynamic attribute to node
@@ -613,7 +605,7 @@ class Node(object):
         if isinstance(attr, _AbstractAttribute):
             attr = attr.create()
 
-        self.fn.addAttribute(attr)
+        self._fn.addAttribute(attr)
 
     def hasAttr(self, attr):
         """Return whether or not `attr` exists
@@ -633,7 +625,7 @@ class Node(object):
 
         """
 
-        return self.fn.hasAttribute(attr)
+        return self._fn.hasAttribute(attr)
 
     def deleteAttr(self, attr):
         """Delete `attr` from node
@@ -654,7 +646,7 @@ class Node(object):
             attr = self[attr]
 
         attribute = attr._mplug.attribute()
-        self.fn.removeAttribute(attribute)
+        self._fn.removeAttribute(attribute)
 
     def connections(self, type=None, unit=None, plugs=False):
         """Yield plugs of node with a connection to any other plug
@@ -680,7 +672,7 @@ class Node(object):
 
         """
 
-        for plug in self.fn.getConnections():
+        for plug in self._fn.getConnections():
             mobject = plug.node()
 
             if mobject.hasFn(om.MFn.kDagNode):
@@ -688,7 +680,7 @@ class Node(object):
             else:
                 node = Node(mobject)
 
-            if not type or type == node.fn.typeName:
+            if not type or type == node._fn.typeName:
                 plug = Plug(node, plug, unit)
                 for connection in plug.connections(plugs=plugs):
                     yield connection
@@ -747,7 +739,9 @@ class DagNode(Node):
 
         """
 
-        return self.fn.fullPathName()
+        if self._destroyed:
+            raise ExistError("Cannot perform operation on deleted node")
+        return self._fn.fullPathName()
 
     def shortestPath(self):
         """Return shortest unique path to node
@@ -765,7 +759,9 @@ class DagNode(Node):
 
         """
 
-        return self.fn.partialPathName()
+        if self._destroyed:
+            raise ExistError("Cannot perform operation on deleted node")
+        return self._fn.partialPathName()
 
     def addChild(self, child, index=Last):
         """Add `child` to self
@@ -782,7 +778,7 @@ class DagNode(Node):
 
         """
 
-        self.fn.addChild(child._mobject, index)
+        self._fn.addChild(child._mobject, index)
 
     def assembly(self):
         """Return the top-level parent of node
@@ -799,7 +795,7 @@ class DagNode(Node):
 
         """
 
-        path = self.fn.getPath()
+        path = self._fn.getPath()
 
         root = None
         for level in range(path.length() - 1):
@@ -832,14 +828,14 @@ class DagNode(Node):
 
         """
 
-        mobject = self.fn.parent(0)
+        mobject = self._fn.parent(0)
 
         if mobject.apiType() == om.MFn.kWorld:
             return
 
         cls = self.__class__
 
-        if not type or type == self.fn.__class__(mobject).typeName:
+        if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
 
     def children(self, type=None, filter=om.MFn.kTransform):
@@ -868,18 +864,19 @@ class DagNode(Node):
         """
 
         cls = self.__class__
-        Fn = self.fn.__class__
+        Fn = self._fn.__class__
+        op = operator.eq
 
-        if type and not isinstance(type, (tuple, list)):
-            type = (type,)
+        if isinstance(type, (tuple, list)):
+            op = operator.contains
 
-        for index in range(self.fn.childCount()):
-            mobject = self.fn.child(index)
+        for index in range(self._fn.childCount()):
+            mobject = self._fn.child(index)
 
             if filter is not None and not mobject.hasFn(filter):
                 continue
 
-            if not type or Fn(mobject).typeName in type:
+            if not type or op(type, Fn(mobject).typeName):
                 yield cls(mobject)
 
     def child(self, type=None, filter=om.MFn.kTransform):
@@ -891,11 +888,11 @@ class DagNode(Node):
     def shape(self, type=None):
         return next(self.shapes(type), None)
 
-    def siblings(self):
+    def siblings(self, type=None):
         parent = self.parent()
 
         if parent is not None:
-            for child in parent.children():
+            for child in parent.children(type=type):
                 if child != self:
                     yield child
 
@@ -947,10 +944,10 @@ class DagNode(Node):
                 node = DagNode(mobj)
 
                 if typeName is None:
-                    if not type or type == node.fn.typeId:
+                    if not type or type == node._fn.typeId:
                         yield node
                 else:
-                    if not typeName or typeName == node.fn.typeName:
+                    if not typeName or typeName == node._fn.typeName:
                         yield node
 
                 it.next()
@@ -974,11 +971,11 @@ class DagNode(Node):
 
             """
 
-            def _descendents(node, type=None, children=None):
+            def _descendents(node, children=None):
                 children = children or list()
                 children.append(node)
                 for child in node.children(filter=None):
-                    _descendents(child, type, children)
+                    _descendents(child, children)
 
                 return children
 
@@ -988,14 +985,14 @@ class DagNode(Node):
                 typeName = type
                 type = om.MFn.kInvalid
 
-            descendents = _descendents(self, type)[1:]  # Skip self
+            descendents = _descendents(self)[1:]  # Skip self
 
             for child in descendents:
                 if typeName is None:
-                    if not type or type == child.fn.typeId:
+                    if not type or type == child._fn.typeId:
                         yield child
                 else:
-                    if not typeName or typeName == child.fn.typeName:
+                    if not typeName or typeName == child._fn.typeName:
                         yield child
 
     def descendent(self, type=om.MFn.kInvalid):
@@ -1452,6 +1449,15 @@ class Plug(object):
 
         """
 
+        op = operator.eq
+        other = "typeId"
+
+        if isinstance(type, string_types):
+            other = "typeName"
+
+        if isinstance(type, (tuple, list)):
+            op = operator.contains
+
         for plug in self._mplug.connectedTo(source, destination):
             mobject = plug.node()
 
@@ -1460,12 +1466,8 @@ class Plug(object):
             else:
                 node = Node(mobject)
 
-            if isinstance(type, (tuple, list)):
-                if not type or node.fn.typeName in type:
-                    yield Plug(node, plug, unit) if plugs else node
-            else:
-                if not type or node.fn.typeName == type:
-                    yield Plug(node, plug, unit) if plugs else node
+            if not type or op(type, getattr(node._fn, other)):
+                yield Plug(node, plug, unit) if plugs else node
 
     def connection(self,
                    type=None,
@@ -1839,10 +1841,7 @@ class Modifier(object):
         self._modifier.renameNode(node._mobject, parent)
 
 
-def createNode(type,
-               name=None,
-               parent=None,
-               undoable=False):
+def createNode(type, name=None, parent=None):
     """Create a new node
 
     This function forms the basic building block
@@ -1856,7 +1855,6 @@ def createNode(type,
         name (str, optional): Sets the name of the newly-created node
         parent (Node, optional): Specifies the parent in the DAG under which
             the new node belongs
-        undoable (bool, optional): Whether or not this node can be undone
 
     Example:
         >>> node = createNode("transform")  # Type as string
@@ -1871,24 +1869,19 @@ def createNode(type,
         kwargs["name"] = name
 
     if parent:
-        kwargs["parent"] = str(parent) if undoable else parent._mobject
+        kwargs["parent"] = parent._mobject
         fn = GlobalDagNode
 
-    if undoable:
-        kwargs["skipSelect"] = True
-        return encode(cmds.createNode(type, **kwargs))
+    try:
+        mobj = fn.create(type, **kwargs)
+    except RuntimeError as e:
+        log.debug(str(e))
+        raise TypeError("Unrecognized node type '%s'" % type)
 
+    if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
+        return DagNode(mobj, exists=False)
     else:
-        try:
-            mobj = fn.create(type, **kwargs)
-        except RuntimeError as e:
-            log.debug(str(e))
-            raise TypeError("Unrecognized node type '%s'" % type)
-
-        if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
-            return DagNode(mobj, exists=False)
-        else:
-            return Node(mobj, exists=False)
+        return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None):
