@@ -184,7 +184,6 @@ def test_nodereuse_noexist():
     assert_raises(ValueError, cmdx.encode, "|myNode")
 
     # Any operation on a deleted node raises RuntimeError
-    assert_raises(RuntimeError, getattr, nodeA, "name")
     assert_raises(RuntimeError, lambda: nodeA.name())
 
 
