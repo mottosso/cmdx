@@ -45,6 +45,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Attribute Query and Assignment](#attribute-query-and-assignment)
   - [Cached](#cached)
   - [Time](#time)
+  - [Native Types](#native-types)
 - [Connections](#connections)
 - [Iterators](#iterators)
 - [Modifier](#modifier)
@@ -561,6 +562,45 @@ node["myArray"][1] = 10
 node["myArray"][2]
 # 5
 ```
+
+<br>
+
+### Native Types
+
+Maya boasts a library of classes that provide mathematical convenience functionality, such as rotating a vector, multiplying matrices or converting between Euler degrees and Quaternions.
+
+You can access these classes via the `.as*` prefix of `cmdx` instances.
+
+```python
+import cmdx
+nodeA = cmdx.createNode("transform")
+nodeB = cmdx.createNode("transform", parent=nodeA)
+nodeC = cmdx.createNode("transform")
+
+nodeA["rotate"] = (4, 8, 15)
+
+tmA = nodeB["worldMatrix"][0].asTransformationMatrix()
+nodeC["rotate"] = tmA.rotation()
+```
+
+Now `nodeC` will share the same *worldspace* orientation as `nodeA` (note that `nodeB` was not rotated).
+
+**Matrix Multiplication**
+
+One useful aspect of native types is that you can leverage their operators, such as multiplication.
+
+```python
+matA = nodeA["worldMatrix"][0].asMatrix()
+matB = nodeB["worldInverseMatrix"][0].asMatrix()
+tm = cmdx.TransformationMatrix(matA * matB)
+relativeTranslate = tm.translation()
+relativeRotate = tm.rotation()
+```
+
+**Available types**
+
+- `asMatrix()` -> `MMatrix`
+- `asTransformationMatrix()` (alias `asTm()`) -> `MTransformationMatrix`
 
 <br>
 

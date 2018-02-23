@@ -260,3 +260,21 @@ def test_channelBox():
     assert_equals(node["translate"].channelBox, False)
     node["translate"].channelBox = True
     assert_equals(node["translate"].channelBox, True)
+
+
+def test_assign_tm():
+    """Assign MTransformationMatrix works"""
+
+    node = cmdx.createNode("transform")
+    tm = node["worldMatrix"][0].asTm()
+    node["translate"] = tm.translation()
+    node["rotate"] = tm.rotation()
+
+
+def test_assign_toangle():
+    """Assign to Angle3 works"""
+
+    node = cmdx.createNode("transform")
+    node["Limits"] = cmdx.Angle3()
+    node["Limits"] = (0, 0, 0)
+    node["Limits"] = 0  # Crash!

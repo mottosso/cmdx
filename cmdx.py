@@ -112,6 +112,15 @@ def withTiming(text="{func}() {time:.2f} ns"):
     return timings_decorator
 
 
+class _Type(int):
+    """Facilitate use of isinstance(space, _Type())"""
+
+
+kShape = _Type(om.MFn.kShape)
+kTransform = _Type(om.MFn.kTransform)
+kJoint = _Type(om.MFn.kJoint)
+
+
 class _Space(int):
     """Facilitate use of isinstance(space, _Space())"""
 
@@ -122,6 +131,12 @@ Object = _Space(om.MSpace.kObject)
 Transform = _Space(om.MSpace.kTransform)
 PostTransform = _Space(om.MSpace.kPostTransform)
 PreTransform = _Space(om.MSpace.kPreTransform)
+
+kWorld = World
+kObject = Object
+kTransform = Transform
+kPostTransform = PostTransform
+kPreTransform = PreTransform
 
 
 class _Unit(int):
@@ -425,6 +440,9 @@ class Node(object):
 
     def typeId(self):
         return self._fn.typeId
+
+    def isA(self, type):
+        return self._mobject.hasFn(type)
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -870,13 +888,15 @@ class DagNode(Node):
         if isinstance(type, (tuple, list)):
             op = operator.contains
 
+        other = "typeId" if isinstance(type, om.MTypeId) else "typeName"
+
         for index in range(self._fn.childCount()):
             mobject = self._fn.child(index)
 
             if filter is not None and not mobject.hasFn(filter):
                 continue
 
-            if not type or op(type, Fn(mobject).typeName):
+            if not type or op(type, getattr(Fn(mobject), other)):
                 yield cls(mobject)
 
     def child(self, type=None, filter=om.MFn.kTransform):
@@ -1307,6 +1327,15 @@ class Plug(object):
         self._key = key
         self._modifier = modifier
 
+    def asMatrix(self):
+        return om.MFnMatrixData(self._mplug.asMObject()).matrix()
+
+    def asTransformationMatrix(self):
+        return TransformationMatrix(self.asMatrix())
+
+    # Alias
+    asTm = asTransformationMatrix
+
     @property
     def locked(self):
         return self._mplug.isLocked
@@ -1498,6 +1527,13 @@ class Plug(object):
         return self._node
 
 
+class TransformationMatrix(om.MTransformationMatrix):
+    def translation(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or kTransform
+        return super(TransformationMatrix, self).translation(space)
+
+
 class CachedPlug(Plug):
     """Returned in place of an actual plug"""
     def __init__(self, value):
@@ -1686,38 +1722,9 @@ def _python_to_plug(value, plug):
 
     """
 
-    # Native Python types
-
-    if isinstance(value, str):
-        plug._mplug.setString(value)
-
-    elif isinstance(value, int):
-        plug._mplug.setInt(value)
-
-    elif isinstance(value, float):
-        plug._mplug.setDouble(value)
-
-    elif isinstance(value, bool):
-        plug._mplug.setBool(value)
-
-    # Native Maya types
-
-    elif isinstance(value, om.MAngle):
-        plug._mplug.setMAngle(value)
-
-    elif isinstance(value, om.MDistance):
-        plug._mplug.setMDistance(value)
-
-    elif isinstance(value, om.MTime):
-        plug._mplug.setMTime(value)
-
-    elif isinstance(value, om.MVector):
-        for index, value in enumerate(value):
-            _python_to_plug(value, plug[index])
-
     # Compound values
 
-    elif isinstance(value, (tuple, list)):
+    if isinstance(value, (tuple, list)):
         for index, value in enumerate(value):
 
             # Tuple values are assumed flat:
@@ -1732,6 +1739,44 @@ def _python_to_plug(value, plug):
                 )
 
             _python_to_plug(value, plug[index])
+
+    # Native Maya types
+
+    elif isinstance(value, om.MEulerRotation):
+        for index, value in enumerate(value):
+            value = om.MAngle(value, om.MAngle.kRadians)
+            _python_to_plug(value, plug[index])
+
+    elif isinstance(value, om.MAngle):
+        plug._mplug.setMAngle(value)
+
+    elif isinstance(value, om.MDistance):
+        plug._mplug.setMDistance(value)
+
+    elif isinstance(value, om.MTime):
+        plug._mplug.setMTime(value)
+
+    elif isinstance(value, om.MVector):
+        for index, value in enumerate(value):
+            _python_to_plug(value, plug[index])
+
+    elif plug._mplug.isCompound:
+        count = plug._mplug.numChildren()
+        return _python_to_plug([value] * count, plug)
+
+    # Native Python types
+
+    elif isinstance(value, str):
+        plug._mplug.setString(value)
+
+    elif isinstance(value, int):
+        plug._mplug.setInt(value)
+
+    elif isinstance(value, float):
+        plug._mplug.setDouble(value)
+
+    elif isinstance(value, bool):
+        plug._mplug.setBool(value)
 
     else:
         raise TypeError("Unsupported Python type '%s'" % value.__class__)
@@ -2389,19 +2434,58 @@ class Distance(AbstractUnit):
 
 class Compound(_AbstractAttribute):
     Fn = om.MFnCompoundAttribute()
+    Multi = None
 
-    def __init__(self, name, children, **kwargs):
+    def __init__(self, name, children=None, **kwargs):
+        if not children and self.Multi:
+            default = kwargs.pop("default", None)
+            children, Type = self.Multi
+            children = tuple(
+                Type(name + child, default=default[index], **kwargs)
+                if default else Type(name + child, **kwargs)
+                for index, child in enumerate(children)
+            )
+
+            self["children"] = children
+
+        else:
+            self["children"] = children
+
         super(Compound, self).__init__(name, **kwargs)
-        self["children"] = children
+
+    def default(self):
+        # Compound itself has no defaults, only it's children do
+        pass
 
     def create(self):
         mobj = super(Compound, self).create()
+        default = super(Compound, self).default()
 
-        for child in self["children"]:
+        for index, child in enumerate(self["children"]):
+            if child["default"] is None and default is not None:
+                child["default"] = default[index]
+
             self.Fn.addChild(child.create())
 
         return mobj
 
+    def read(self, handle):
+        """Read from MDataHandle"""
+        output = list()
+
+        for child in self["children"]:
+            child_handle = handle.child(child["mobject"])
+            output.append(child.read(child_handle))
+
+        return tuple(output)
+
+
+class Angle3(Compound):
+    Multi = ("XYZ", Angle)
+
+
+class Distance3(Compound):
+    Multi = ("XYZ", Distance)
 
 # --------------------------------------------------------
 #
@@ -2429,6 +2513,7 @@ Condition = om.MTypeId(0x52434e44)
 Mesh = om.MTypeId(0x444d5348)
 NurbsCurve = om.MTypeId(0x4e435256)
 NurbsSurface = om.MTypeId(0x4e535246)
+Joint = om.MTypeId(0x4a4f494e)
 Transform = om.MTypeId(0x5846524d)
 TransformGeometry = om.MTypeId(0x5447454f)
 WtAddMatrix = om.MTypeId(0x4457414d)
