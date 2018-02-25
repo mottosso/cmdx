@@ -916,8 +916,8 @@ class DagNode(Node):
                 if child != self:
                     yield child
 
-    def sibling(self):
-        return next(self.siblings(), None)
+    def sibling(self, type=None):
+        return next(self.siblings(type), None)
 
     # Module-level expression; this isn't evaluated
     # at run-time, for that extra performance boost.
