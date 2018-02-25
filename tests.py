@@ -345,7 +345,7 @@ def test_timings():
 
     with environment("CMDX_TIMINGS") as cmdx:
         cmdx.encode("myNode")
-        assert cmdx.LastTiming > 0, cmdx.LastTiming
+        assert cmdx.LastTiming is not None, cmdx.LastTiming
 
 
 @with_setup(new_scene)
