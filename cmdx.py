@@ -56,6 +56,7 @@ Stats = self
 Stats.NodeInitCount = 0
 Stats.NodeReuseCount = 0
 Stats.PlugReuseCount = 0
+Stats.LastTiming = None
 
 # Node reuse depends on this member
 if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
@@ -103,6 +104,8 @@ def withTiming(text="{func}() {time:.2f} ns"):
                 t1 = time.clock()
                 duration = (t1 - t0) * 10 ** 6  # microseconds
 
+                Stats.LastTiming = duration
+
                 log.debug(
                     text.format(func=func.__name__,
                                 time=duration)
@@ -110,6 +113,20 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         return func_wrapper
     return timings_decorator
+
+
+def protected(func):
+    """Prevent fatal crashes from illegal access to deleted nodes"""
+    if ROGUE_MODE:
+        return func
+
+    @wraps(func)
+    def func_wrapper(*args, **kwargs):
+        if args[0]._destroyed:
+            raise ExistError("Cannot perform operation on deleted node")
+        return func(*args, **kwargs)
+
+    return func_wrapper
 
 
 class _Type(int):
@@ -209,7 +226,6 @@ class Singleton(type):
 
     @withTiming()
     def __call__(cls, mobject, exists=True, modifier=None):
-
         handle = om.MObjectHandle(mobject)
         hsh = handle.hashCode()
 
@@ -278,14 +294,6 @@ class Node(object):
     def __repr__(self):
         return self.name()
 
-    def __rshift__(self, other):
-        """Support connecting nodes via A >> B"""
-        return self.connect(other)
-
-    def __lshift__(self, other):
-        """Support connecting nodes via A << B"""
-        other.connect(self)
-
     def __add__(self, other):
         """Support legacy + '.attr' behavior
 
@@ -342,7 +350,8 @@ class Node(object):
         """Support item assignment of new attributes or values
 
         Example:
-            >>> node = createNode("transform")
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node = createNode("transform", name="myNode")
             >>> node["myAttr"] = Double(default=1.0)
             >>> node["myAttr"] == 1.0
             True
@@ -350,8 +359,19 @@ class Node(object):
             >>> node["rotateX"] = Degrees(1)
             >>> node["rotateX", Degrees]
             1.0
+            >>> node["myDist"] = Distance()
+            >>> node["myDist"] = node["translateX"]
+            >>> node["myDist", Centimeters] = node["translateX", Meters]
             >>> round(node["rotateX", Radians], 3)
             0.017
+            >>> node["myDist"] = Distance()
+            Traceback (most recent call last):
+            ...
+            ExistError: myDist
+            >>> node["notExist"] = 5
+            Traceback (most recent call last):
+            ...
+            ExistError: |myNode.notExist
             >>> delete(node)
 
         """
@@ -387,7 +407,7 @@ class Node(object):
         try:
             plug = self.findPlug(key)
         except RuntimeError:
-            raise KeyError(key)
+            raise ExistError("%s.%s" % (self.path(), key))
 
         Plug(self, plug, unit=unit).write(value)
 
@@ -413,7 +433,7 @@ class Node(object):
             fn (om.MFnDependencyNode): The corresponding function set
             modifier (om.MDagModifier, optional): Operations are
                 deferred to this modifier.
-            exists (bool): Has this node been destroyed by Maya?
+            destroyed (bool): Has this node been destroyed by Maya?
             state (dict): Optional state for performance
 
         """
@@ -439,9 +459,32 @@ class Node(object):
         ) if not ROGUE_MODE else DoNothing
 
     def typeId(self):
+        """Return the native maya.api.MTypeId of this node
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node.typeId() == Transform
+            True
+
+        """
+
         return self._fn.typeId
 
     def isA(self, type):
+        """Evaluate whether self is of `type`
+
+        Arguments:
+            type (int): MFn function set constant
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node.isA(kTransform)
+            True
+            >>> node.isA(kShape)
+            False
+
+        """
+
         return self._mobject.hasFn(type)
 
     # Module-level branch; evaluated on import
@@ -518,9 +561,32 @@ class Node(object):
             return self._fn.findPlug(name, False)
 
     def clear(self):
-        """Clear state"""
-        self._state["plugs"].clear()
+        """Clear transient state
 
+        A node may cache previously queried values for performance
+        at the expense of memory. This method erases any cached
+        values, freeing up memory at the expense of performance.
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translateX"] = 5
+            >>> node["translateX"]
+            5.0
+            >>> # Plug was reused
+            >>> node["translateX"]
+            5.0
+            >>> # Value was reused
+            >>> node.clear()
+            >>> node["translateX"]
+            5.0
+            >>> # Plug and value was recomputed
+
+        """
+
+        self._state["plugs"].clear()
+        self._state["values"].clear()
+
+    @protected
     def name(self):
         """Return the name of this node
 
@@ -531,8 +597,6 @@ class Node(object):
 
         """
 
-        if self._destroyed:
-            raise ExistError("Cannot perform operation on deleted node")
         return self._fn.name()
 
     # Alias
@@ -578,13 +642,25 @@ class Node(object):
         del self[key]
 
     def dump(self, detail=0):
-        """Return dictionary of all attributes"""
+        """Return dictionary of all attributes
+
+        Example:
+            >>> import json
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node = createNode("choice")
+            >>> dump = node.dump()
+            >>> len(dump.keys())
+            8
+            >>> dump["choice1.caching"]
+            False
+
+        """
 
         attrs = {}
         count = self._fn.attributeCount()
         for index in range(count):
             obj = self._fn.attribute(index)
-            plug = self.findPlug(obj)
+            plug = self._fn.findPlug(obj, False)
 
             try:
                 value = Plug(self, plug).read()
@@ -602,7 +678,15 @@ class Node(object):
         return json.dumps(self.dump(), indent=indent, sort_keys=sortKeys)
 
     def type(self):
-        """Return type name"""
+        """Return type name
+
+        Example:
+            >>> node = createNode("choice")
+            >>> node.type()
+            u'choice'
+
+        """
+
         return self._fn.typeName
 
     def addAttr(self, attr):
@@ -744,6 +828,7 @@ class DagNode(Node):
     def __repr__(self):
         return self.path()
 
+    @protected
     def path(self):
         """Return full path to node
 
@@ -757,10 +842,9 @@ class DagNode(Node):
 
         """
 
-        if self._destroyed:
-            raise ExistError("Cannot perform operation on deleted node")
         return self._fn.fullPathName()
 
+    @protected
     def shortestPath(self):
         """Return shortest unique path to node
 
@@ -777,8 +861,6 @@ class DagNode(Node):
 
         """
 
-        if self._destroyed:
-            raise ExistError("Cannot perform operation on deleted node")
         return self._fn.partialPathName()
 
     def addChild(self, child, index=Last):
@@ -1328,9 +1410,41 @@ class Plug(object):
         self._modifier = modifier
 
     def asMatrix(self):
+        """Return plug as MMatrix
+
+        Example:
+            >>> node1 = createNode("transform")
+            >>> node2 = createNode("transform", parent=node1)
+            >>> node1["translate"] = (0, 5, 0)
+            >>> node2["translate"] = (0, 5, 0)
+            >>> plug1 = node1["matrix"]
+            >>> plug2 = node2["worldMatrix"][0]
+            >>> mat1 = plug1.asMatrix()
+            >>> mat2 = plug2.asMatrix()
+            >>> mat = mat1 * mat2
+            >>> tm = TransformationMatrix(mat)
+            >>> list(tm.translation())
+            [0.0, 15.0, 0.0]
+
+        """
+
         return om.MFnMatrixData(self._mplug.asMObject()).matrix()
 
     def asTransformationMatrix(self):
+        """Return plug as TransformationMatrix
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translateY"] = 12
+            >>> node["rotate"] = 1
+            >>> tm = node["matrix"].asTm()
+            >>> map(round, tm.rotation())
+            [1.0, 1.0, 1.0]
+            >>> list(tm.translation())
+            [0.0, 12.0, 0.0]
+
+        """
+
         return TransformationMatrix(self.asMatrix())
 
     # Alias

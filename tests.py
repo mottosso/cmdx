@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import shutil
+import tempfile
 import contextlib
 
 from nose.tools import (
     with_setup,
     assert_equals,
+    assert_not_equals,
     assert_raises,
     assert_is,
+    assert_is_not,
     assert_almost_equals,
 )
 
@@ -22,15 +26,25 @@ def new_scene():
 
 
 @contextlib.contextmanager
+def tempdir():
+    tmp = tempfile.mkdtemp()
+    try:
+        yield tmp
+    finally:
+        shutil.rmtree(tmp)
+
+
+@contextlib.contextmanager
 def environment(key, value=None):
     env = os.environ.copy()
     os.environ[key] = value or "1"
     try:
         sys.modules.pop("cmdx")
-        __import__("cmdx")
-        yield
+        yield __import__("cmdx")
     finally:
         os.environ.update(env)
+        sys.modules.pop("cmdx")
+        __import__("cmdx")
 
 
 @contextlib.contextmanager
@@ -39,10 +53,11 @@ def pop_environment(key):
     os.environ.pop(key)
     try:
         sys.modules.pop("cmdx")
-        __import__("cmdx")
-        yield
+        yield __import__("cmdx")
     finally:
         os.environ.update(env)
+        sys.modules.pop("cmdx")
+        __import__("cmdx")
 
 
 @with_setup(new_scene)
@@ -134,6 +149,25 @@ def test_getattrtime():
     assert_almost_equals(transform["ty"].read(time=10), 10.0, places=5)
 
 
+def test_setattr():
+    """Setting attributes works well"""
+    transform = cmdx.createNode("transform")
+
+    # Setting single with single
+    transform["translateX"] = 1.0
+
+    # Multi with multi
+    transform["translate"] = (1.0, 2.0, 3.0)
+    transform["translate"] = (1, 2, 3)  # Automatic cast to float
+
+    # Multi with single
+    transform["translate"] = 1.0
+    assert_equals(transform["translate"].read(), (1.0, 1.0, 1.0))
+
+    # Plug with plug
+    transform["translate"] = transform["translate"]
+
+
 @with_setup(new_scene)
 def test_getcached():
     """Returning a cached plug works"""
@@ -149,10 +183,11 @@ def test_getcached():
 
 def test_plugreuse():
     """Plug re-use works ok"""
+    import cmdx
     node = cmdx.createNode("transform")
     id(node["translate"]) == id(node["translate"])
 
-    with pop_environment("CMDX_ENABLE_PLUG_REUSE"):
+    with pop_environment("CMDX_ENABLE_PLUG_REUSE") as cmdx:
         node = cmdx.createNode("transform")
         id(node["translate"]) != id(node["translate"])
 
@@ -161,10 +196,27 @@ def test_plugreuse():
 def test_nodereuse():
     """Node re-use works ok"""
 
+    import cmdx
     nodeA = cmdx.createNode("transform", name="myNode")
     nodeB = cmdx.createNode("transform", parent=nodeA)
     assert_is(cmdx.encode("|myNode"), nodeA)
     assert_is(nodeB.parent(), nodeA)
+
+    with pop_environment("CMDX_ENABLE_NODE_REUSE") as cmdx:
+        nodeC = cmdx.createNode("transform", name="myOtherNode")
+        assert_is_not(cmdx.encode("|myOtherNode"), nodeC)
+
+    with tempdir() as tmp:
+        fname = os.path.join(tmp, "myScene.ma")
+        cmds.file(rename=fname)
+        cmds.file(save=True, type="mayaAscii")
+        cmds.file(fname, open=True, force=True)
+
+        # On scene open, the current scene is closed, triggering
+        # the nodeDestroyed callback which invalidates the node
+        # for cmdx. Upon encoding this node anew, cmdx will
+        # allocate a new instance for it.
+        assert_is_not(cmdx.encode("|myNode"), nodeA)
 
 
 @with_setup(new_scene)
@@ -278,3 +330,29 @@ def test_assign_toangle():
     node["Limits"] = cmdx.Angle3()
     node["Limits"] = (0, 0, 0)
     node["Limits"] = 0  # Crash!
+
+
+@with_setup(new_scene)
+def test_timings():
+    """CMDX_TIMINGS outputs timing information"""
+
+    import cmdx
+    cmdx.createNode("transform", name="myNode")
+
+    # Trigger re-use timings
+    cmdx.encode("myNode")
+    assert cmdx.LastTiming is None
+
+    with environment("CMDX_TIMINGS") as cmdx:
+        cmdx.encode("myNode")
+        assert cmdx.LastTiming > 0, cmdx.LastTiming
+
+
+@with_setup(new_scene)
+def test_nodeoperators():
+    """Node operators works"""
+
+    node = cmdx.createNode(cmdx.Transform, name="myNode")
+    assert_equals(node, "|myNode")
+    assert_not_equals(node, "|NotEquals")
+    assert_equals(str(node), repr(node))
