@@ -597,8 +597,26 @@ relativeTranslate = tm.translation()
 relativeRotate = tm.rotation()
 ```
 
+**Vector Operations**
+
+Maya's `MVector` is exposed via `cmdx.Vector`.
+
+```python
+from maya.api import OpenMaya as om
+import cmdx
+
+vec = cmdx.Vector(1, 0, 0)
+
+# Dot product
+vec * cmdx.Vector(0, 1, 0) == 0.0
+
+# Cross product
+vec ^ cmdx.Vector(0, 1, 0) == om.MVector(0, 0, 1)
+```
+
 **Available types**
 
+- `asDouble()` -> `float`
 - `asMatrix()` -> `MMatrix`
 - `asTransformationMatrix()` (alias `asTm()`) -> `MTransformationMatrix`
 

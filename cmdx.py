@@ -1661,6 +1661,19 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).translation(space)
 
 
+class Vector(om.MVector):
+    """Maya's MVector
+
+    Example:
+        >>> vec = Vector(1, 0, 0)
+        >>> vec * Vector(0, 1, 0)  # Dot product
+        0.0
+        >>> vec ^ Vector(0, 1, 0)  # Cross product
+        maya.api.OpenMaya.MVector(0, 0, 1)
+
+    """
+
+
 class CachedPlug(Plug):
     """Returned in place of an actual plug"""
     def __init__(self, value):
