@@ -649,8 +649,8 @@ class Node(object):
             >>> _ = cmds.file(new=True, force=True)
             >>> node = createNode("choice")
             >>> dump = node.dump()
-            >>> len(dump.keys())
-            8
+            >>> isinstance(dump, dict)
+            True
             >>> dump["choice1.caching"]
             False
 
@@ -1408,6 +1408,19 @@ class Plug(object):
         self._cached = None
         self._key = key
         self._modifier = modifier
+
+    def asDouble(self):
+        """Return plug as double (Python float)
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translateX"] = 5.0
+            >>> node["translateX"].asDouble()
+            5.0
+
+        """
+
+        return self._mplug.asDouble()
 
     def asMatrix(self):
         """Return plug as MMatrix
