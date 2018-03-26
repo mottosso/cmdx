@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import time
+import types
 import logging
 import operator
 from functools import wraps
@@ -32,16 +33,19 @@ ROGUE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROGUE_MODE"))
 # Increase performance by not bothering to free up unused memory
 MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
 
+# Support undo/redo
+ENABLE_UNDO = not SAFE_MODE and bool(os.getenv("CMDX_ENABLE_UNDO"))
+
 # Opt-in performance boosters
-ENABLE_NODE_REUSE = not SAFE_MODE and bool(os.getenv("CMDX_ENABLE_NODE_REUSE"))
-ENABLE_PLUG_REUSE = not SAFE_MODE and bool(os.getenv("CMDX_ENABLE_PLUG_REUSE"))
+ENABLE_NODE_REUSE = not SAFE_MODE
+ENABLE_PLUG_REUSE = not SAFE_MODE
 
 if PY3:
     string_types = str,
 else:
     string_types = basestring,
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __maya_version__ = int(cmds.about(version=True))
 
 # TODO: Lower this requirement
@@ -76,6 +80,8 @@ GlobalDependencyNode = om.MFnDependencyNode()
 
 First = 0
 Last = -1
+
+history = dict()
 
 
 def withTiming(text="{func}() {time:.2f} ns"):
@@ -1551,30 +1557,20 @@ class Plug(object):
             raise
 
     def connect(self, other):
-        mod = self._modifier or om.MDGModifier()
-        mod.connect(self._mplug, other._mplug)
+        if not getattr(self._modifier, "isDone", True):
+            return self._modifier.connect(self._mplug, other._mplug)
 
-        if self._modifier is None:
-            try:
-                mod.doIt()
-            except RuntimeError:
-                raise ValueError(
-                    "Could not connect '%s' -> '%s'"
-                    % (self.path(), other.path())
-                )
+        mod = om.MDGModifier()
+        mod.connect(self._mplug, other._mplug)
+        mod.doIt()
 
     def disconnect(self, other):
-        mod = self._modifier or om.MDGModifier()
-        mod.disconnect(self._mplug, other._mplug)
+        if not getattr(self._modifier, "isDone", True):
+            return self._modifier.disconnect(self._mplug, other._mplug)
 
-        if self._modifier is None:
-            try:
-                mod.doIt()
-            except RuntimeError:
-                raise ValueError(
-                    "Could not disconnect '%s' -> '%s'"
-                    % (self.path(), other.path())
-                )
+        mod = om.MDGModifier()
+        mod.disconnect(self._mplug, other._mplug)
+        mod.doIt()
 
     def connections(self,
                     type=None,
@@ -1963,11 +1959,67 @@ def decode(node):
         return node.name()
 
 
+class MDGModifier(om.MDGModifier):
+    def __init__(self, *args, **kwargs):
+        super(MDGModifier, self).__init__(*args, **kwargs)
+        self.isDone = False
+
+
+class MDagModifier(om.MDagModifier):
+    def __init__(self, *args, **kwargs):
+        super(MDagModifier, self).__init__(*args, **kwargs)
+        self.isDone = False
+
+
 class Modifier(object):
-    """Interactively edit an existing scenegraph with ability to undo
+    """Interactively edit an existing scenegraph with support for undo/redo"""
+
+    Type = MDGModifier
+
+    def __enter__(self):
+        self._modifier = self.Type()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._modifier.doIt()
+        self._modifier.isDone = True
+        commit(self._modifier.undoIt, self._modifier.doIt)
+
+    def doIt(self):
+        self._modifier.doIt()
+
+    def undoIt(self):
+        self._modifier.undoIt()
+
+    def createNode(self, type, name=None):
+        mobj = self._modifier.createNode(type)
+
+        if name is not None:
+            self._modifier.renameNode(mobj, name)
+
+        return Node(mobj, exists=False, modifier=self._modifier)
+
+    def getAttr(self, node, key):
+        return node[key]
+
+    def setAttr(self, node, key, value):
+        node[key] = value
+
+    def connect(self, plug1, plug2):
+        plug1 >> plug2
+
+
+class DGModifier(Modifier):
+    """Modifier for DG nodes"""
+
+    Type = MDGModifier
+
+
+class DagModifier(Modifier):
+    """Modifier for DAG nodes
 
     Example:
-        >>> with Modifier() as mod:
+        >>> with DagModifier() as mod:
         ...     node1 = mod.createNode("transform")
         ...     node2 = mod.createNode("transform", parent=node1)
         ...     mod.setAttr(node1, "translate", (1, 2, 3))
@@ -1980,7 +2032,7 @@ class Modifier(object):
         1.0
         >>> node2["translate"][1]
         2.0
-        >>> with Modifier() as mod:
+        >>> with DagModifier() as mod:
         ...     node1 = mod.createNode("transform")
         ...     node2 = mod.createNode("transform", parent=node1)
         ...     node1["translate"] = (5, 6, 7)
@@ -1993,12 +2045,7 @@ class Modifier(object):
 
     """
 
-    def __enter__(self):
-        self._modifier = om.MDagModifier()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self._modifier.doIt()
+    Type = MDagModifier
 
     def createNode(self, type, name=None, parent=None):
         parent = parent._mobject if parent else om.MObject.kNullObj
@@ -2007,17 +2054,7 @@ class Modifier(object):
         if name is not None:
             self._modifier.renameNode(mobj, name)
 
-        cls = DagNode if mobj.hasFn(om.MFn.kDagNode) else Node
-        return cls(mobj, exists=False, modifier=self._modifier)
-
-    def getAttr(self, node, key):
-        return node[key]
-
-    def setAttr(self, node, key, value):
-        node[key] = value
-
-    def connect(self, plug1, plug2):
-        plug1 >> plug2
+        return DagNode(mobj, exists=False, modifier=self._modifier)
 
     def parent(self, node, parent=None):
         self._modifier.reparentNode(node._mobject, parent)
@@ -2627,6 +2664,159 @@ class Angle3(Compound):
 class Distance3(Compound):
     Multi = ("XYZ", Distance)
 
+
+# --------------------------------------------------------
+#
+# Undo/Redo Support
+#
+# NOTE: Localised version of apiundo.py 0.2.0
+# https://github.com/mottosso/apiundo
+#
+# In Maya, history is maintained by "commands". Each command is an instance of
+# MPxCommand that encapsulates a series of API calls coupled with their
+# equivalent undo/redo API calls. For example, the `createNode` command
+# is presumably coupled with `cmds.delete`, `setAttr` is presumably
+# coupled with another `setAttr` with the previous values passed in.
+#
+# Thus, creating a custom command involves subclassing MPxCommand and
+# implementing coupling your do, undo and redo into one neat package.
+#
+# cmdx however doesn't fit into this framework.
+#
+# With cmdx, you call upon API calls directly. There is little to no
+# correlation between each of your calls, which is great for performance
+# but not so great for conforming to the undo/redo framework set forth
+# by Autodesk.
+#
+# To work around this, without losing out on performance or functionality,
+# a generic command is created, capable of hosting arbitrary API calls
+# and storing them in the Undo/Redo framework.
+#
+#   >>> node = cmdx.createNode("transform")
+#   >>> cmdx.commit(lambda: cmdx.delete(node))
+#
+# Now when you go to undo, the `lambda` is called. It is then up to you
+# the developer to ensure that what is being undone actually relates
+# to what you wanted to have undone. For example, it is perfectly
+# possible to add an unrelated call to history.
+#
+#   >>> node = cmdx.createNode("transform")
+#   >>> cmdx.commit(lambda: cmdx.setAttr(node + "translateX", 5))
+#
+# The result would be setting an attribute to `5` when attempting to undo.
+#
+# --------------------------------------------------------
+
+
+# Support for multiple co-existing versions of apiundo.
+# NOTE: This is important for vendoring, as otherwise a vendored apiundo
+# could register e.g. cmds.apiUndo() first, causing a newer version
+# to inadvertently use this older command (or worse yet, throwing an
+# error when trying to register it again).
+command = "_apiUndo_%s" % __version__.replace(".", "_")
+
+# This module is both a Python module and Maya plug-in.
+# Data is shared amongst the two through this "module"
+name = "_cmdxShared"
+if name not in sys.modules:
+    sys.modules[name] = types.ModuleType(name)
+
+shared = sys.modules[name]
+shared.undo = None
+shared.redo = None
+
+
+def commit(undo, redo=lambda: None):
+    """Commit `undo` and `redo` to history
+
+    Arguments:
+        undo (func): Call this function on next undo
+        redo (func, optional): Like `undo`, for for redo
+
+    """
+
+    if not ENABLE_UNDO:
+        return
+
+    if not hasattr(cmds, command):
+        install()
+
+    # Precautionary measure.
+    # If this doesn't pass, odds are we've got a race condition.
+    # NOTE: This assumes calls to `commit` can only be done
+    # from a single thread, which should already be the case
+    # given that Maya's API is not threadsafe.
+    assert shared.redo is None
+    assert shared.undo is None
+
+    # Temporarily store the functions at module-level,
+    # they are later picked up by the command once called.
+    shared.undo = undo
+    shared.redo = redo
+
+    # Let Maya know that something is undoable
+    getattr(cmds, command)()
+
+
+def install():
+    """Load this module as a plug-in
+
+    Call this prior to using the module
+
+    """
+
+    if not ENABLE_UNDO:
+        return
+
+    cmds.loadPlugin(__file__, quiet=True)
+
+
+def uninstall():
+    if not ENABLE_UNDO:
+        return
+
+    # Plug-in may exist in undo queue and
+    # therefore cannot be unloaded until flushed.
+    cmds.flushUndo()
+
+    cmds.unloadPlugin(os.path.basename(__file__))
+
+
+def maya_useNewAPI():
+    pass
+
+
+class _apiUndo(om.MPxCommand):
+    def doIt(self, args):
+        self.undo = shared.undo
+        self.redo = shared.redo
+
+        # Facilitate the above precautionary measure
+        shared.undo = None
+        shared.redo = None
+
+    def undoIt(self):
+        self.undo()
+
+    def redoIt(self):
+        self.redo()
+
+    def isUndoable(self):
+        # Without this, the above undoIt and redoIt will not be called
+        return True
+
+
+def initializePlugin(plugin):
+    om.MFnPlugin(plugin).registerCommand(
+        command,
+        _apiUndo
+    )
+
+
+def uninitializePlugin(plugin):
+    om.MFnPlugin(plugin).deregisterCommand(command)
+
+
 # --------------------------------------------------------
 #
 # Commonly Node Types
@@ -2636,6 +2826,8 @@ class Distance3(Compound):
 # has a negative impact on maintainability and readability of
 # the project, so a balance is struck where only the most
 # performance sensitive types are included here.
+#
+# Developers: See cmdt.py for a list of all available types and their IDs
 #
 # --------------------------------------------------------
 

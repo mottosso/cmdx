@@ -75,6 +75,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Flags](#flags)
   - [`CMDX_ENABLE_NODE_REUSE`](#cmdx_enable_node_reuse)
   - [`CMDX_ENABLE_PLUG_REUSE`](#cmdx_enable_plug_reuse)
+  - [`CMDX_ENABLE_UNDO`](#cmdx_enable_undo)
   - [`CMDX_TIMINGS`](#cmdx_timings)
   - [`CMDX_MEMORY_HOG_MODE`](#cmdx_memory_hog_mode)
   - [`CMDX_IGNORE_VERSION`](#cmdx_ignore_version)
@@ -245,8 +246,6 @@ Any interaction with the Maya API carries the overhead of translating from Pytho
 
 #### Node Reuse
 
-> Opt-in `CMDX_ENABLE_NODE_REUSE`
-
 Any node created or queried via `cmdx` is kept around until the next time the same node is returned, regardless of the exact manner in which it was queried.
 
 For example, when `encode`d or returned as children of another node.
@@ -272,7 +271,6 @@ In fact, regardless of how a node is queried, there is only ever a single instan
 
 #### Plug Reuse
 
-> Opt-in `CMDX_ENABLE_PLUG_REUSE`
 
 ```python
 node = cmdx.createNode("transform")
@@ -292,6 +290,18 @@ Whenever an attribute is queried, a number of things happen.
 This isn't just 4 interactions with the Maya API, it's also 3 interactions with the *Maya scenegraph*. An interaction of this nature triggers the propagation and handling of the dirty flag, which in turn triggers a virtually unlimited number of additional function calls; both internally to Maya - i.e. the `compute()` method - and in any Python that might be listening - e.g. arbitrary callbacks.
 
 With module level caching, a repeated query to either an `MObject` or `MPlug` is handled entirely in Python, saving on both time and computational resources.
+
+#### Enable Undo
+
+> Opt-in `CMDX_ENABLE_UNDO`
+
+Currently, support for undo/redo is opt-in via the `CMDX_ENABLE_UNDO` environment variable.
+
+```bash
+$ export CMDX_ENABLE_UNDO=1
+$ mayapy
+...
+```
 
 <br>
 

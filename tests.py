@@ -187,10 +187,6 @@ def test_plugreuse():
     node = cmdx.createNode("transform")
     id(node["translate"]) == id(node["translate"])
 
-    with pop_environment("CMDX_ENABLE_PLUG_REUSE") as cmdx:
-        node = cmdx.createNode("transform")
-        id(node["translate"]) != id(node["translate"])
-
 
 @with_setup(new_scene)
 def test_nodereuse():
@@ -201,10 +197,6 @@ def test_nodereuse():
     nodeB = cmdx.createNode("transform", parent=nodeA)
     assert_is(cmdx.encode("|myNode"), nodeA)
     assert_is(nodeB.parent(), nodeA)
-
-    with pop_environment("CMDX_ENABLE_NODE_REUSE") as cmdx:
-        nodeC = cmdx.createNode("transform", name="myOtherNode")
-        assert_is_not(cmdx.encode("|myOtherNode"), nodeC)
 
     with tempdir() as tmp:
         fname = os.path.join(tmp, "myScene.ma")
