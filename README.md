@@ -26,6 +26,12 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See [API Documentation](https://weightshift.io/cmdx/api/) for usage 
 
+### What is novel?
+
+- Performance
+- Node and attribute reuse
+- Native Qt, per-node signals
+
 <br>
 <br>
 

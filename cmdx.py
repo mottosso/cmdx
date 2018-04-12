@@ -11,6 +11,11 @@ from functools import wraps
 from maya import cmds
 from maya.api import OpenMaya as om
 
+try:
+    from PySide import QtCore
+except ImportError:
+    from PySide2 import QtCore
+
 PY3 = sys.version_info[0] == 3
 
 # Bypass assertion error on unsupported Maya versions
@@ -204,7 +209,7 @@ _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
 
-class Singleton(type):
+class Singleton(type(QtCore.QObject)):
     """Re-use previous instances of Node
 
     Cost: 14 microseconds
@@ -253,7 +258,7 @@ class Singleton(type):
         return self
 
 
-class Node(object):
+class Node(QtCore.QObject):
     """A Maya dependency node
 
     Example:
@@ -271,6 +276,8 @@ class Node(object):
         (5.0, 0.0, 0.0)
 
     """
+
+    destroyed = QtCore.Signal()
 
     if ENABLE_NODE_REUSE:
         __metaclass__ = Singleton
@@ -418,12 +425,14 @@ class Node(object):
         Plug(self, plug, unit=unit).write(value)
 
     if MEMORY_HOG_MODE:
-        def onDestroyed(self, mobject):
+        def _onDestroyed(self, mobject):
             self._destroyed = True
+            self.destroyed.emit()
 
     else:
-        def onDestroyed(self, mobject):
+        def _onDestroyed(self, mobject):
             self._destroyed = True
+            self.destroyed.emit()
             cid = om.MMessage.currentCallbackId()
             om.MMessage.removeCallback(cid)
 
@@ -444,6 +453,8 @@ class Node(object):
 
         """
 
+        super(Node, self).__init__(parent=None)
+
         self._mobject = mobject
         self._fn = self._Fn(mobject)
         self._modifier = modifier
@@ -460,9 +471,12 @@ class Node(object):
         # result in a fatal crash.
         om.MNodeMessage.addNodeDestroyedCallback(
             mobject,
-            self.onDestroyed,  # func
+            self._onDestroyed,  # func
             None  # clientData
         ) if not ROGUE_MODE else DoNothing
+
+    def isAlive(self):
+        return not self._destroyed
 
     def typeId(self):
         """Return the native maya.api.MTypeId of this node
