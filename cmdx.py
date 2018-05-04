@@ -303,11 +303,7 @@ class Node(object):
         return self.name()
 
     def __repr__(self):
-        return "<class '%s.%s(\"%s\")'>" % (
-            self.__class__.__module__,
-            self.__class__.__name__,
-            self.name()
-        )
+        return self.name()
 
     def __add__(self, other):
         """Support legacy + '.attr' behavior
@@ -853,11 +849,7 @@ class DagNode(Node):
         return self.path()
 
     def __repr__(self):
-        return "<class '%s.%s(\"%s\")'>" % (
-            self.__class__.__module__,
-            self.__class__.__name__,
-            self.path()
-        )
+        return self.path()
 
     @protected
     def path(self):
