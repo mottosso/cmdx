@@ -5,16 +5,12 @@ import json
 import time
 import types
 import logging
+import traceback
 import operator
 from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om
-
-try:
-    from PySide import QtCore
-except ImportError:
-    from PySide2 import QtCore
 
 PY3 = sys.version_info[0] == 3
 
@@ -39,7 +35,7 @@ ROGUE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROGUE_MODE"))
 MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
 
 # Support undo/redo
-ENABLE_UNDO = not SAFE_MODE and bool(os.getenv("CMDX_ENABLE_UNDO"))
+ENABLE_UNDO = not SAFE_MODE
 
 # Opt-in performance boosters
 ENABLE_NODE_REUSE = not SAFE_MODE
@@ -209,7 +205,7 @@ _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
 
-class Singleton(type(QtCore.QObject)):
+class Singleton(type):
     """Re-use previous instances of Node
 
     Cost: 14 microseconds
@@ -258,7 +254,7 @@ class Singleton(type(QtCore.QObject)):
         return self
 
 
-class Node(QtCore.QObject):
+class Node(object):
     """A Maya dependency node
 
     Example:
@@ -277,8 +273,6 @@ class Node(QtCore.QObject):
 
     """
 
-    destroyed = QtCore.Signal()
-
     if ENABLE_NODE_REUSE:
         __metaclass__ = Singleton
 
@@ -291,13 +285,17 @@ class Node(QtCore.QObject):
         """MObject supports this operator explicitly"""
         try:
             # Better to ask forgivness than permission
-            return self._mobject == other._mobject
+            mobject = self._handle.object()
+            other = other._handle.object()
+            return mobject == other
         except AttributeError:
             return str(self) == str(other)
 
     def __ne__(self, other):
         try:
-            return self._mobject != other._mobject
+            mobject = self._handle.object()
+            other = other._handle.object()
+            return mobject != other
         except AttributeError:
             return str(self) != str(other)
 
@@ -305,7 +303,11 @@ class Node(QtCore.QObject):
         return self.name()
 
     def __repr__(self):
-        return self.name()
+        return "<class '%s.%s(\"%s\")'>" % (
+            self.__class__.__module__,
+            self.__class__.__name__,
+            self.name()
+        )
 
     def __add__(self, other):
         """Support legacy + '.attr' behavior
@@ -424,17 +426,17 @@ class Node(QtCore.QObject):
 
         Plug(self, plug, unit=unit).write(value)
 
-    if MEMORY_HOG_MODE:
-        def _onDestroyed(self, mobject):
-            self._destroyed = True
-            self.destroyed.emit()
+    def _onDestroyed(self, mobject):
+        self._destroyed = True
 
-    else:
-        def _onDestroyed(self, mobject):
-            self._destroyed = True
-            self.destroyed.emit()
-            cid = om.MMessage.currentCallbackId()
-            om.MMessage.removeCallback(cid)
+        cid = om.MMessage.currentCallbackId()
+        om.MMessage.removeCallback(cid)
+
+        for callback in self.onDestroyed:
+            try:
+                callback()
+            except Exception:
+                traceback.print_exc()
 
     def __delitem__(self, key):
         self.deleteAttr(key)
@@ -453,9 +455,7 @@ class Node(QtCore.QObject):
 
         """
 
-        super(Node, self).__init__(parent=None)
-
-        self._mobject = mobject
+        self._handle = om.MObjectHandle(mobject)
         self._fn = self._Fn(mobject)
         self._modifier = modifier
         self._destroyed = False
@@ -463,6 +463,8 @@ class Node(QtCore.QObject):
             "plugs": dict(),
             "values": dict(),
         }
+
+        self.onDestroyed = list()
 
         Stats.NodeInitCount += 1
 
@@ -474,6 +476,10 @@ class Node(QtCore.QObject):
             self._onDestroyed,  # func
             None  # clientData
         ) if not ROGUE_MODE else DoNothing
+
+    def object(self):
+        """Return MObject of this node"""
+        return self._handle.object()
 
     def isAlive(self):
         return not self._destroyed
@@ -505,7 +511,8 @@ class Node(QtCore.QObject):
 
         """
 
-        return self._mobject.hasFn(type)
+        mobject = self._handle.object()
+        return mobject.hasFn(type)
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -846,7 +853,11 @@ class DagNode(Node):
         return self.path()
 
     def __repr__(self):
-        return self.path()
+        return "<class '%s.%s(\"%s\")'>" % (
+            self.__class__.__module__,
+            self.__class__.__name__,
+            self.path()
+        )
 
     @protected
     def path(self):
@@ -898,7 +909,8 @@ class DagNode(Node):
 
         """
 
-        self._fn.addChild(child._mobject, index)
+        mobject = child._handle.object()
+        self._fn.addChild(mobject, index)
 
     def assembly(self):
         """Return the top-level parent of node
@@ -983,7 +995,7 @@ class DagNode(Node):
 
         """
 
-        cls = self.__class__
+        cls = DagNode
         Fn = self._fn.__class__
         op = operator.eq
 
@@ -1052,9 +1064,10 @@ class DagNode(Node):
                 typeName = type
                 type = om.MFn.kInvalid
 
+            mobject = self._handle.object()
             it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
             it.reset(
-                self._mobject,
+                mobject,
                 om.MItDag.kDepthFirst,
                 om.MIteratorType.kMObject
             )
@@ -1442,7 +1455,7 @@ class Plug(object):
 
         return self._mplug.asDouble()
 
-    def asMatrix(self):
+    def asMatrix(self, time=None):
         """Return plug as MMatrix
 
         Example:
@@ -1461,9 +1474,14 @@ class Plug(object):
 
         """
 
-        return om.MFnMatrixData(self._mplug.asMObject()).matrix()
+        context = om.MDGContext.kNormal
 
-    def asTransformationMatrix(self):
+        if time is not None:
+            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+
+        return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
+
+    def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
 
         Example:
@@ -1478,7 +1496,7 @@ class Plug(object):
 
         """
 
-        return TransformationMatrix(self.asMatrix())
+        return TransformationMatrix(self.asMatrix(time))
 
     # Alias
     asTm = asTransformationMatrix
@@ -1536,7 +1554,7 @@ class Plug(object):
         context = None
 
         if time is not None:
-            context = om.MDGContext(om.MTime(time, TimeUnit))
+            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
 
         try:
             value = _plug_to_python(
@@ -1973,28 +1991,30 @@ def decode(node):
         return node.name()
 
 
-class MDGModifier(om.MDGModifier):
+# The original class does not support adding
+# members to self at run-time.
+class _MDGModifier(om.MDGModifier):
     def __init__(self, *args, **kwargs):
-        super(MDGModifier, self).__init__(*args, **kwargs)
+        super(_MDGModifier, self).__init__(*args, **kwargs)
         self.isDone = False
 
 
-class MDagModifier(om.MDagModifier):
+class _MDagModifier(om.MDagModifier):
     def __init__(self, *args, **kwargs):
-        super(MDagModifier, self).__init__(*args, **kwargs)
+        super(_MDagModifier, self).__init__(*args, **kwargs)
         self.isDone = False
 
 
-class Modifier(object):
+class _BaseModifier(object):
     """Interactively edit an existing scenegraph with support for undo/redo"""
 
-    Type = MDGModifier
+    Type = _MDGModifier
 
     def __enter__(self):
         self._modifier = self.Type()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, tb):
         self._modifier.doIt()
         self._modifier.isDone = True
         commit(self._modifier.undoIt, self._modifier.doIt)
@@ -2023,13 +2043,13 @@ class Modifier(object):
         plug1 >> plug2
 
 
-class DGModifier(Modifier):
+class DGModifier(_BaseModifier):
     """Modifier for DG nodes"""
 
-    Type = MDGModifier
+    Type = _MDGModifier
 
 
-class DagModifier(Modifier):
+class DagModifier(_BaseModifier):
     """Modifier for DAG nodes
 
     Example:
@@ -2059,10 +2079,13 @@ class DagModifier(Modifier):
 
     """
 
-    Type = MDagModifier
+    Type = _MDagModifier
 
     def createNode(self, type, name=None, parent=None):
-        parent = parent._mobject if parent else om.MObject.kNullObj
+        parent = (
+            parent._handle.object()
+            if parent else om.MObject.kNullObj
+        )
         mobj = self._modifier.createNode(type, parent)
 
         if name is not None:
@@ -2071,10 +2094,12 @@ class DagModifier(Modifier):
         return DagNode(mobj, exists=False, modifier=self._modifier)
 
     def parent(self, node, parent=None):
-        self._modifier.reparentNode(node._mobject, parent)
+        mobject = node._handle.object()
+        self._modifier.reparentNode(mobject, parent)
 
     def rename(self, node, name):
-        self._modifier.renameNode(node._mobject, parent)
+        mobject = node._handle.object()
+        self._modifier.renameNode(mobject, parent)
 
 
 def createNode(type, name=None, parent=None):
@@ -2105,7 +2130,8 @@ def createNode(type, name=None, parent=None):
         kwargs["name"] = name
 
     if parent:
-        kwargs["parent"] = parent._mobject
+        mobject = parent._handle.object()
+        kwargs["parent"] = mobject
         fn = GlobalDagNode
 
     try:
@@ -2291,7 +2317,8 @@ def delete(*nodes):
     mod = om.MDGModifier()
 
     for node in nodes:
-        mod.deleteNode(node._mobject)
+        mobject = node._handle.object()
+        mod.deleteNode(mobject)
 
     mod.doIt()
 

@@ -405,6 +405,34 @@ The following units are currently supported.
   - `Miles`
   - `Yards`
 
+#### Exceptions
+
+Not all attribute editing supports units.
+
+```python
+transform = cmdx.createNode("transform")
+tm = transform["worldMatrix"][0].asTransformationMatrix()
+
+# What unit am I?
+tm.translation()
+```
+
+The same applies to orientation.
+
+```python
+tm.rotation()
+```
+
+In circumstances without an option, cmdx takes and returns a default unit per type of plug, similar to `maya.api`
+
+**Defaults**
+
+| Type     | Unit
+|---------:|:-----
+| Linear   | Centimeter
+| Angular  | Radian
+| Time     | Second
+
 <br>
 
 ### Limitations
