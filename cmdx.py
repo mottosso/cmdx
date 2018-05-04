@@ -285,17 +285,13 @@ class Node(object):
         """MObject supports this operator explicitly"""
         try:
             # Better to ask forgivness than permission
-            mobject = self._handle.object()
-            other = other._handle.object()
-            return mobject == other
+            return self._mobject == other._mobject
         except AttributeError:
             return str(self) == str(other)
 
     def __ne__(self, other):
         try:
-            mobject = self._handle.object()
-            other = other._handle.object()
-            return mobject != other
+            return self._mobject != other._mobject
         except AttributeError:
             return str(self) != str(other)
 
@@ -451,7 +447,7 @@ class Node(object):
 
         """
 
-        self._handle = om.MObjectHandle(mobject)
+        self._mobject = mobject
         self._fn = self._Fn(mobject)
         self._modifier = modifier
         self._destroyed = False
@@ -475,7 +471,7 @@ class Node(object):
 
     def object(self):
         """Return MObject of this node"""
-        return self._handle.object()
+        return self._mobject
 
     def isAlive(self):
         return not self._destroyed
@@ -507,8 +503,7 @@ class Node(object):
 
         """
 
-        mobject = self._handle.object()
-        return mobject.hasFn(type)
+        return self._mobject.hasFn(type)
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -901,7 +896,7 @@ class DagNode(Node):
 
         """
 
-        mobject = child._handle.object()
+        mobject = child._mobject
         self._fn.addChild(mobject, index)
 
     def assembly(self):
@@ -1056,10 +1051,9 @@ class DagNode(Node):
                 typeName = type
                 type = om.MFn.kInvalid
 
-            mobject = self._handle.object()
             it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
             it.reset(
-                mobject,
+                self._mobject,
                 om.MItDag.kDepthFirst,
                 om.MIteratorType.kMObject
             )
@@ -2074,10 +2068,7 @@ class DagModifier(_BaseModifier):
     Type = _MDagModifier
 
     def createNode(self, type, name=None, parent=None):
-        parent = (
-            parent._handle.object()
-            if parent else om.MObject.kNullObj
-        )
+        parent = parent._mobject if parent else om.MObject.kNullObj
         mobj = self._modifier.createNode(type, parent)
 
         if name is not None:
@@ -2086,12 +2077,10 @@ class DagModifier(_BaseModifier):
         return DagNode(mobj, exists=False, modifier=self._modifier)
 
     def parent(self, node, parent=None):
-        mobject = node._handle.object()
-        self._modifier.reparentNode(mobject, parent)
+        self._modifier.reparentNode(node._mobject, parent)
 
     def rename(self, node, name):
-        mobject = node._handle.object()
-        self._modifier.renameNode(mobject, parent)
+        self._modifier.renameNode(node._mobject, parent)
 
 
 def createNode(type, name=None, parent=None):
@@ -2122,8 +2111,7 @@ def createNode(type, name=None, parent=None):
         kwargs["name"] = name
 
     if parent:
-        mobject = parent._handle.object()
-        kwargs["parent"] = mobject
+        kwargs["parent"] = parent._mobject
         fn = GlobalDagNode
 
     try:
@@ -2309,7 +2297,7 @@ def delete(*nodes):
     mod = om.MDGModifier()
 
     for node in nodes:
-        mobject = node._handle.object()
+        mobject = node._mobject
         mod.deleteNode(mobject)
 
     mod.doIt()
