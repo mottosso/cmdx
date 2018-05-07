@@ -249,7 +249,19 @@ class Singleton(type):
                 return node
 
         # It didn't exist, let's create one
-        self = super(Singleton, cls).__call__(mobject, exists, modifier)
+        #
+        # But first, make sure we instantiate the right type
+        #
+        # This is important, as a user may otherwise try to
+        # instantiate a DagNode as a Node, which will then get
+        # cached for repeat use and never again be assigned a
+        # proper DagNode superclass.
+        if mobject.hasFn(om.MFn.kDagNode):
+            sup = DagNode
+        else:
+            sup = Node
+
+        self = super(Singleton, sup).__call__(mobject, exists, modifier)
         cls._instances[hsh] = self
         return self
 

@@ -17,6 +17,7 @@ from nose.tools import (
 
 import cmdx
 from maya import cmds
+from maya.api import OpenMaya as om
 
 __maya_version__ = int(cmds.about(version=True))
 
@@ -348,3 +349,26 @@ def test_nodeoperators():
     assert_equals(node, "|myNode")
     assert_not_equals(node, "|NotEquals")
     assert_equals(str(node), repr(node))
+
+
+@with_setup(new_scene)
+def test_superclass():
+    """cmdx.Node(dagmobject) creates a DagNode"""
+
+    # Using the right class works
+    mobj = om.MFnDagNode().create("transform")
+    node = cmdx.DagNode(mobj)
+    assert isinstance(node, cmdx.DagNode)
+
+    mobj = om.MFnDependencyNode().create("polySplit")
+    node = cmdx.Node(mobj)
+    assert isinstance(node, cmdx.Node)
+
+    # Using the wrong class works too
+    mobj = om.MFnDagNode().create("transform")
+    node = cmdx.Node(mobj)
+    assert isinstance(node, cmdx.DagNode)
+
+    mobj = om.MFnDependencyNode().create("polySplit")
+    node = cmdx.DagNode(mobj)
+    assert isinstance(node, cmdx.Node)
