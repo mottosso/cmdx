@@ -511,7 +511,7 @@ class Node(object):
 
         Example:
             >>> node = createNode("transform")
-            >>> node.hexStr == format(self.hashCode, "x")
+            >>> node.hexStr == format(node.hashCode, "x")
             True
 
         """
@@ -528,7 +528,7 @@ class Node(object):
 
         Example:
             >>> node = createNode("transform")
-            >>> node.typeId() == Transform
+            >>> node.typeId == Transform
             True
 
         """
