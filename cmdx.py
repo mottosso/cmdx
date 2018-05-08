@@ -11,6 +11,7 @@ from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om
+from maya import OpenMaya as om1
 
 PY3 = sys.version_info[0] == 3
 
@@ -37,9 +38,9 @@ MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
 # Support undo/redo
 ENABLE_UNDO = not SAFE_MODE
 
-# Opt-in performance boosters
-ENABLE_NODE_REUSE = not SAFE_MODE
-ENABLE_PLUG_REUSE = not SAFE_MODE
+# Required
+ENABLE_NODE_REUSE = True
+ENABLE_PLUG_REUSE = True
 
 if PY3:
     string_types = str,
@@ -235,10 +236,11 @@ class Singleton(type):
     def __call__(cls, mobject, exists=True, modifier=None):
         handle = om.MObjectHandle(mobject)
         hsh = handle.hashCode()
+        hx = "%x" % hsh
 
         if exists and handle.isValid():
             try:
-                node = cls._instances[hsh]
+                node = cls._instances[hx]
                 assert not node._destroyed
             except KeyError:
                 pass
@@ -249,21 +251,18 @@ class Singleton(type):
                 return node
 
         # It didn't exist, let's create one
-        #
         # But first, make sure we instantiate the right type
-        #
-        # This is important, as a user may otherwise try to
-        # instantiate a DagNode as a Node, which will then get
-        # cached for repeat use and never again be assigned a
-        # proper DagNode superclass.
         if mobject.hasFn(om.MFn.kDagNode):
             sup = DagNode
+        elif mobject.hasFn(om.MFn.kSet):
+            sup = ObjectSet
         else:
             sup = Node
 
         self = super(Singleton, sup).__call__(mobject, exists, modifier)
         self._hashCode = hsh
-        cls._instances[hsh] = self
+        self._hexStr = hx
+        cls._instances[hx] = self
         return self
 
 
@@ -516,7 +515,7 @@ class Node(object):
 
         """
 
-        return "%x" % self._hashCode
+        return self._hexStr
 
     # Alias
     code = hashCode
@@ -534,6 +533,10 @@ class Node(object):
         """
 
         return self._fn.typeId
+
+    @property
+    def typeName(self):
+        return self._fn.typeName
 
     def isA(self, type):
         """Evaluate whether self is of `type`
@@ -841,11 +844,7 @@ class Node(object):
 
         for plug in self._fn.getConnections():
             mobject = plug.node()
-
-            if mobject.hasFn(om.MFn.kDagNode):
-                node = DagNode(mobject)
-            else:
-                node = Node(mobject)
+            node = Node(mobject)
 
             if not type or type == node._fn.typeName:
                 plug = Plug(node, plug, unit)
@@ -1198,6 +1197,65 @@ class DagNode(Node):
 
 class ObjectSet(Node):
     """Support list-type operations on objectSets"""
+
+    def __iter__(self):
+        for member in self.members():
+            yield member
+
+    def append(self, member):
+        mobj = _encode1(self.path())
+        fn = om1.MFnSet(mobj)
+        member = _encode1(member.path())
+        fn.addMember(member)
+
+    def remove(self, member):
+        pass
+
+    def descendent(self, type=None):
+        """Return the first descendent"""
+        return next(self.descendents(type), None)
+
+    def descendents(self, type=None):
+        """Return hierarchy of objects in set"""
+        for member in self.members(type=type):
+            yield member
+
+            try:
+                for child in member.descendents(type=type):
+                    yield child
+
+            except AttributeError:
+                continue
+
+    def member(self, type=None, flatten=True):
+        """Return the first member"""
+
+        return next(self.members(type, flatten), None)
+
+    def members(self, type=None, flatten=True):
+        op = operator.eq
+        other = "typeId"
+
+        if isinstance(type, string_types):
+            other = "typeName"
+
+        if isinstance(type, (tuple, list)):
+            op = operator.contains
+
+        mobj = _encode1(self.path())
+        fn = om1.MFnSet(mobj)
+
+        members = om1.MSelectionList()
+        memberStrings = list()
+
+        fn.getMembers(members, flatten)
+        members.getSelectionStrings(memberStrings)
+
+        for member in memberStrings:
+            member = encode(member)
+
+            if not type or op(type, getattr(member._fn, other)):
+                yield member
 
 
 class Plug(object):
@@ -1677,11 +1735,7 @@ class Plug(object):
 
         for plug in self._mplug.connectedTo(source, destination):
             mobject = plug.node()
-
-            if mobject.hasFn(om.MFn.kDagNode):
-                node = DagNode(mobject)
-            else:
-                node = Node(mobject)
+            node = Node(mobject)
 
             if not type or op(type, getattr(node._fn, other)):
                 yield Plug(node, plug, unit) if plugs else node
@@ -1702,11 +1756,7 @@ class Plug(object):
     def source(self, unit=None):
         cls = self.__class__
         plug = self._mplug.source()
-        node = plug.node()
-        if node.hasFn(om.MFn.kDagNode):
-            node = DagNode(node)
-        else:
-            node = Node(node)
+        node = Node(plug.node())
 
         if not plug.isNull:
             return cls(node, plug, unit)
@@ -2003,11 +2053,31 @@ def encode(path):
         raise ValueError("'%s' does not exist" % path)
 
     mobj = selectionList.getDependNode(0)
+    return Node(mobj)
 
-    if mobj.hasFn(om.MFn.kDagNode):
-        return DagNode(mobj)
-    else:
-        return Node(mobj)
+
+def fromHex(hex):
+    return Singleton._instances[hex]
+
+
+def _encode1(path):
+    """Convert `path` to Maya API 1.0 MObject
+
+    Arguments:
+        path (str): Absolute or relative path to DAG or DG node
+
+    """
+
+    selectionList = om1.MSelectionList()
+
+    try:
+        selectionList.add(path)
+    except RuntimeError:
+        raise ValueError("'%s' does not exist" % path)
+
+    mobject = om1.MObject()
+    selectionList.getDependNode(0, mobject)
+    return mobject
 
 
 def decode(node):
@@ -2167,10 +2237,7 @@ def createNode(type, name=None, parent=None):
         log.debug(str(e))
         raise TypeError("Unrecognized node type '%s'" % type)
 
-    if fn is GlobalDagNode or mobj.hasFn(om.MFn.kDagNode):
-        return DagNode(mobj, exists=False)
-    else:
-        return Node(mobj, exists=False)
+    return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None):
