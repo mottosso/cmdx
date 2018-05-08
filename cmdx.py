@@ -262,6 +262,7 @@ class Singleton(type):
             sup = Node
 
         self = super(Singleton, sup).__call__(mobject, exists, modifier)
+        self._hashCode = hsh
         cls._instances[hsh] = self
         return self
 
@@ -463,11 +464,16 @@ class Node(object):
         self._fn = self._Fn(mobject)
         self._modifier = modifier
         self._destroyed = False
+        self._hashCode = None
         self._state = {
             "plugs": dict(),
             "values": dict(),
         }
 
+        # End-user, transient metadata
+        self.data = {}
+
+        # Callbacks
         self.onDestroyed = list()
 
         Stats.NodeInitCount += 1
@@ -488,6 +494,35 @@ class Node(object):
     def isAlive(self):
         return not self._destroyed
 
+    @property
+    def hashCode(self):
+        """Return MObjectHandle.hashCode of this node
+
+        This a guaranteed-unique integer (long in Python 2)
+        similar to the UUID of Maya 2016
+
+        """
+
+        return self._hashCode
+
+    @property
+    def hexStr(self):
+        """Return unique hashCode as hexadecimal string
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node.hexStr == format(self.hashCode, "x")
+            True
+
+        """
+
+        return "%x" % self._hashCode
+
+    # Alias
+    code = hashCode
+    hex = hexStr
+
+    @property
     def typeId(self):
         """Return the native maya.api.MTypeId of this node
 

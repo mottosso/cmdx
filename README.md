@@ -28,9 +28,10 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 ### What is novel?
 
-- Performance
-- Node and attribute reuse
-- Native Qt, per-node signals
+- [Performance](#performance)
+- [Node and attribute reuse](#query-reduction)
+- [Hashable References](#hashable-references)
+- Signals
 
 <br>
 <br>
@@ -45,6 +46,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Query Reduction](#query-reduction)
   - [Node Reuse](#node-reuse)
   - [Plug Reuse](#plug-reuse)
+  - [Hashable References](#hashable-references)
+  - [Metadata](#metadata)
 - [Interoperability](#interoperability)
 - [Units](#units)
 - [Node Creation](#node-creation)
@@ -293,19 +296,55 @@ Whenever an attribute is queried, a number of things happen.
 3. A value is retrieved, wrapped in a Maya API object, e.g. MDistance
 4. The object is cast to Python object, e.g. MDistance to `float`
 
-This isn't just 4 interactions with the Maya API, it's also 3 interactions with the *Maya scenegraph*. An interaction of this nature triggers the propagation and handling of the dirty flag, which in turn triggers a virtually unlimited number of additional function calls; both internally to Maya - i.e. the `compute()` method - and in any Python that might be listening - e.g. arbitrary callbacks.
+This isn't just 4 interactions with the Maya API, it's also 3 interactions with the *Maya scenegraph*. An interaction of this nature triggers the propagation and handling of the dirty flag, which in turn triggers a virtually unlimited number of additional function calls; both internally to Maya - i.e. the `compute()` method and callbacks - and in any Python that might be listening.
 
 With module level caching, a repeated query to either an `MObject` or `MPlug` is handled entirely in Python, saving on both time and computational resources.
 
-#### Enable Undo
+#### Hashable References
 
-> Opt-in `CMDX_ENABLE_UNDO`
+In addition to reusing things internally, you are able to re-use things yourself by using nodes as e.g. keys to dictionaries.
 
-Currently, support for undo/redo is opt-in via the `CMDX_ENABLE_UNDO` environment variable.
+```python
+from qtmonte.vendor import cmdx
+node = cmdx.createNode("transform")
 
-```bash
-$ export CMDX_ENABLE_UNDO=1
-$ mayapy
+myNodes = {
+  node: {"my": "data"}
+}
+
+for node in cmds.ls():
+    node = cmdx.encode(node)
+
+    if node in myNodes:
+        print("Got %s" % node)
+```
+
+The hash of the node is guaranteed unique, and the aforementioned reuse mechanism ensure that however a node is referenced the same reference is returned.
+
+<br>
+
+### Metadata
+
+For persistent metadata, one practice is to use a Maya `string` attribute and store arbitrary data there, serialised to string.
+
+For transient metadata however - data that doesn't need or should persist across sessions - you can rely on the node reuse mechanism of `cmdx`.
+
+```python
+# Get reference to existing node
+node = cmdx.encode("|myNode")
+
+node.data["myData"] = {
+  "awesome": True
+}
+```
+
+This data is then preserved with the node for its lifetime. Once the node is destroyed - e.g. on deleting it or opening a new scene - the data is destroyed along with it.
+
+The data is stored entirely in Python so there is no overhead of interacting with the Maya scenegraph per call or edit.
+
+To make persistent data, you may for example associate a given ID with a file on disk or database path and automatically load the data into it on node creation.
+
+```python
 ...
 ```
 
