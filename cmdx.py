@@ -248,6 +248,7 @@ class Singleton(type):
                 pass
             else:
                 Stats.NodeReuseCount += 1
+                node._exists = True
                 return node
 
         # It didn't exist, let's create one
@@ -433,14 +434,16 @@ class Node(object):
     def _onDestroyed(self, mobject):
         self._destroyed = True
 
-        cid = om.MMessage.currentCallbackId()
-        om.MMessage.removeCallback(cid)
+        om.MMessage.removeCallbacks(self._state["callbacks"])
 
         for callback in self.onDestroyed:
             try:
                 callback()
             except Exception:
                 traceback.print_exc()
+
+    def _onRemoved(self, mobject, modifier, _=None):
+        self._exists = False
 
     def __delitem__(self, key):
         self.deleteAttr(key)
@@ -467,6 +470,7 @@ class Node(object):
         self._state = {
             "plugs": dict(),
             "values": dict(),
+            "callbacks": list()
         }
 
         # End-user, transient metadata
@@ -477,21 +481,35 @@ class Node(object):
 
         Stats.NodeInitCount += 1
 
-        # Monitor node deletion, to prevent accidental
-        # use of MObject past its lifetime which may
-        # result in a fatal crash.
-        om.MNodeMessage.addNodeDestroyedCallback(
-            mobject,
-            self._onDestroyed,  # func
-            None  # clientData
-        ) if not ROGUE_MODE else DoNothing
+        self._state["callbacks"] += [
+            # Monitor node deletion, to prevent accidental
+            # use of MObject past its lifetime which may
+            # result in a fatal crash.
+            om.MNodeMessage.addNodeDestroyedCallback(
+                mobject,
+                self._onDestroyed,  # func
+                None  # clientData
+            ) if not ROGUE_MODE else 0,
+
+            om.MNodeMessage.addNodeAboutToDeleteCallback(
+                mobject,
+                self._onRemoved,
+                None
+            ),
+        ]
 
     def object(self):
         """Return MObject of this node"""
         return self._mobject
 
     def isAlive(self):
+        """The node exists somewhere in memory"""
         return not self._destroyed
+
+    @property
+    def exists(self):
+        """The node exists in both memory *and* scene"""
+        return self._exists
 
     @property
     def hashCode(self):
