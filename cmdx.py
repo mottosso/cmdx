@@ -438,12 +438,18 @@ class Node(object):
 
         for callback in self.onDestroyed:
             try:
-                callback()
+                callback(self)
             except Exception:
                 traceback.print_exc()
 
     def _onRemoved(self, mobject, modifier, _=None):
         self._exists = False
+
+        for callback in self.onRemoved:
+            try:
+                callback()
+            except Exception:
+                traceback.print_exc()
 
     def __delitem__(self, key):
         self.deleteAttr(key)
@@ -478,6 +484,7 @@ class Node(object):
 
         # Callbacks
         self.onDestroyed = list()
+        self.onRemoved = list()
 
         Stats.NodeInitCount += 1
 
@@ -2074,8 +2081,62 @@ def encode(path):
     return Node(mobj)
 
 
+def fromHash(code):
+    """Get existing node from MObjectHandle.hashCode()"""
+    return Singleton._instances["%x" % code]
+
+
 def fromHex(hex):
+    """Get existing node from Node.hex"""
     return Singleton._instances[hex]
+
+
+def toHash(mobj):
+    """Cache the given `mobj` and return its hashCode
+
+    This enables pre-caching of one or more nodes in situations where
+    intend to access it later, at a more performance-critical moment.
+
+    Ignores nodes that have already been cached.
+
+    """
+
+    node = Node(mobj)
+    return node.hashCode
+
+
+def toHex(mobj):
+    """Cache the given `mobj` and return its hex value
+
+    See :func:`toHash` for docstring.
+
+    """
+
+    node = Node(mobj)
+    return node.hex
+
+
+def asHash(mobj):
+    """Return a given hashCode for `mobj`, without caching it
+
+    This can be helpful in case you wish to synchronise `cmdx`
+    with a third-party library or tool and wish to guarantee
+    that an identical algorithm is used.
+
+    """
+
+    handle = om.MObjectHandle(mobj)
+    return handle.hashCode()
+
+
+def asHex(mobj):
+    """Return a given hex string for `mobj`, without caching it
+
+    See docstring for :func:`asHash` for details
+
+    """
+
+    return "%x" % asHash(mobj)
 
 
 def _encode1(path):

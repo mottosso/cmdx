@@ -28,10 +28,12 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 ### What is novel?
 
+With [so many options](#comparison) for interacting with Maya, when or why should you choose `cmdx`?
+
 - [Performance](#performance)
 - [Node and attribute reuse](#query-reduction)
 - [Hashable References](#hashable-references)
-- Signals
+- [Signals](#signals)
 
 <br>
 <br>
@@ -50,6 +52,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
   - [Metadata](#metadata)
 - [Interoperability](#interoperability)
 - [Units](#units)
+- [Node Types](#node-types)
 - [Node Creation](#node-creation)
 - [Attribute Query and Assignment](#attribute-query-and-assignment)
   - [Cached](#cached)
@@ -58,7 +61,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - [Connections](#connections)
 - [Iterators](#iterators)
 - [Modifier](#modifier)
-- [FAQ](#faq)
+- [Signals](#signals)
 - [Comparison](#comparison)
   - [MEL](#mel)
   - [PyMEL](#pymel)
@@ -80,6 +83,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
   - [`node`](#node-attr-attr)
   - [`ls`](#ls)
 - [Evolution](#evolution)
+- [FAQ](#faq)
 - [Debugging](#debugging)
 - [Flags](#flags)
   - [`CMDX_ENABLE_NODE_REUSE`](#cmdx_enable_node_reuse)
@@ -321,6 +325,47 @@ for node in cmds.ls():
 
 The hash of the node is guaranteed unique, and the aforementioned reuse mechanism ensure that however a node is referenced the same reference is returned.
 
+**Utilities**
+
+Here are some useful utilities that leverages this hash.
+
+```python
+import cmdx
+node = cmdx.createNode("transform")
+node = cmdx.fromHash(node.hashCode)
+node = cmdx.fromHex(node.hex)
+```
+
+These tap directly into the dictionary used to maintain references to each `cmdx.Node`. The `hashCode` is the one from `maya.api.OpenMaya.MObjectHandle.hashCode()`, which means that if you have an object from the Maya Python API 2.0, you can fetch the `cmdx` equivalent of it by passing its `hashCode`.
+
+```python
+from maya.api import OpenMaya as om
+import cmdx
+fn = om.MDagNode()
+mobj = fn.create("transform")
+handle = om.MObjectHandle()
+node = cmdx.fromHash(handle.hashCode())
+```
+
+However keep in mind that you can only retrieve nodes that have previously been access by `cmdx`.
+
+```python
+cmdx.fromHash(handle.hashCode())
+# Traceback: KeyError
+```
+
+A more robust alternative is to instead pass the `MObject` directly.
+
+```python
+from maya.api import OpenMaya as om
+import cmdx
+fn = om.MDagNode()
+mobj = fn.create("transform")
+node = cmdx.Node(mobj)
+```
+
+This will use the hash if a `cmdx` instance of this `MObject` already exist, else it will instantiate a new. The performance difference is slim and as such this is the recommended approach. The exception is if you happen to already has either an `MObjectHandle` or a corresponding `hashCode` at hand, in which case you can save a handful of cycles per call by using `fromHash` or `fromHex`. 
+
 <br>
 
 ### Metadata
@@ -527,6 +572,60 @@ Only the most commonly used and performance sensitive types are available as exp
 - `WtAddMatrix` 
 
 See [API Documentation](https://weightshift.io/cmdx/api/) for more.
+
+<br>
+
+### Node Types
+
+Unlike PyMEL and for best performance, `cmdx` does not wrap each node type in an individual class. However it does wrap the those with a corresponding API function set.
+
+| Node Type        | Features
+|:-----------------|:-------------
+| `Node`           | Lowest level superclass, this host most of the functionality of `cmdx`
+| `DagNode`        | A subclass of `Node` with added functinality related to hierarchy
+| `ObjectSet`      | A subclass of `Node` with added functinality related to sets
+
+#### `Node`
+
+Any node that isn't a `DagNode` or `ObjectSet` is wrapped in this class, which provides the basic building blocks for manipulating nodes in the Maya scenegraph, including working with attributes and connections.
+
+```python
+import cmdx
+add = cmdx.createNode("addDoubleLinear")
+mult = cmdx.createNode("multDoubleLinear")
+add["input1"] = 1
+add["input2"] = 1
+mult["input1"] = 2
+mult["input2"] << add["output"]
+assert mult["output"] == 4
+```
+
+#### `DagNode`
+
+Any node compatible with the `MFnDagNode` function set is wrapped in this class and faciliates a parent/child relationship.
+
+```python
+import cmdx
+parent = cmdx.createNode("transform")
+child = cmdx.createNode("transform")
+parent.addChild(child)
+```
+
+#### `ObjectSet`
+
+Any node compatible with the `MFnSet` function set is wrapped in this class and provides a Python list-like interface for working with sets.
+
+```python
+import cmdx
+objset = cmdx.createNode("objectSet")
+member = cmdx.createNode("transform")
+objset.append(member)
+
+for member in objset:
+  print(member)
+```
+
+> NOTE: `MFnSet` was first introduced to the Maya Python API 2.0 in Maya 2016 and has been backported to work with `cmdx` in Maya 2015, leveraging the equivalent functionality found in API 1.0. It does however mean that there is a performance impact in Maya <2016 of roughly 0.01 ms/node.
 
 <br>
 
@@ -807,6 +906,22 @@ with cmdx.Modifier() as mod:
 ```
 
 This makes it easy to move a block of code into a modifier without changing things around. Perhaps to test performance, or to figure out whether undo support is necessary.
+
+<br>
+
+### Signals
+
+Maya offers a large number of callbacks for responding to native events in your code. `cmdx` wraps some of these in an alternative interface akin to Qt Signals and Slots.
+
+```python
+import cmdx
+
+def onDestroyed():
+  pass
+
+node = cmdx.createNode("transform")
+node.onDestroyed.append(onDestroyed)
+```
 
 <br>
 
