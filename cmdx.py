@@ -514,6 +514,10 @@ class Node(object):
         return not self._destroyed
 
     @property
+    def destroyed(self):
+        return self._destroyed
+
+    @property
     def exists(self):
         """The node exists in both memory *and* scene"""
         return self._exists
@@ -2214,6 +2218,9 @@ class _BaseModifier(object):
             self._modifier.renameNode(mobj, name)
 
         return Node(mobj, exists=False, modifier=self._modifier)
+
+    def deleteNode(self, node):
+        return self._modifier.deleteNode(node._mobject)
 
     def getAttr(self, node, key):
         return node[key]
