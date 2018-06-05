@@ -224,9 +224,9 @@ def test_nodereuse_noexist():
     cmds.file(new=True, force=True)
 
     # Even if it's available for re-use, it will still throw
-    # a ValueError on account of trying to fetch an MObject
+    # a cmdx.ExistError on account of trying to fetch an MObject
     # from a non-existing node.
-    assert_raises(ValueError, cmdx.encode, "|myNode")
+    assert_raises(cmdx.ExistError, cmdx.encode, "|myNode")
 
     # Any operation on a deleted node raises RuntimeError
     assert_raises(RuntimeError, lambda: nodeA.name())
@@ -243,7 +243,7 @@ def test_nodereuse_equalexist():
 
     cmds.file(new=True, force=True)
 
-    assert_raises(ValueError, cmdx.encode, "|myNode")
+    assert_raises(cmdx.ExistError, cmdx.encode, "|myNode")
     nodeC = cmdx.createNode("transform", name="myNode")
     assert_is(cmdx.encode("|myNode"), nodeC)
 

@@ -47,7 +47,7 @@ if PY3:
 else:
     string_types = basestring,
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __maya_version__ = int(cmds.about(version=True))
 
 # TODO: Lower this requirement
@@ -138,7 +138,7 @@ def protected(func):
 
 
 class _Type(int):
-    """Facilitate use of isinstance(space, _Type())"""
+    """Facilitate use of isinstance(space, _Type)"""
 
 
 kShape = _Type(om.MFn.kShape)
@@ -147,7 +147,7 @@ kJoint = _Type(om.MFn.kJoint)
 
 
 class _Space(int):
-    """Facilitate use of isinstance(space, _Space())"""
+    """Facilitate use of isinstance(space, _Space)"""
 
 
 # Spaces
@@ -162,6 +162,13 @@ kObject = Object
 kTransform = Transform
 kPostTransform = PostTransform
 kPreTransform = PreTransform
+
+kXYZ = om.MEulerRotation.kXYZ
+kYZX = om.MEulerRotation.kYZX
+kZXY = om.MEulerRotation.kZXY
+kXZY = om.MEulerRotation.kXZY
+kYXZ = om.MEulerRotation.kYXZ
+kZYX = om.MEulerRotation.kZYX
 
 
 class _Unit(int):
@@ -248,7 +255,7 @@ class Singleton(type):
                 pass
             else:
                 Stats.NodeReuseCount += 1
-                node._exists = True
+                node._removed = False
                 return node
 
         # It didn't exist, let's create one
@@ -443,7 +450,7 @@ class Node(object):
                 traceback.print_exc()
 
     def _onRemoved(self, mobject, modifier, _=None):
-        self._exists = False
+        self._removed = True
 
         for callback in self.onRemoved:
             try:
@@ -472,6 +479,7 @@ class Node(object):
         self._fn = self._Fn(mobject)
         self._modifier = modifier
         self._destroyed = False
+        self._removed = False
         self._hashCode = None
         self._state = {
             "plugs": dict(),
@@ -519,8 +527,30 @@ class Node(object):
 
     @property
     def exists(self):
-        """The node exists in both memory *and* scene"""
-        return self._exists
+        """The node exists in both memory *and* scene
+
+        Example:
+            >>> node = createNode("joint")
+            >>> node.exists
+            True
+            >>> cmds.delete(str(node))
+            >>> node.exists
+            False
+            >>> node.destroyed
+            False
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node.exists
+            False
+            >>> node.destroyed
+            True
+
+        """
+
+        return not self._removed
+
+    @property
+    def removed(self):
+        return self._removed
 
     @property
     def hashCode(self):
@@ -583,6 +613,12 @@ class Node(object):
         """
 
         return self._mobject.hasFn(type)
+
+    def lock(self, value=True):
+        self._fn.isLocked = value
+
+    def isLocked(self):
+        return self._fn.isLocked
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -684,8 +720,8 @@ class Node(object):
         self._state["values"].clear()
 
     @protected
-    def name(self):
-        """Return the name of this node
+    def name(self, namespace=True):
+        """Return the name of this node, without namespace
 
         Example:
             >>> node = createNode("transform", name="myName")
@@ -694,7 +730,17 @@ class Node(object):
 
         """
 
-        return self._fn.name()
+        if namespace:
+            return self._fn.name()
+        else:
+            return self._fn.name().rsplit(":", 1)[-1]
+
+    def namespace(self):
+        if ":" in name:
+            # Else it will return name as-is, as namespace
+            # E.g. Ryan_:leftHand -> Ryan_, but :leftHand -> leftHand
+            return name.rsplit(":", 1)[0]
+        return ""
 
     # Alias
     path = name
@@ -884,6 +930,14 @@ class Node(object):
         """Singular version of :func:`connections()`"""
         return next(self.connections(type, unit, plug), None)
 
+    def rename(self, name):
+        if not getattr(self._modifier, "isDone", True):
+            return self._modifier.rename(self._mobj, name)
+
+        mod = om.MDGModifier()
+        mod.renameNode(self._mobj, name)
+        mod.doIt()
+
 
 class DagNode(Node):
     """A Maya DAG node
@@ -955,6 +1009,22 @@ class DagNode(Node):
         """
 
         return self._fn.partialPathName()
+
+    @property
+    def level(self):
+        """Return the number of parents this DAG node has
+
+        Example:
+            >>> parent = createNode("transform")
+            >>> child = createNode("transform", parent=parent)
+            >>> child.level
+            1
+            >>> parent.level
+            0
+
+        """
+
+        return self.path().count("|") - 1
 
     def addChild(self, child, index=Last):
         """Add `child` to self
@@ -1079,21 +1149,21 @@ class DagNode(Node):
         return next(self.children(type, filter), None)
 
     def shapes(self, type=None):
-        return self.children(type, om.MFn.kShape)
+        return self.children(type, kShape)
 
     def shape(self, type=None):
         return next(self.shapes(type), None)
 
-    def siblings(self, type=None):
+    def siblings(self, type=None, filter=om.MFn.kTransform):
         parent = self.parent()
 
         if parent is not None:
-            for child in parent.children(type=type):
+            for child in parent.children(type=type, filter=filter):
                 if child != self:
                     yield child
 
-    def sibling(self, type=None):
-        return next(self.siblings(type), None)
+    def sibling(self, type=None, filter=None):
+        return next(self.siblings(type, filter), None)
 
     # Module-level expression; this isn't evaluated
     # at run-time, for that extra performance boost.
@@ -1223,22 +1293,94 @@ class DagNode(Node):
 
         return next(self.descendents(type), None)
 
+    def duplicate(self):
+        return self.__class__(self._fn.duplicate())
+
 
 class ObjectSet(Node):
-    """Support list-type operations on objectSets"""
+    """Support set-type operations on Maya sets
+
+    Caveats
+        1. MFnSet was introduced in Maya 2016, this class backports
+            that behaviour for Maya 2015 SP3
+
+        2. Adding a DAG node as a DG node persists its function set
+            such that when you query it, it'll return the name rather
+            than the path.
+
+            Therefore, when adding a node to an object set, it's important
+            that it is added either a DAG or DG node depending on what it it.
+
+            This class manages this automatically.
+
+    """
 
     def __iter__(self):
         for member in self.members():
             yield member
 
-    def append(self, member):
-        mobj = _encode1(self.path())
-        fn = om1.MFnSet(mobj)
-        member = _encode1(member.path())
-        fn.addMember(member)
+    def add(self, member):
+        """Add single `member` to set
 
-    def remove(self, member):
-        pass
+        Arguments:
+            member (cmdx.Node): Node to add
+
+        """
+
+        return self.update([member])
+
+    def remove(self, members):
+        mobj = _encode1(self.name())
+        selectionList = om1.MSelectionList()
+
+        if not isinstance(members, (tuple, list)):
+            selectionList.add(members.path())
+
+        else:
+            for member in members:
+                selectionList.add(member.path())
+
+        fn = om1.MFnSet(mobj)
+        fn.removeMembers(selectionList)
+
+    def update(self, members):
+        """Add several `members` to set
+
+        Arguments:
+            members (list): Series of cmdx.Node instances
+
+        """
+
+        mobj = _encode1(self.name())
+        selectionList = om1.MSelectionList()
+
+        for member in members:
+            selectionList.add(member.path())
+
+        fn = om1.MFnSet(mobj)
+        fn.addMembers(selectionList)
+
+    def clear(self):
+        """Remove all members from set"""
+        mobj = _encode1(self.name())
+        fn = om1.MFnSet(mobj)
+        fn.clear()
+
+    def sort(self, key=lambda o: (o.typeName, o.path())):
+        """Sort members of set by `key`
+
+        Arguments:
+            key (lambda): See built-in `sorted(key)` for reference
+
+        """
+
+        members = sorted(
+            self.members(),
+            key=key
+        )
+
+        self.clear()
+        self.update(members)
 
     def descendent(self, type=None):
         """Return the first descendent"""
@@ -1256,12 +1398,12 @@ class ObjectSet(Node):
             except AttributeError:
                 continue
 
-    def member(self, type=None, flatten=True):
+    def member(self, type=None):
         """Return the first member"""
 
-        return next(self.members(type, flatten), None)
+        return next(self.members(type), None)
 
-    def members(self, type=None, flatten=True):
+    def members(self, type=None):
         op = operator.eq
         other = "typeId"
 
@@ -1271,20 +1413,11 @@ class ObjectSet(Node):
         if isinstance(type, (tuple, list)):
             op = operator.contains
 
-        mobj = _encode1(self.path())
-        fn = om1.MFnSet(mobj)
+        for node in cmds.sets(self.name(), query=True):
+            node = encode(node)
 
-        members = om1.MSelectionList()
-        memberStrings = list()
-
-        fn.getMembers(members, flatten)
-        members.getSelectionStrings(memberStrings)
-
-        for member in memberStrings:
-            member = encode(member)
-
-            if not type or op(type, getattr(member._fn, other)):
-                yield member
+            if not type or op(type, getattr(node._fn, other)):
+                yield node
 
 
 class Plug(object):
@@ -1382,24 +1515,6 @@ class Plug(object):
             other = other.read()
         return self.read() / other
 
-    def __floordiv__(self, other):
-        """Integer division, e.g. self // other
-
-        Example:
-            >>> node = createNode("transform")
-            >>> node["tx"] = 5
-            >>> node["ty"] = 2
-            >>> node["tx"] // node["ty"]
-            2.0
-            >>> node["tx"] // 2
-            2.0
-
-        """
-
-        if isinstance(other, Plug):
-            other = other.read()
-        return self.read() // other
-
     def __truediv__(self, other):
         """Float division, e.g. self / other"""
         if isinstance(other, Plug):
@@ -1465,6 +1580,25 @@ class Plug(object):
     def __lshift__(self, other):
         """Support connecting attributes via A << B"""
         other.connect(self)
+
+    def __floordiv__(self, other):
+        """Disconnect attribute via A // B
+
+        Example:
+            >>> nodeA = createNode("transform")
+            >>> nodeB = createNode("transform")
+            >>> nodeA["tx"] >> nodeB["tx"]
+            >>> nodeA["tx"] = 5
+            >>> nodeB["tx"] == 5
+            True
+            >>> nodeA["tx"] // nodeB["tx"]
+            >>> nodeA["tx"] = 0
+            >>> nodeB["tx"] == 5
+            True
+
+        """
+
+        self.disconnect(other)
 
     def __iter__(self):
         """Iterate over value as a tuple
@@ -1562,6 +1696,9 @@ class Plug(object):
         self._key = key
         self._modifier = modifier
 
+    def plug(self):
+        return self._mplug
+
     def asDouble(self):
         """Return plug as double (Python float)
 
@@ -1621,6 +1758,13 @@ class Plug(object):
     # Alias
     asTm = asTransformationMatrix
 
+    def asEulerRotation(self, order=kXYZ, time=None):
+        value = self.read(time=time)
+        return om.MEulerRotation(value, order)
+
+    def asQuaternion(self, time=None):
+        pass
+
     @property
     def locked(self):
         return self._mplug.isLocked
@@ -1640,6 +1784,14 @@ class Plug(object):
     @keyable.setter
     def keyable(self, value):
         om.MFnAttribute(self._mplug.attribute()).keyable = value
+
+    @property
+    def hidden(self):
+        return om.MFnAttribute(self._mplug.attribute()).hidden
+
+    @hidden.setter
+    def hidden(self, value):
+        om.MFnAttribute(self._mplug.attribute()).hidden = value
 
     def type(self):
         """Retrieve API type of plug as string
@@ -1708,11 +1860,17 @@ class Plug(object):
             log.error("'%s': failed to write attribute" % self.path())
             raise
 
-    def connect(self, other):
+    def connect(self, other, force=True):
         if not getattr(self._modifier, "isDone", True):
             return self._modifier.connect(self._mplug, other._mplug)
 
         mod = om.MDGModifier()
+
+        if force:
+            # Disconnect any plug connected to `other`
+            for plug in other._mplug.connectedTo(True, False):
+                mod.disconnect(plug, other._mplug)
+
         mod.connect(self._mplug, other._mplug)
         mod.doIt()
 
@@ -1733,10 +1891,12 @@ class Plug(object):
         """Yield plugs connected to self
 
         Arguments:
+            type (int, optional): Only return nodes of this type
             source (bool, optional): Return source plugs,
                 default is True
             destination (bool, optional): Return destination plugs,
                 default is True
+            plugs (bool, optional): Return connected plugs instead of nodes
             unit (int, optional): Return plug in this unit, e.g. Meters
 
         Example:
@@ -1799,6 +1959,20 @@ class TransformationMatrix(om.MTransformationMatrix):
         """This method does not typically support optional arguments"""
         space = space or kTransform
         return super(TransformationMatrix, self).translation(space)
+
+    def setTranslation(self, trans, space=None):
+        space = space or kTransform
+        return super(TransformationMatrix, self).setTranslation(trans, space)
+
+    def scale(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or kTransform
+        return super(TransformationMatrix, self).scale(space)
+
+    def setScale(self, seq, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or kTransform
+        return super(TransformationMatrix, self).setScale(seq, space)
 
 
 class Vector(om.MVector):
@@ -2079,20 +2253,27 @@ def encode(path):
     try:
         selectionList.add(path)
     except RuntimeError:
-        raise ValueError("'%s' does not exist" % path)
+        raise ExistError("'%s' does not exist" % path)
 
     mobj = selectionList.getDependNode(0)
     return Node(mobj)
 
 
-def fromHash(code):
+def fromHash(code, default=None):
     """Get existing node from MObjectHandle.hashCode()"""
-    return Singleton._instances["%x" % code]
+    try:
+        return Singleton._instances["%x" % code]
+    except IndexError:
+        return default
 
 
-def fromHex(hex):
+def fromHex(hex, default=None, safe=True):
     """Get existing node from Node.hex"""
-    return Singleton._instances[hex]
+    node = Singleton._instances.get(hex, default)
+    if safe and node and node.exists:
+        return node
+    else:
+        return node
 
 
 def toHash(mobj):
@@ -2143,11 +2324,19 @@ def asHex(mobj):
     return "%x" % asHash(mobj)
 
 
+def clear():
+    """Remove all reused nodes"""
+    Singleton._instances.clear()
+
+
 def _encode1(path):
     """Convert `path` to Maya API 1.0 MObject
 
     Arguments:
         path (str): Absolute or relative path to DAG or DG node
+
+    Raises:
+        ExistError on `path` not existing
 
     """
 
@@ -2156,11 +2345,34 @@ def _encode1(path):
     try:
         selectionList.add(path)
     except RuntimeError:
-        raise ValueError("'%s' does not exist" % path)
+        raise ExistError("'%s' does not exist" % path)
 
     mobject = om1.MObject()
     selectionList.getDependNode(0, mobject)
     return mobject
+
+
+def _encodedagpath1(path):
+    """Convert `path` to Maya API 1.0 MObject
+
+    Arguments:
+        path (str): Absolute or relative path to DAG or DG node
+
+    Raises:
+        ExistError on `path` not existing
+
+    """
+
+    selectionList = om1.MSelectionList()
+
+    try:
+        selectionList.add(path)
+    except RuntimeError:
+        raise ExistError("'%s' does not exist" % path)
+
+    dagpath = om1.MDagPath()
+    selectionList.getDagPath(0, dagpath)
+    return dagpath
 
 
 def decode(node):
@@ -2203,7 +2415,13 @@ class _BaseModifier(object):
     def __exit__(self, exc_type, exc_value, tb):
         self._modifier.doIt()
         self._modifier.isDone = True
-        commit(self._modifier.undoIt, self._modifier.doIt)
+
+        if self._undoable:
+            commit(self._modifier.undoIt, self._modifier.doIt)
+
+    def __init__(self, undoable=True):
+        self._undoable = undoable
+        super(_BaseModifier, self).__init__()
 
     def doIt(self):
         self._modifier.doIt()
@@ -2222,6 +2440,13 @@ class _BaseModifier(object):
     def deleteNode(self, node):
         return self._modifier.deleteNode(node._mobject)
 
+    delete = deleteNode
+
+    def renameNode(self, node, name):
+        return self._modifier.renameNode(node._mobject, name)
+
+    rename = renameNode
+
     def getAttr(self, node, key):
         return node[key]
 
@@ -2230,6 +2455,9 @@ class _BaseModifier(object):
 
     def connect(self, plug1, plug2):
         plug1 >> plug2
+
+    def disconnect(self, plug1, plug2):
+        plug1 // plug2
 
 
 class DGModifier(_BaseModifier):
@@ -2280,10 +2508,12 @@ class DagModifier(_BaseModifier):
         return DagNode(mobj, exists=False, modifier=self._modifier)
 
     def parent(self, node, parent=None):
+        parent = parent._mobject if parent is not None else None
         self._modifier.reparentNode(node._mobject, parent)
 
-    def rename(self, node, name):
-        self._modifier.renameNode(node._mobject, parent)
+
+def ls(*args, **kwargs):
+    return map(encode, cmds.ls(*args, **kwargs))
 
 
 def createNode(type, name=None, parent=None):
@@ -2494,13 +2724,14 @@ def connectAttr(src, dst):
 
 
 def delete(*nodes):
-    mod = om.MDGModifier()
+    with DGModifier() as mod:
+        for node in nodes:
+            mod.delete(node)
 
-    for node in nodes:
-        mobject = node._mobject
-        mod.deleteNode(mobject)
 
-    mod.doIt()
+def rename(node, name):
+    with DGModifier() as mod:
+        mod.rename(node, name)
 
 
 def parent(children, parent, relative=True, absolute=False):

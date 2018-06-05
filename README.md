@@ -97,6 +97,7 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
 - [References](#references)
 - [Notes](#notes)
   - [MDagModifier](#mdagmodifier)
+- [Examples](#examples)
 
 <br>
 
@@ -1320,3 +1321,24 @@ Test("cmdx", "createNodeBulk", createMany, number=1, repeat=100, setup=New)
 # createNodeBulkExclusive API 2.0: 132.8 ms (509.58 µs/call)
 # createNodeBulk cmdx: 150.5 ms (620.12 µs/call)
 ```
+
+<br>
+
+### Examples
+
+One-off examples using `cmdx`.
+
+##### Transferring of attributes
+
+Zeroing out `rotate` by moving them to `jointOrient`.
+
+```python
+from maya import cmds
+import cmdx
+
+for joint in cmdx.ls(selection=True, type="joint"):
+    joint["jointOrient", cmdx.Degrees] = joint["rotate"]
+    joint["rotate"] = 0
+```
+
+Transferring the orientation of a series of joints to the `jointOrient`
