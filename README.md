@@ -1154,6 +1154,16 @@ Common causes of a crash is:
 
 This can happen when, for example, you experiment in the Script Editor, and retain access to nodes created from a different scene, or after the node has simply been deleted.
 
+> Can I have attribute access via ".", e.g. `myNode.translate`?
+
+Unfortunately not, it isn't safe.
+
+The problem is how it shadows attribute access for attributes on the object itself with attributes in Maya. In the above example, `translate` could refer to a method that translates a given node, or it could be Maya's `.translate` attribute. If there isn't a method in `cmdx` to translate a node today, then when that feature is introduced, your code would break.
+
+Furthermore it makes the code more difficult to read, as the reader won't know whether an attribute is referring to an Maya attribute or an attribute or method on the object.
+
+With the dictionary access - e.g. `myNode["translate"]`, there's no question about this.
+
 > Why is PyMEL slow?
 
 ...
