@@ -141,6 +141,7 @@ class _Type(int):
     """Facilitate use of isinstance(space, _Type)"""
 
 
+kDagNode = _Type(om.MFn.kDagNode)
 kShape = _Type(om.MFn.kShape)
 kTransform = _Type(om.MFn.kTransform)
 kJoint = _Type(om.MFn.kJoint)
@@ -1413,7 +1414,7 @@ class ObjectSet(Node):
         if isinstance(type, (tuple, list)):
             op = operator.contains
 
-        for node in cmds.sets(self.name(), query=True):
+        for node in cmds.sets(self.name(), query=True) or []:
             node = encode(node)
 
             if not type or op(type, getattr(node._fn, other)):
@@ -3287,6 +3288,7 @@ def uninitializePlugin(plugin):
 AddDoubleLinear = om.MTypeId(0x4441444c)
 AddMatrix = om.MTypeId(0x44414d58)
 AngleBetween = om.MTypeId(0x4e414254)
+BlendShape = om.MTypeId(0x46424c53)
 MultMatrix = om.MTypeId(0x444d544d)
 AngleDimension = om.MTypeId(0x4147444e)
 BezierCurve = om.MTypeId(0x42435256)
