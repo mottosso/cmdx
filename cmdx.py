@@ -3095,6 +3095,14 @@ class Compound(_AbstractAttribute):
             if child["default"] is None and default is not None:
                 child["default"] = default[index]
 
+            child["storable"] = self["storable"]
+            child["readable"] = self["readable"]
+            child["writable"] = self["writable"]
+            child["hidden"] = self["hidden"]
+            child["channelBox"] = self["channelBox"]
+            child["keyable"] = self["keyable"]
+            child["array"] = self["array"]
+
             self.Fn.addChild(child.create())
 
         return mobj
