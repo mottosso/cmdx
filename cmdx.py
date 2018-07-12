@@ -335,6 +335,11 @@ class Node(object):
 
         return self[other.strip(".")]
 
+    def __contains__(self, other):
+        """Does the attribute `other` exist?"""
+
+        return self.hasAttr(other)
+
     def __getitem__(self, key):
         """Get plug from self
 
@@ -1026,6 +1031,14 @@ class DagNode(Node):
         """
 
         return self.path().count("|") - 1
+
+    def hide(self):
+        """Set visibility to False"""
+        self["visibility"] = False
+
+    def show(self):
+        """Set visibility to True"""
+        self["visibility"] = True
 
     def addChild(self, child, index=Last):
         """Add `child` to self
@@ -1793,6 +1806,12 @@ class Plug(object):
     @hidden.setter
     def hidden(self, value):
         om.MFnAttribute(self._mplug.attribute()).hidden = value
+
+    def hide(self):
+        self.hidden = True
+
+    def show(self):
+        self.hidden = False
 
     def type(self):
         """Retrieve API type of plug as string
@@ -2758,6 +2777,50 @@ def objExists(obj):
         return True
 
 
+# Speciality functions
+
+def curve(parent, points, degree=1):
+    assert isinstance(parent, DagNode), (
+        "parent must be of type cmdx.DagNode"
+    )
+
+    cvs = om1.MPointArray()
+    knots = om1.MDoubleArray()
+    curveFn = om1.MFnNurbsCurve()
+
+    knotcount = len(points) - degree + 2 * degree - 1
+
+    for point in points:
+        cvs.append(om1.MPoint(*point))
+
+    for index in range(knotcount):
+        knots.append(index)
+
+    mobj = curveFn.createWithEditPoints(cvs,
+                                        degree,
+                                        om1.MFnNurbsCurve.kOpen,
+                                        False,
+                                        False,
+                                        True,
+                                        _encode1(parent.path()))
+
+    mod = om1.MDagModifier()
+    mod.renameNode(mobj, parent.name() + "Shape")
+    mod.doIt()
+
+    def undo():
+        mod.deleteNode(mobj)
+        mod.doIt()
+
+    def redo():
+        mod.undoIt()
+
+    commit(undo, redo)
+
+    shapeFn = om1.MFnDagNode(mobj)
+    return encode(shapeFn.fullPathName())
+
+
 # --------------------------------------------------------
 #
 # Attribute Types
@@ -2955,7 +3018,7 @@ class Matrix(_AbstractAttribute):
 
     Default = (0.0,) * 4 * 4  # Identity matrix
 
-    Array = True
+    Array = False
     Readable = True
     Keyable = False
     Hidden = False
