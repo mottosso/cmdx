@@ -50,7 +50,6 @@ else:
 __version__ = "0.3.0"
 __maya_version__ = int(cmds.about(version=True))
 
-# TODO: Lower this requirement
 if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
 
@@ -442,7 +441,14 @@ class Node(object):
         except RuntimeError:
             raise ExistError("%s.%s" % (self.path(), key))
 
-        Plug(self, plug, unit=unit).write(value)
+        plug = Plug(self, plug, unit=unit)
+
+        if not getattr(self._modifier, "isDone", True):
+            if _python_to_mod(value, plug, self._modifier):
+                return
+
+        # Else, write it immediately
+        plug.write(value)
 
     def _onDestroyed(self, mobject):
         self._destroyed = True
@@ -1084,7 +1090,9 @@ class DagNode(Node):
     def transform(self, space=Object):
         """Return MTransformationMatrix"""
         plug = self["worldMatrix"][0] if space == World else self["matrix"]
-        return om.MFnMatrixData(plug._mplug.asMObject()).transformation()
+        return TransformationMatrix(
+            om.MFnMatrixData(plug._mplug.asMObject()).transformation()
+        )
 
     # Alias
     root = assembly
@@ -2008,6 +2016,28 @@ class Vector(om.MVector):
     """
 
 
+def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
+    degree = min(3, max(1, degree))
+
+    cvs = om1.MPointArray()
+    curveFn = om1.MFnNurbsCurve()
+    data = om1.MFnNurbsCurveData()
+    mobj = data.create()
+
+    for point in points:
+        cvs.append(om1.MPoint(*point))
+
+    curveFn.createWithEditPoints(cvs,
+                                 degree,
+                                 form,
+                                 False,
+                                 False,
+                                 True,
+                                 mobj)
+
+    return mobj
+
+
 class CachedPlug(Plug):
     """Returned in place of an actual plug"""
     def __init__(self, value):
@@ -2093,14 +2123,20 @@ def _plug_to_python(plug, unit=None, context=None):
         elif innerType == om.MFnData.kString:
             return plug.asString(context)
 
+        elif innerType == om.MFnData.kNurbsCurve:
+            return om.MFnNurbsCurveData(plug.asMObject(context))
+
+        elif innerType == om.MFnData.kComponentList:
+            return None
+
         elif innerType == om.MFnData.kInvalid:
             # E.g. time1.timewarpIn_Hidden
             # Unsure of why some attributes are invalid
             return None
 
         else:
-            raise TypeError("Unsupported typed type: %s"
-                            % innerType)
+            log.debug("Unsupported kTypedAttribute: %s" % innerType)
+            return None
 
     elif type == om.MFn.kMatrixAttribute:
         return tuple(om.MFnMatrixData(plug.asMObject(context)).matrix())
@@ -2216,6 +2252,12 @@ def _python_to_plug(value, plug):
 
     # Native Maya types
 
+    elif isinstance(value, om1.MObject):
+        node = _encode1(plug._node.path())
+        shapeFn = om1.MFnDagNode(node)
+        plug = shapeFn.findPlug(plug.name())
+        plug.setMObject(value)
+
     elif isinstance(value, om.MEulerRotation):
         for index, value in enumerate(value):
             value = om.MAngle(value, om.MAngle.kRadians)
@@ -2253,7 +2295,67 @@ def _python_to_plug(value, plug):
         plug._mplug.setBool(value)
 
     else:
-        raise TypeError("Unsupported Python type '%s'" % value.__class__)
+        log.debug("Unsupported Python type '%s'" % value.__class__)
+        return None
+
+
+def _python_to_mod(value, plug, mod):
+    """Convert `value` into a suitable equivalent for om.MDGModifier"""
+
+    mplug = plug._mplug
+
+    if isinstance(value, (tuple, list)):
+        for index, value in enumerate(value):
+
+            # Tuple values are assumed flat:
+            #   e.g. (0, 0, 0, 0)
+            # Nested values are not supported:
+            #   e.g. ((0, 0), (0, 0))
+            # Those can sometimes appear in e.g. matrices
+            if isinstance(value, (tuple, list)):
+                raise TypeError(
+                    "Unsupported nested Python type: %s"
+                    % value.__class__
+                )
+
+            _python_to_mod(value, plug[index], mod)
+
+    elif isinstance(value, om.MVector):
+        for index, value in enumerate(value):
+            _python_to_mod(value, plug[index], mod)
+
+    elif isinstance(value, str):
+        mod.newPlugValueString(mplug, value)
+
+    elif isinstance(value, int):
+        mod.newPlugValueInt(mplug, value)
+
+    elif isinstance(value, float):
+        mod.newPlugValueFloat(mplug, value)
+
+    elif isinstance(value, bool):
+        mod.newPlugValueBool(mplug, value)
+
+    elif isinstance(value, om.MAngle):
+        mod.newPlugValueMAngle(mplug, value)
+
+    elif isinstance(value, om.MDistance):
+        mod.newPlugValueMDistance(mplug, value)
+
+    elif isinstance(value, om.MTime):
+        mod.newPlugValueMTime(mplug, value)
+
+    elif isinstance(value, om.MEulerRotation):
+        for index, value in enumerate(value):
+            value = om.MAngle(value, om.MAngle.kRadians)
+            _python_to_mod(value, plug[index], mod)
+
+    else:
+        log.warning(
+            "Unsupported plug type for modifier: %s" % type(value)
+        )
+        return False
+    return True
 
 
 def encode(path):
@@ -2471,7 +2573,8 @@ class _BaseModifier(object):
         return node[key]
 
     def setAttr(self, node, key, value):
-        node[key] = value
+        plug = node[key]
+        return _python_to_mod(value, plug, self._modifier)
 
     def connect(self, plug1, plug2):
         plug1 >> plug2
@@ -2534,6 +2637,14 @@ class DagModifier(_BaseModifier):
 
 def ls(*args, **kwargs):
     return map(encode, cmds.ls(*args, **kwargs))
+
+
+def selection(*args, **kwargs):
+    return map(encode, cmds.ls(*args, selection=True, **kwargs))
+
+
+# Alias
+sl = selection
 
 
 def createNode(type, name=None, parent=None):
@@ -2779,10 +2890,60 @@ def objExists(obj):
 
 # Speciality functions
 
-def curve(parent, points, degree=1):
+kOpen = om1.MFnNurbsCurve.kOpen
+kClosed = om1.MFnNurbsCurve.kClosed
+kPeriodic = om1.MFnNurbsCurve.kPeriodic
+
+
+def editCurve(parent, points, degree=1, form=kOpen):
     assert isinstance(parent, DagNode), (
         "parent must be of type cmdx.DagNode"
     )
+
+    degree = min(3, max(1, degree))
+
+    cvs = om1.MPointArray()
+    curveFn = om1.MFnNurbsCurve()
+
+    for point in points:
+        cvs.append(om1.MPoint(*point))
+
+    mobj = curveFn.createWithEditPoints(cvs,
+                                        degree,
+                                        form,
+                                        False,
+                                        False,
+                                        True,
+                                        _encode1(parent.path()))
+
+    mod = om1.MDagModifier()
+    mod.renameNode(mobj, parent.name() + "Shape")
+    mod.doIt()
+
+    def undo():
+        mod.deleteNode(mobj)
+        mod.doIt()
+
+    def redo():
+        mod.undoIt()
+
+    commit(undo, redo)
+
+    shapeFn = om1.MFnDagNode(mobj)
+    return encode(shapeFn.fullPathName())
+
+
+def curve(parent, points, degree=1, form=kOpen):
+    assert isinstance(parent, DagNode), (
+        "parent must be of type cmdx.DagNode"
+    )
+
+    # Superimpose end knots
+    # startpoints = [points[0]] * (degree - 1)
+    # endpoints = [points[-1]] * (degree - 1)
+    # points = startpoints + list(points) + endpoints
+
+    degree = min(3, max(1, degree))
 
     cvs = om1.MPointArray()
     knots = om1.MDoubleArray()
@@ -2796,13 +2957,13 @@ def curve(parent, points, degree=1):
     for index in range(knotcount):
         knots.append(index)
 
-    mobj = curveFn.createWithEditPoints(cvs,
-                                        degree,
-                                        om1.MFnNurbsCurve.kOpen,
-                                        False,
-                                        False,
-                                        True,
-                                        _encode1(parent.path()))
+    mobj = curveFn.create(cvs,
+                          knots,
+                          degree,
+                          form,
+                          False,
+                          True,
+                          _encode1(parent.path()))
 
     mod = om1.MDagModifier()
     mod.renameNode(mobj, parent.name() + "Shape")

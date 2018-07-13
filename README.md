@@ -166,6 +166,7 @@ cmdx.delete(joe)
 - `Divider`
 - `Long`
 - `Compound`
+- `NurbsCurve`
 
 <br>
 
@@ -802,6 +803,55 @@ vec ^ cmdx.Vector(0, 1, 0) == om.MVector(0, 0, 1)
 - `asDouble()` -> `float`
 - `asMatrix()` -> `MMatrix`
 - `asTransformationMatrix()` (alias `asTm()`) -> `MTransformationMatrix`
+
+<br>
+
+### Geometry Types
+
+`cmdx` supports reading and writing of geometry attributes via the `*Data` family of functions.
+
+**Drawing a line**
+
+```python
+import cmdx
+
+parent = cmdx.createNode("transform")
+shape = cmdx.createNode("nurbsCurve", parent=parent)
+shape["cached"] = cmdx.NurbsCurveData(points=((0, 0, 0), (0, 1, 0), (0, 2, 0)))
+```
+
+This creates a new `nurbsCurve` shape and fills it with points.
+
+**Drawing an arc**
+
+Append the `degree` argument for a smooth curve.
+
+```python
+import cmdx
+
+parent = cmdx.createNode("transform")
+shape = cmdx.createNode("nurbsCurve", parent=parent)
+shape["cached"] = cmdx.NurbsCurveData(
+    points=((0, 0, 0), (1, 1, 0), (0, 2, 0)),
+    degree=2
+)
+```
+
+**Drawing a circle**
+
+Append the `form` argument for closed loop.
+
+```python
+import cmdx
+
+parent = cmdx.createNode("transform")
+shape = cmdx.createNode("nurbsCurve", parent=parent)
+shape["cached"] = cmdx.NurbsCurveData(
+    points=((0, 0, 0), (1, 1, 0), (0, 2, 0)),
+    degree=2,
+    form=cmdx.kClosed
+)
+```
 
 <br>
 
