@@ -2576,7 +2576,7 @@ class _BaseModifier(object):
 
     def setAttr(self, node, key, value):
         plug = node[key]
-        return _python_to_mod(value, plug, self._modifier)
+        _python_to_mod(value, plug, self._modifier)
 
     def connect(self, plug1, plug2):
         plug1 >> plug2
@@ -2599,10 +2599,9 @@ class DagModifier(_BaseModifier):
         ...     node1 = mod.createNode("transform")
         ...     node2 = mod.createNode("transform", parent=node1)
         ...     mod.setAttr(node1, "translate", (1, 2, 3))
-        ...     value = mod.getAttr(node1, "translateX")
         ...     mod.connect(node1 + ".translate", node2 + ".translate")
         ...
-        >>> value
+        >>> mod.getAttr(node1, "translateX")
         1.0
         >>> node2["translate"][0]
         1.0
