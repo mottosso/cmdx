@@ -944,10 +944,10 @@ class Node(object):
 
     def rename(self, name):
         if not getattr(self._modifier, "isDone", True):
-            return self._modifier.rename(self._mobj, name)
+            return self._modifier.rename(self._mobject, name)
 
         mod = om.MDGModifier()
-        mod.renameNode(self._mobj, name)
+        mod.renameNode(self._mobject, name)
         mod.doIt()
 
 
@@ -1797,7 +1797,7 @@ class Plug(object):
 
     @channelBox.setter
     def channelBox(self, value):
-        om.MFnAttribute(self._mplug.attribute()).channelBox = value
+        self._mplug.isChannelBox = value
 
     @property
     def keyable(self):
@@ -1805,7 +1805,7 @@ class Plug(object):
 
     @keyable.setter
     def keyable(self, value):
-        om.MFnAttribute(self._mplug.attribute()).keyable = value
+        self._mplug.isKeyable = value
 
     @property
     def hidden(self):
@@ -1816,10 +1816,12 @@ class Plug(object):
         om.MFnAttribute(self._mplug.attribute()).hidden = value
 
     def hide(self):
-        self.hidden = True
+        self.keyable = True
+        self.channelBox = False
 
     def show(self):
-        self.hidden = False
+        self.keyable = True
+        self.channelBox = True
 
     def type(self):
         """Retrieve API type of plug as string
@@ -3029,8 +3031,19 @@ class _AbstractAttribute(dict):
         return self["name"]
 
     def __new__(cls, *args, **kwargs):
+        """Support for using name of assignment
+
+        Example:
+            node["thisName"] =  cmdx.Double()
+
+        In this example, the attribute isn't given a `name`
+        Instead, the name is inferred from where it is assigned.
+
+        """
+
         if not args:
             return cls, kwargs
+
         return super(_AbstractAttribute, cls).__new__(cls, *args, **kwargs)
 
     def __init__(self,
@@ -3316,16 +3329,18 @@ class Compound(_AbstractAttribute):
         default = super(Compound, self).default()
 
         for index, child in enumerate(self["children"]):
+            # Forward attributes from parent to child
+            for attr in ("storable",
+                         "readable",
+                         "writable",
+                         "hidden",
+                         "channelBox",
+                         "keyable",
+                         "array"):
+                child[attr] = self[attr]
+
             if child["default"] is None and default is not None:
                 child["default"] = default[index]
-
-            child["storable"] = self["storable"]
-            child["readable"] = self["readable"]
-            child["writable"] = self["writable"]
-            child["hidden"] = self["hidden"]
-            child["channelBox"] = self["channelBox"]
-            child["keyable"] = self["keyable"]
-            child["array"] = self["array"]
 
             self.Fn.addChild(child.create())
 
