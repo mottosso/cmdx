@@ -2543,8 +2543,9 @@ class _BaseModifier(object):
         if self._undoable:
             commit(self._modifier.undoIt, self._modifier.doIt)
 
-    def __init__(self, undoable=True):
+    def __init__(self, undoable=True, interesting=True):
         self._undoable = undoable
+        self._interesting = interesting
         super(_BaseModifier, self).__init__()
 
     def doIt(self):
@@ -2559,7 +2560,13 @@ class _BaseModifier(object):
         if name is not None:
             self._modifier.renameNode(mobj, name)
 
-        return Node(mobj, exists=False, modifier=self._modifier)
+        node = Node(mobj, exists=False, modifier=self._modifier)
+
+        if not self._interesting:
+            plug = node["isHistoricallyInteresting"]
+            _python_to_mod(False, plug, self._modifier)
+
+        return node
 
     def deleteNode(self, node):
         return self._modifier.deleteNode(node._mobject)
