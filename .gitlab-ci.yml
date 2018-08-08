@@ -15,7 +15,7 @@ tests:maya2015:
     - echo $CI_PIPELINE_ID
     - echo $CI_JOB_ID
     - mayapy run_tests.py
-    - mayapy build_livedocs.py && mayapy test_docs.py
+    - mayapy build_livedocs.py && mayapy -m nose --with-doctest test_docs.py
     - mayapy build_docs.py
 
 tests:maya2017:
@@ -35,4 +35,5 @@ tests:maya2017:
     - echo $CI_PIPELINE_ID
     - echo $CI_JOB_ID
     - mayapy run_tests.py
+    - mayapy build_livedocs.py && mayapy -m nose --with-doctest test_docs.py
     - mayapy build_docs.py
