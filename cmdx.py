@@ -35,6 +35,8 @@ ROGUE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROGUE_MODE"))
 # Increase performance by not bothering to free up unused memory
 MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
 
+ENABLE_PEP8 = bool(os.getenv("CMDX_PEP8"))
+
 # Support undo/redo
 ENABLE_UNDO = not SAFE_MODE
 
@@ -444,8 +446,15 @@ class Node(object):
         plug = Plug(self, plug, unit=unit)
 
         if not getattr(self._modifier, "isDone", True):
+
+            # Only a few attribute types are supported by a modifier
             if _python_to_mod(value, plug, self._modifier):
                 return
+            else:
+                log.warning(
+                    "Could not write %s via modifier, writing directly.."
+                    % plug
+                )
 
         # Else, write it immediately
         plug.write(value)
@@ -748,11 +757,29 @@ class Node(object):
             return self._fn.name().rsplit(":", 1)[-1]
 
     def namespace(self):
+        """Get namespace of node
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node = createNode("transform", name="myNode")
+            >>> node.namespace()
+            u''
+            >>> _ = cmds.namespace(add=":A")
+            >>> _ = cmds.namespace(add=":A:B")
+            >>> node = createNode("transform", name=":A:B:myNode")
+            >>> node.namespace()
+            u'A:B'
+
+        """
+
+        name = self._fn.name()
+
         if ":" in name:
             # Else it will return name as-is, as namespace
             # E.g. Ryan_:leftHand -> Ryan_, but :leftHand -> leftHand
             return name.rsplit(":", 1)[0]
-        return ""
+
+        return type(name)()
 
     # Alias
     path = name
@@ -950,6 +977,19 @@ class Node(object):
         mod.renameNode(self._mobject, name)
         mod.doIt()
 
+    if ENABLE_PEP8:
+        is_alive = isAlive
+        hex_str = hexStr
+        hash_code = hashCode
+        type_id = typeId
+        type_name = typeName
+        is_a = isA
+        is_locked = isLocked
+        find_plug = findPlug
+        add_attr = addAttr
+        has_attr = hasAttr
+        delete_attr = deleteAttr
+
 
 class DagNode(Node):
     """A Maya DAG node
@@ -1087,12 +1127,10 @@ class DagNode(Node):
 
         return self.__class__(root.node()) if root else self
 
-    def transform(self, space=Object):
+    def transform(self, space=Object, time=None):
         """Return MTransformationMatrix"""
         plug = self["worldMatrix"][0] if space == World else self["matrix"]
-        return TransformationMatrix(
-            om.MFnMatrixData(plug._mplug.asMObject()).transformation()
-        )
+        return TransformationMatrix(plug.asMatrix(time))
 
     # Alias
     root = assembly
@@ -1148,6 +1186,10 @@ class DagNode(Node):
             True
 
         """
+
+        # Shapes have no children
+        if self.isA(kShape):
+            return
 
         cls = DagNode
         Fn = self._fn.__class__
@@ -1318,6 +1360,10 @@ class DagNode(Node):
     def duplicate(self):
         return self.__class__(self._fn.duplicate())
 
+    if ENABLE_PEP8:
+        shortest_path = shortestPath
+        add_child = addChild
+
 
 class ObjectSet(Node):
     """Support set-type operations on Maya sets
@@ -1373,14 +1419,7 @@ class ObjectSet(Node):
 
         """
 
-        mobj = _encode1(self.name())
-        selectionList = om1.MSelectionList()
-
-        for member in members:
-            selectionList.add(member.path())
-
-        fn = om1.MFnSet(mobj)
-        fn.addMembers(selectionList)
+        cmds.sets(list(map(str, members)), forceElement=self.path())
 
     def clear(self):
         """Remove all members from set"""
@@ -1580,6 +1619,31 @@ class Plug(object):
             % type(other)
         )
 
+    def __iadd__(self, other):
+        """Support += operator, for .append()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["myArray"] = Double(array=True)
+            >>> node["myArray"].append(1.0)
+            >>> node["myArray"].extend([2.0, 3.0])
+            >>> node["myArray"] += 5.1
+            >>> node["myArray"] += [1.1, 2.3, 999.0]
+            >>> node["myArray"][0]
+            1.0
+            >>> node["myArray"][6]
+            999.0
+            >>> node["myArray"][-1]
+            999.0
+
+        """
+
+        if isinstance(other, (tuple, list)):
+            for entry in other:
+                self.append(entry)
+        else:
+            self.append(other)
+
     def __str__(self):
         """Return value as str
 
@@ -1668,9 +1732,17 @@ class Plug(object):
             >>> node["visibility"][0]
             Traceback (most recent call last):
             ...
-            TypeError: mynode.visibility does not support indexing
+            TypeError: |mynode.visibility does not support indexing
+            >>> node["translate"][2] = 5.1
+            >>> node["translate"][2].read()
+            5.1
 
         """
+
+        # Support backwards-indexing
+        if index < 0:
+            index = self.count() - abs(index)
+
         cls = self.__class__
 
         if self._mplug.isArray:
@@ -1720,6 +1792,68 @@ class Plug(object):
 
     def plug(self):
         return self._mplug
+
+    @property
+    def isArray(self):
+        return self._mplug.isArray
+
+    @property
+    def isCompound(self):
+        return self._mplug.isCompound
+
+    def append(self, value):
+        """Add `value` to end of self, which is an array
+
+        Arguments:
+            value (object): If value, create a new entry and append it.
+                If cmdx.Plug, create a new entry and connect it.
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node = createNode("transform", name="appendTest")
+            >>> node["myArray"] = Double(array=True)
+            >>> node["myArray"].append(1.0)
+            >>> node["notArray"] = Double()
+            >>> node["notArray"].append(2.0)
+            Traceback (most recent call last):
+            ...
+            TypeError: "|appendTest.notArray" was not an array attribute
+
+        """
+
+        if not self._mplug.isArray:
+            raise TypeError("\"%s\" was not an array attribute" % self.path())
+
+        index = self.count()
+
+        if isinstance(value, Plug):
+            self[index] << value
+        else:
+            self[index].write(value)
+
+    def extend(self, values):
+        """Append multiple values to the end of an array
+
+        Arguments:
+            values (tuple): If values, create a new entry and append it.
+                If cmdx.Plug's, create a new entry and connect it.
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["myArray"] = Double(array=True)
+            >>> node["myArray"].extend([1.0, 2.0, 3.0])
+            >>> node["myArray"][0]
+            1.0
+            >>> node["myArray"][-1]
+            3.0
+
+        """
+
+        for value in values:
+            self.append(value)
+
+    def count(self):
+        return self._mplug.numElements()
 
     def asDouble(self):
         """Return plug as double (Python float)
@@ -1791,21 +1925,73 @@ class Plug(object):
     def locked(self):
         return self._mplug.isLocked
 
+    @locked.setter
+    def locked(self, value):
+        """Lock attribute"""
+        elements = (
+            self
+            if self.isArray or self.isCompound
+            else [self]
+        )
+
+        # Use setAttr in place of MPlug.isKeyable = False, as that
+        # doesn't persist the scene on save if the attribute is dynamic.
+        for el in elements:
+            cmds.setAttr(el.path(), lock=value)
+
+    def lock(self):
+        self.locked = True
+
+    def unlock(self):
+        self.locked = False
+
     @property
     def channelBox(self):
-        return self._mplug.isChannelBox
+        """Is the attribute visible in the Channel Box?"""
+        if self.isArray or self.isCompound:
+            return all(
+                plug._mplug.isChannelBox
+                for plug in self
+            )
+        else:
+            return self._mplug.isChannelBox
 
     @channelBox.setter
     def channelBox(self, value):
-        self._mplug.isChannelBox = value
+        elements = (
+            self
+            if self.isArray or self.isCompound
+            else [self]
+        )
+
+        # Use setAttr in place of MPlug.isChannelBox = False, as that
+        # doesn't persist the scene on save if the attribute is dynamic.
+        for el in elements:
+            cmds.setAttr(el.path(), keyable=value, channelBox=value)
 
     @property
     def keyable(self):
-        return self._mplug.isKeyable
+        """Is the attribute keyable?"""
+        if self.isArray or self.isCompound:
+            return all(
+                plug._mplug.isKeyable
+                for plug in self
+            )
+        else:
+            return self._mplug.isKeyable
 
     @keyable.setter
     def keyable(self, value):
-        self._mplug.isKeyable = value
+        elements = (
+            self
+            if self.isArray or self.isCompound
+            else [self]
+        )
+
+        # Use setAttr in place of MPlug.isKeyable = False, as that
+        # doesn't persist the scene on save if the attribute is dynamic.
+        for el in elements:
+            cmds.setAttr(el.path(), keyable=value)
 
     @property
     def hidden(self):
@@ -1813,14 +1999,31 @@ class Plug(object):
 
     @hidden.setter
     def hidden(self, value):
-        om.MFnAttribute(self._mplug.attribute()).hidden = value
+        pass
 
     def hide(self):
-        self.keyable = True
+        """Hide attribute from channel box
+
+        Note: An attribute cannot be hidden from the channel box
+        and keyable at the same time. Therefore, this method
+        also makes the attribute non-keyable.
+
+        Supports array and compound attributes too.
+
+        """
+
+        self.keyable = False
         self.channelBox = False
 
     def show(self):
-        self.keyable = True
+        """Show attribute in channel box
+
+        Note: An attribute can be both visible in the channel box
+        and non-keyable, therefore, unlike :func:`hide()`, this
+        method does not alter the keyable state of the attribute.
+
+        """
+
         self.channelBox = True
 
     def type(self):
@@ -1838,10 +2041,12 @@ class Plug(object):
         return self._mplug.attribute().apiTypeStr
 
     def path(self):
-        return self._mplug.partialName(
-            includeNodeName=True,
-            useLongNames=True,
-            useFullAttributePath=True
+        return "%s.%s" % (
+            self._node.path(), self._mplug.partialName(
+                includeNodeName=False,
+                useLongNames=True,
+                useFullAttributePath=True
+            )
         )
 
     def name(self, long=False):
@@ -1983,6 +2188,14 @@ class Plug(object):
     def node(self):
         return self._node
 
+    if ENABLE_PEP8:
+        as_double = asDouble
+        as_matrix = asMatrix
+        as_transformation_matrix = asTransformationMatrix
+        as_euler_rotation = asEulerRotation
+        as_quaternion = asQuaternion
+        channel_box = channelBox
+
 
 class TransformationMatrix(om.MTransformationMatrix):
     def translation(self, space=None):
@@ -2004,6 +2217,10 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or kTransform
         return super(TransformationMatrix, self).setScale(seq, space)
 
+    if ENABLE_PEP8:
+        set_translation = setTranslation
+        set_Scale = setScale
+
 
 class Vector(om.MVector):
     """Maya's MVector
@@ -2019,6 +2236,30 @@ class Vector(om.MVector):
 
 
 def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
+    """Tuple of points to MObject suitable for nurbsCurve-typed data
+
+    Arguments:
+        points (tuple): (x, y, z) tuples per point
+        degree (int, optional): Defaults to 1 for linear
+        form (int, optional): Defaults to MFnNurbsCurve.kOpen,
+            also available kClosed
+
+    Example:
+        Create a new nurbs curve like this.
+
+        >>> data = NurbsCurveData(
+        ...     points=(
+        ...         (0, 0, 0),
+        ...         (0, 1, 0),
+        ...         (0, 2, 0),
+        ...     ))
+        ...
+        >>> parent = createNode("transform")
+        >>> shape = createNode("nurbsCurve", parent=parent)
+        >>> shape["cached"] = data
+
+    """
+
     degree = min(3, max(1, degree))
 
     cvs = om1.MPointArray()
@@ -2326,7 +2567,7 @@ def _python_to_mod(value, plug, mod):
         for index, value in enumerate(value):
             _python_to_mod(value, plug[index], mod)
 
-    elif isinstance(value, str):
+    elif isinstance(value, string_types):
         mod.newPlugValueString(mplug, value)
 
     elif isinstance(value, int):
@@ -2533,23 +2774,23 @@ class _BaseModifier(object):
     Type = _MDGModifier
 
     def __enter__(self):
-        self._modifier = self.Type()
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
-        self._modifier.doIt()
-        self._modifier.isDone = True
-
-        if self._undoable:
-            commit(self._modifier.undoIt, self._modifier.doIt)
+        self.doIt()
 
     def __init__(self, undoable=True, interesting=True):
+        self._modifier = self.Type()
         self._undoable = undoable
         self._interesting = interesting
         super(_BaseModifier, self).__init__()
 
     def doIt(self):
+        if self._undoable:
+            commit(self._modifier.undoIt, self._modifier.doIt)
+
         self._modifier.doIt()
+        self._modifier.isDone = True
 
     def undoIt(self):
         self._modifier.undoIt()
@@ -2578,11 +2819,7 @@ class _BaseModifier(object):
 
     rename = renameNode
 
-    def getAttr(self, node, key):
-        return node[key]
-
-    def setAttr(self, node, key, value):
-        plug = node[key]
+    def setAttr(self, plug, value):
         _python_to_mod(value, plug, self._modifier)
 
     def connect(self, plug1, plug2):
@@ -2605,10 +2842,10 @@ class DagModifier(_BaseModifier):
         >>> with DagModifier() as mod:
         ...     node1 = mod.createNode("transform")
         ...     node2 = mod.createNode("transform", parent=node1)
-        ...     mod.setAttr(node1, "translate", (1, 2, 3))
+        ...     mod.setAttr(node1["translate"], (1, 2, 3))
         ...     mod.connect(node1 + ".translate", node2 + ".translate")
         ...
-        >>> mod.getAttr(node1, "translateX")
+        >>> getAttr(node1 + ".translateX")
         1.0
         >>> node2["translate"][0]
         1.0
@@ -2624,6 +2861,36 @@ class DagModifier(_BaseModifier):
         5.0
         >>> node2["translate"][1]
         6.0
+
+    Example, without context manager:
+        >>> mod = DagModifier()
+        >>> parent = mod.createNode("transform")
+        >>> shape = mod.createNode("transform", parent=parent)
+        >>> mod.connect(parent["tz"], shape["tz"])
+        >>> mod.setAttr(parent["sx"], 2.0)
+        >>> parent["tx"] >> shape["ty"]
+        >>> parent["tx"] = 5.1
+        >>> round(shape["ty"], 1)  # Not yet created nor connected
+        0.0
+        >>> mod.doIt()
+        >>> round(shape["ty"], 1)
+        5.1
+        >>> round(parent["sx"])
+        2.0
+
+    Duplicate names are resolved, even though nodes haven't yet been created:
+        >>> _ = cmds.file(new=True, force=True)
+        >>> with DagModifier() as mod:
+        ...     node = mod.createNode("transform", name="NotUnique")
+        ...     node1 = mod.createNode("transform", name="NotUnique")
+        ...     node2 = mod.createNode("transform", name="NotUnique")
+        ...
+        >>> node.name() == "NotUnique"
+        True
+        >>> node1.name() == "NotUnique1"
+        True
+        >>> node2.name() == "NotUnique2"
+        True
 
     """
 
@@ -3430,6 +3697,8 @@ if name not in sys.modules:
 shared = sys.modules[name]
 shared.undo = None
 shared.redo = None
+shared.undos = {}
+shared.redos = {}
 
 
 def commit(undo, redo=lambda: None):
@@ -3455,19 +3724,21 @@ def commit(undo, redo=lambda: None):
     assert shared.redo is None
     assert shared.undo is None
 
-    # Temporarily store the functions at module-level,
+    # Temporarily store the functions at shared-level,
     # they are later picked up by the command once called.
-    shared.undo = undo
-    shared.redo = redo
+    shared.undo = "%x" % id(undo)
+    shared.redo = "%x" % id(redo)
+    shared.undos[shared.undo] = undo
+    shared.redos[shared.redo] = redo
 
     # Let Maya know that something is undoable
     getattr(cmds, command)()
 
 
 def install():
-    """Load this module as a plug-in
+    """Load this shared as a plug-in
 
-    Call this prior to using the module
+    Call this prior to using the shared
 
     """
 
@@ -3484,6 +3755,13 @@ def uninstall():
     # Plug-in may exist in undo queue and
     # therefore cannot be unloaded until flushed.
     cmds.flushUndo()
+
+    # Discard shared module
+    shared.undo = None
+    shared.redo = None
+    shared.undos.clear()
+    shared.redos.clear()
+    sys.modules.pop(name, None)
 
     cmds.unloadPlugin(os.path.basename(__file__))
 
@@ -3502,10 +3780,10 @@ class _apiUndo(om.MPxCommand):
         shared.redo = None
 
     def undoIt(self):
-        self.undo()
+        shared.undos[self.undo]()
 
     def redoIt(self):
-        self.redo()
+        shared.redos[self.redo]()
 
     def isUndoable(self):
         # Without this, the above undoIt and redoIt will not be called

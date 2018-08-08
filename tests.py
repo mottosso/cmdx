@@ -292,6 +292,10 @@ def test_keyable():
     node["translateX"].keyable = False
     assert_equals(node["translateX"].keyable, False)
 
+    assert_equals(node["rotate"].keyable, True)
+    node["rotate"].keyable = False
+    assert_equals(node["rotate"].keyable, False)
+
 
 def test_channelBox():
     """Plug.channelBox = True works"""

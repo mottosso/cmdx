@@ -32,8 +32,10 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
 
 - [Performance](#performance)
 - [Node and attribute reuse](#query-reduction)
+- [Transactions](#transactions)
 - [Hashable References](#hashable-references)
 - [Signals](#signals)
+- [PEP8 Dual Syntax](#pep8-dual-syntax)
 
 <br>
 <br>
@@ -55,13 +57,17 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
 - [Node Types](#node-types)
 - [Node Creation](#node-creation)
 - [Attribute Query and Assignment](#attribute-query-and-assignment)
+  - [Meta Attributes](#meta-attributes)
+  - [Arrays](#arrays)
   - [Cached](#cached)
   - [Time](#time)
   - [Native Types](#native-types)
 - [Connections](#connections)
 - [Iterators](#iterators)
+- [Transactions](#transactions)
 - [Modifier](#modifier)
 - [Signals](#signals)
+- [PEP8 Dual Syntax](#pep8-dual-syntax)
 - [Comparison](#comparison)
   - [MEL](#mel)
   - [PyMEL](#pymel)
@@ -119,13 +125,13 @@ It *may* run on older versions too, but those are not being tested. To bypass th
 Familiar and fast.
 
 ```python
-import cmdx
-joe = cmdx.createNode("transform", name="Joe")
-benji = cmdx.createNode("transform", name="myChild", parent=joe)
-cmdx.addAttr(joe, longName="myAttr", defaultValue=5.0, attributeType="double")
-cmdx.connectAttr(joe + ".myAttr", benji + ".tx")
-cmdx.setAttr(joe + ".myAttr", 5)
-cmdx.delete(joe)
+>>> import cmdx
+>>> joe = cmdx.createNode("transform", name="Joe")
+>>> benji = cmdx.createNode("transform", name="myChild", parent=joe)
+>>> cmdx.addAttr(joe, longName="myAttr", defaultValue=5.0, attributeType="double")
+>>> cmdx.connectAttr(joe + ".myAttr", benji + ".tx")
+>>> cmdx.setAttr(joe + ".myAttr", 5)
+>>> cmdx.delete(joe)
 ```
 
 **Modern**
@@ -133,13 +139,13 @@ cmdx.delete(joe)
 Faster and most concise.
 
 ```python
-import cmdx
-joe = cmdx.createNode("transform", name="Joe")
-benji = cmdx.createNode("transform", name="myChild", parent=joe)
-joe["myAttr"] = cmdx.Double(default=5.0)
-joe["myAttr"] >> benji["translateX"]
-joe["tx"] = 5
-cmdx.delete(joe)
+>>> import cmdx
+>>> joe = cmdx.createNode("transform", name="Joe")
+>>> benji = cmdx.createNode("transform", name="myChild", parent=joe)
+>>> joe["myAttr"] = cmdx.Double(default=5.0)
+>>> joe["myAttr"] >> benji["translateX"]
+>>> joe["tx"] = 5
+>>> cmdx.delete(joe)
 ```
 
 **Commands**
@@ -215,6 +221,7 @@ This overhead can be bypassed with [Rogue Mode](#cmdx_rogue_mode).
 To confirm this for yourself, run the below in your Script Editor; it should take about 30-60 seconds depending on your hardware.
 
 ```python
+# untested
 import time
 import timeit
 import cmdx
@@ -266,26 +273,28 @@ Any node created or queried via `cmdx` is kept around until the next time the sa
 For example, when `encode`d or returned as children of another node.
 
 ```python
-node = cmdx.createNode("transform", name="parent")
-assert cmdx.encode("|parent") is node
+>>> node = cmdx.createNode("transform", name="parent")
+>>> cmdx.encode("|parent") is node
+True
 ```
 
 This property survives function calls too.
 
 ```python
-def function1():
-  return cmdx.createNode("transform", name="parent")
-
-def function2():
-  return cmdx.encode("|parent")
-
-assert function1() is function2()
+>>> def function1():
+...   return cmdx.createNode("transform", name="parent")
+...
+>>> def function2():
+...   return cmdx.encode("|parent")
+...
+>>> _ = cmds.file(new=True, force=True)
+>>> function1() is function2()
+True
 ```
 
 In fact, regardless of how a node is queried, there is only ever a single instance in `cmdx` of it. This is great for repeated queries to nodes and means nodes can contain an additional level of state, beyond the one found in Maya. A property which is used for, amongst other things, optimising *plug reuse*.
 
 #### Plug Reuse
-
 
 ```python
 node = cmdx.createNode("transform")
@@ -311,18 +320,13 @@ With module level caching, a repeated query to either an `MObject` or `MPlug` is
 In addition to reusing things internally, you are able to re-use things yourself by using nodes as e.g. keys to dictionaries.
 
 ```python
-from qtmonte.vendor import cmdx
-node = cmdx.createNode("transform")
-
-myNodes = {
-  node: {"my": "data"}
-}
-
-for node in cmds.ls():
-    node = cmdx.encode(node)
-
-    if node in myNodes:
-        print("Got %s" % node)
+>>> _ = cmds.file(new=True, force=True)
+>>> node = cmdx.createNode("animCurveTA")
+>>> nodes = {node: {"key": "value"}}
+>>> for node in cmdx.ls(type="animCurveTA"):
+...    assert node in nodes
+...    assert nodes[node]["key"] == "value"
+...
 ```
 
 The hash of the node is guaranteed unique, and the aforementioned reuse mechanism ensure that however a node is referenced the same reference is returned.
@@ -332,28 +336,26 @@ The hash of the node is guaranteed unique, and the aforementioned reuse mechanis
 Here are some useful utilities that leverages this hash.
 
 ```python
-import cmdx
-node = cmdx.createNode("transform")
-node = cmdx.fromHash(node.hashCode)
-node = cmdx.fromHex(node.hex)
+>>> import cmdx
+>>> node = cmdx.createNode("transform")
+>>> node == cmdx.fromHash(node.hashCode)
+True
+>>> node == cmdx.fromHex(node.hex)
+True
 ```
 
 These tap directly into the dictionary used to maintain references to each `cmdx.Node`. The `hashCode` is the one from `maya.api.OpenMaya.MObjectHandle.hashCode()`, which means that if you have an object from the Maya Python API 2.0, you can fetch the `cmdx` equivalent of it by passing its `hashCode`.
 
-```python
-from maya.api import OpenMaya as om
-import cmdx
-fn = om.MDagNode()
-mobj = fn.create("transform")
-handle = om.MObjectHandle()
-node = cmdx.fromHash(handle.hashCode())
-```
-
 However keep in mind that you can only retrieve nodes that have previously been access by `cmdx`.
 
 ```python
-cmdx.fromHash(handle.hashCode())
-# Traceback: KeyError
+>>> from maya.api import OpenMaya as om
+>>> fn = om.MFnDagNode()
+>>> mobj = fn.create("transform")
+>>> handle = om.MObjectHandle(mobj)
+>>> assert_raises(KeyError, cmdx.fromHash, handle.hashCode())
+>>> node = cmdx.Node(mobj)
+>>> node = cmdx.fromHash(handle.hashCode())
 ```
 
 A more robust alternative is to instead pass the `MObject` directly.
@@ -678,6 +680,37 @@ For familiarity, an attribute may also be accessed by string concatenation.
 attr = node + ".tx"
 ```
 
+#### Meta Attributes
+
+Attributes about attributes, such as `keyable` and `channelBox` are native Python properties.
+
+```python
+import cmdx
+node = cmdx.createNode("transform")
+node["translateX"].keyable = False
+node["translateX"].channelBox = True
+```
+
+These also have convenience methods for use where it makes sense for readability.
+
+```python
+# Hide from Channel Box
+node["translateX"].hide()
+```
+
+#### Arrays
+
+Working with arrays is akin to the native Python list.
+
+```python
+node = createNode("transform")
+node["myArray"] = Double(array=True)
+node["myArray"].append(1.0)  # Explicit append
+node["myArray"].extend([2.0, 3.0])  # Explicit extend
+node["myArray"] += 6.0  # Append via __iadd__
+node["myArray"] += [1.1, 2.3, 999.0]  # Append multiple values
+```
+
 #### Cached
 
 Sometimes, a value is queried when you know it hasn't changed since your last query. By passing `cmdx.Cached` to any attribute, the previously computed value is returned, without the round-trip the the Maya API.
@@ -925,15 +958,28 @@ assert a.child() == b
 
 <br>
 
+### Transactions
+
+`cmdx` supports the notion of an "atomic commit", similar to what is commonly found in database software. It means to perform a series of commands as though they were one.
+
+The differences between an atomic and non-atomic commit with regards to `cmdx` is the following.
+
+1. Commands within an atomic commit are not executed until committed as one
+2. An atomic commit is undoable as one
+
+(1) means that if a series of commands where to be "queued", but not committed, then the Maya scenegraph remains unspoiled. It also means that executing commands is faster, as they are merely added to the end of a series of commands that will at some point be executed by Maya, which means that if one of those commands should fail, you will know without having to wait for Maya to spend time actually performing any of the actions.
+
+<br>
+
 ### Modifier
 
 `cmdx` is designed to make bulk operations fast, such as making exporters, importers and rigging frameworks. It is not ideal for interactive tools.
 
-However, in order to smooth out the line between what is a bulk operation and what is interactive, `cmdx` provides the `Modifier` which is a fast alternative to `cmds` that *retains undo*.
+However, in order to smooth out the line between what is a bulk operation and what is interactive, `cmdx` provides the `Modifier` which is a fast alternative to `cmds` that also *retains undo*.
 
 For example.
 
-```pytyhon
+```python
 import cmdx
 
 with cmdx.Modifier() as mod:
@@ -958,6 +1004,19 @@ with cmdx.Modifier() as mod:
 
 This makes it easy to move a block of code into a modifier without changing things around. Perhaps to test performance, or to figure out whether undo support is necessary.
 
+##### Limitations
+
+The modifier is quite limited in what features it provides; in general, it can only *modify* the scenegraph, it cannot query it.
+
+1. It cannot read attributes
+2. It cannot set complex attribute types, such as meshes or nurbs curves
+3. It cannot query a future hierarchy, such as asking for the parent or children of a newly created node
+
+Furthermore, there are a few limitations with regards to modern syntax.
+
+1. It cannot connect an existing attribute to one on a newly node, e.g. `existing["tx"] >> new["tx"]`
+2. ...
+
 <br>
 
 ### Signals
@@ -973,6 +1032,32 @@ def onDestroyed():
 node = cmdx.createNode("transform")
 node.onDestroyed.append(onDestroyed)
 ```
+
+<br>
+
+### PEP8 Dual Syntax
+
+> WARNING: Experimental
+
+Write in either Maya-style `mixedCase` or PEP8-compliant `snake_case` where it makes sense to do so. Every member of `cmdx` and its classes offer a `snake_case` alternative.
+
+**Example**
+
+```python
+import cmdx
+
+# Maya-style
+cmdx.createNode("transform")
+
+# PEP8
+cmdx.create_node("transform")
+```
+
+Functionalliy identical, the only difference is in the name.
+
+**When to use**
+
+Consistency aids readability and comprehension. When a majority of your application is written using `mixedCase` it makes sense to use it with `cmdx` as well. And vice versa.
 
 <br>
 

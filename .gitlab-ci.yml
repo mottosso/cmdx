@@ -14,8 +14,9 @@ tests:maya2015:
     - mayapy --version
     - echo $CI_PIPELINE_ID
     - echo $CI_JOB_ID
-    - mayapy _runtests.py
-    - mayapy _builddocs.py
+    - mayapy run_tests.py
+    - mayapy build_livedocs.py && mayapy test_docs.py
+    - mayapy build_docs.py
 
 tests:maya2017:
   stage: test
@@ -33,5 +34,5 @@ tests:maya2017:
     - mayapy --version
     - echo $CI_PIPELINE_ID
     - echo $CI_JOB_ID
-    - mayapy _runtests.py
-    - mayapy _builddocs.py
+    - mayapy run_tests.py
+    - mayapy build_docs.py
