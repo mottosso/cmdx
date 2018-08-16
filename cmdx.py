@@ -1383,6 +1383,10 @@ class ObjectSet(Node):
 
     """
 
+    @protected
+    def shortestPath(self):
+        return self.name()
+
     def __iter__(self):
         for member in self.members():
             yield member
@@ -3331,6 +3335,8 @@ class _AbstractAttribute(dict):
                  storable=None,
                  keyable=None,
                  hidden=None,
+                 min=None,
+                 max=None,
                  channelBox=None,
                  array=False,
                  connectable=True):
@@ -3349,6 +3355,8 @@ class _AbstractAttribute(dict):
         self["channelBox"] = channelBox or self.ChannelBox
         self["array"] = array or self.Array
         self["connectable"] = connectable or self.Connectable
+        self["min"] = min
+        self["max"] = max
 
         # Filled in on creation
         self["mobject"] = None
@@ -3397,6 +3405,12 @@ class _AbstractAttribute(dict):
         self.Fn.channelBox = self["channelBox"]
         self.Fn.keyable = self["keyable"]
         self.Fn.array = self["array"]
+
+        if self["min"] is not None:
+            self.Fn.setMin(self["min"])
+
+        if self["max"] is not None:
+            self.Fn.setMax(self["max"])
 
         if self["label"] is not None:
             self.Fn.setNiceNameOverride(self["label"])
@@ -3690,7 +3704,7 @@ command = "_apiUndo_%s" % __version__.replace(".", "_")
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
-name = "_cmdxShared"
+name = "_cmdxShared_%s" % __name__.replace(".", "_")
 if name not in sys.modules:
     sys.modules[name] = types.ModuleType(name)
 
@@ -3721,8 +3735,11 @@ def commit(undo, redo=lambda: None):
     # NOTE: This assumes calls to `commit` can only be done
     # from a single thread, which should already be the case
     # given that Maya's API is not threadsafe.
-    assert shared.redo is None
-    assert shared.undo is None
+    try:
+        assert shared.redo is None
+        assert shared.undo is None
+    except AssertionError:
+        log.debug("%s has a problem with undo" % __name__)
 
     # Temporarily store the functions at shared-level,
     # they are later picked up by the command once called.
