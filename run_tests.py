@@ -3,15 +3,13 @@
 import os
 import sys
 import nose
+import flaky.flaky_nose_plugin as flaky
 
 if __name__ == "__main__":
     print("Initialising Maya..")
     from maya import standalone, cmds
     standalone.initialize()
     cmds.loadPlugin("matrixNodes", quiet=True)
-
-    os.environ["CMDX_ENABLE_NODE_REUSE"] = "1"
-    os.environ["CMDX_ENABLE_PLUG_REUSE"] = "1"
 
     argv = sys.argv[:]
     argv.extend([
@@ -30,7 +28,7 @@ if __name__ == "__main__":
         "cmdx.py",
     ])
 
-    nose.main(argv=argv)
+    nose.main(argv=argv, addplugins=[flaky.FlakyPlugin()])
 
     if os.getenv("TRAVIS_JOB_ID"):
         import coveralls

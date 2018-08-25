@@ -35,7 +35,7 @@ ROGUE_MODE = not SAFE_MODE and bool(os.getenv("CMDX_ROGUE_MODE"))
 # Increase performance by not bothering to free up unused memory
 MEMORY_HOG_MODE = not SAFE_MODE and bool(os.getenv("CMDX_MEMORY_HOG_MODE"))
 
-ENABLE_PEP8 = bool(os.getenv("CMDX_PEP8"))
+ENABLE_PEP8 = True
 
 # Support undo/redo
 ENABLE_UNDO = not SAFE_MODE
@@ -823,7 +823,7 @@ class Node(object):
 
         del self[key]
 
-    def dump(self, detail=0):
+    def dump(self, ignore_error=True):
         """Return dictionary of all attributes
 
         Example:
@@ -846,10 +846,13 @@ class Node(object):
 
             try:
                 value = Plug(self, plug).read()
-            except RuntimeError:
+            except (RuntimeError, TypeError):
                 # TODO: Support more types of attributes,
                 # such that this doesn't need to happen.
                 value = None
+
+                if not ignore_error:
+                    raise
 
             attrs[plug.name()] = value
 
@@ -1044,6 +1047,24 @@ class DagNode(Node):
         return self._fn.fullPathName()
 
     @protected
+    def dagPath(self):
+        """Return a om.MDagPath for this node
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> parent = createNode("transform", name="Parent")
+            >>> child = createNode("transform", name="Child", parent=parent)
+            >>> path = child.dagPath()
+            >>> str(path)
+            'Child'
+            >>> str(path.pop())
+            'Parent'
+
+        """
+
+        return om.MDagPath.getAPathTo(self._mobject)
+
+    @protected
     def shortestPath(self):
         """Return shortest unique path to node
 
@@ -1128,9 +1149,44 @@ class DagNode(Node):
         return self.__class__(root.node()) if root else self
 
     def transform(self, space=Object, time=None):
-        """Return MTransformationMatrix"""
+        """Return TransformationMatrix"""
         plug = self["worldMatrix"][0] if space == World else self["matrix"]
         return TransformationMatrix(plug.asMatrix(time))
+
+    def mapFrom(self, other, time=None):
+        """Return TransformationMatrix of `other` relative self
+
+        Example:
+            >>> a = createNode("transform")
+            >>> b = createNode("transform")
+            >>> a["translate"] = (0, 5, 0)
+            >>> b["translate"] = (0, -5, 0)
+            >>> delta = a.mapFrom(b)
+            >>> delta.translation()[1]
+            10.0
+            >>> a = createNode("transform")
+            >>> b = createNode("transform")
+            >>> a["translate"] = (0, 5, 0)
+            >>> b["translate"] = (0, -15, 0)
+            >>> delta = a.mapFrom(b)
+            >>> delta.translation()[1]
+            20.0
+
+        """
+
+        a = self["worldMatrix"][0].asMatrix(time)
+        b = other["worldInverseMatrix"][0].asMatrix(time)
+        delta = a * b
+        return TransformationMatrix(delta)
+
+    def mapTo(self, other, time=None):
+        """Return TransformationMatrix of self relative `other`
+
+        See :func:`mapFrom` for examples.
+
+        """
+
+        return other.mapFrom(self, time)
 
     # Alias
     root = assembly
@@ -1363,6 +1419,9 @@ class DagNode(Node):
     if ENABLE_PEP8:
         shortest_path = shortestPath
         add_child = addChild
+        dag_path = dagPath
+        map_from = mapFrom
+        map_to = mapTo
 
 
 class ObjectSet(Node):
@@ -1647,6 +1706,8 @@ class Plug(object):
                 self.append(entry)
         else:
             self.append(other)
+
+        return self
 
     def __str__(self):
         """Return value as str
@@ -2223,7 +2284,7 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     if ENABLE_PEP8:
         set_translation = setTranslation
-        set_Scale = setScale
+        set_scale = setScale
 
 
 class Vector(om.MVector):
@@ -2693,6 +2754,15 @@ def asHex(mobj):
     return "%x" % asHash(mobj)
 
 
+if ENABLE_PEP8:
+    from_hash = fromHash
+    from_hex = fromHex
+    to_hash = toHash
+    to_hex = toHex
+    as_hash = asHash
+    as_hex = asHex
+
+
 def clear():
     """Remove all reused nodes"""
     Singleton._instances.clear()
@@ -2832,6 +2902,14 @@ class _BaseModifier(object):
     def disconnect(self, plug1, plug2):
         plug1 // plug2
 
+    if ENABLE_PEP8:
+        do_it = doIt
+        undo_it = undoIt
+        create_node = createNode
+        delete_node = deleteNode
+        rename_node = renameNode
+        set_attr = setAttr
+
 
 class DGModifier(_BaseModifier):
     """Modifier for DG nodes"""
@@ -2912,6 +2990,9 @@ class DagModifier(_BaseModifier):
     def parent(self, node, parent=None):
         parent = parent._mobject if parent is not None else None
         self._modifier.reparentNode(node._mobject, parent)
+
+    if ENABLE_PEP8:
+        create_node = createNode
 
 
 def ls(*args, **kwargs):
