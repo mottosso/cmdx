@@ -376,3 +376,69 @@ def test_superclass():
     mobj = om.MFnDependencyNode().create("polySplit")
     node = cmdx.DagNode(mobj)
     assert isinstance(node, cmdx.Node)
+
+
+def test_modifier_badtype():
+    """Modifier can't create non-existent types"""
+
+    mod = cmdx.DagModifier()
+
+    # This is the only call that throws an error
+    # immediately as it is called. Great!
+    assert_raises(TypeError, mod.createNode, "doesntExist")
+
+
+def test_modifier_existing_connection():
+    """Modifier fails on connecting to already-connected attribute"""
+
+    mod = cmdx.DagModifier()
+    node = mod.createNode("transform")
+    mod.connect(node["translateX"], node["translateY"])
+    mod.connect(node["translateZ"], node["translateY"], force=False)
+
+    assert_raises(cmdx.ModifierError, mod.doIt)
+
+
+def test_modifier_first_error():
+    """Modifier throws only the first encountered error"""
+
+    mod = cmdx.DagModifier()
+    node = mod.createNode("transform")
+    mod.connect(node["translateX"], node["translateY"])
+    mod.setAttr(node["translateY"], 5.0)
+
+    assert_raises(cmdx.ModifierError, mod.doIt)
+
+
+@with_setup(new_scene)
+def test_modifier_atomicity():
+    """Modifier rolls back changes on failure"""
+
+    mod = cmdx.DagModifier()
+    node = mod.createNode("transform", name="UniqueName")
+    mod.connect(node["translateX"], node["translateY"])
+    mod.setAttr(node["translateY"], 5.0)
+
+    assert_raises(cmdx.ModifierError, mod.doIt)
+
+    # Node got created, even though
+    assert "UniqueName" not in cmds.ls()
+
+
+def test_modifier_history():
+    """Modifiers provide record of history on failure"""
+
+    mod = cmdx.DagModifier()
+    node = mod.createNode("transform", name="UniqueName")
+    mod.connect(node["translateX"], node["translateY"])
+    mod.setAttr(node["translateY"], 5.0)
+
+    try:
+        mod.doIt()
+    except cmdx.ModifierError as e:
+        pass
+
+    tasks = [task[0] for task in e.history]
+    assert_equals(tasks[0], "createNode")
+    assert_equals(tasks[1], "connect")
+    assert_equals(tasks[2], "setAttr")

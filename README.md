@@ -969,13 +969,24 @@ The differences between an atomic and non-atomic commit with regards to `cmdx` i
 
 (1) means that if a series of commands where to be "queued", but not committed, then the Maya scenegraph remains unspoiled. It also means that executing commands is faster, as they are merely added to the end of a series of commands that will at some point be executed by Maya, which means that if one of those commands should fail, you will know without having to wait for Maya to spend time actually performing any of the actions.
 
+**Known Issues**
+
+It's not all roses; in order of severity:
+
+1. Errors are not known until finalisation, which can complicate debugging
+1. Errors are generic; they don't mention what actually happened and only says `RuntimeError: (kFailure): Unexpected Internal Failure # `
+1. Not all attribute types can be set using a modifier
+1. Properties of future nodes are not known until finalisation, such as its name, parent or children
+
 <br>
 
 ### Modifier
 
-`cmdx` is designed to make bulk operations fast, such as making exporters, importers and rigging frameworks. It is not ideal for interactive tools.
+Modifiers in `cmdx` do what Maya's native Modifiers do, and more.
 
-However, in order to smooth out the line between what is a bulk operation and what is interactive, `cmdx` provides the `Modifier` which is a fast alternative to `cmds` that also *retains undo*.
+1. **Automatically undoable** Like `cmds`
+2. **Transactional** Changes are automatically rolled back on error, making every modifier atomic
+3. **Debuggable** Maya's native modifier throws an error without including what or where it happened. `cmdx` provides detailed diagnostics of what was supposed to happen, what happened, attempts to figure out why and what line number it occurred on.
 
 For example.
 
@@ -996,8 +1007,18 @@ If you prefer, modern syntax still works here.
 
 ```python
 with cmdx.Modifier() as mod:
-    parent = mod.createNode("transform", name="MyParemt")
+    parent = mod.createNode("transform", name="MyParent")
     child = mod.createNode("transform", parent=parent)
+    parent["translate"] = (1, 2, 3)
+    parent["rotate"] >> parent["rotate"]
+```
+
+And PEP8.
+
+```python
+with cmdx.Modifier() as mod:
+    parent = mod.create_node("transform", name="MyParent")
+    child = mod.create_node("transform", parent=parent)
     parent["translate"] = (1, 2, 3)
     parent["rotate"] >> parent["rotate"]
 ```
@@ -1037,9 +1058,7 @@ node.onDestroyed.append(onDestroyed)
 
 ### PEP8 Dual Syntax
 
-> WARNING: Experimental
-
-Write in either Maya-style `mixedCase` or PEP8-compliant `snake_case` where it makes sense to do so. Every member of `cmdx` and its classes offer a `snake_case` alternative.
+Write in either Maya-style `mixedCase` or PEP8-compliant `snake_case` where it makes sense to do so. Every member of `cmdx` and its classes offer a functionally identical `snake_case` alternative.
 
 **Example**
 
@@ -1052,8 +1071,6 @@ cmdx.createNode("transform")
 # PEP8
 cmdx.create_node("transform")
 ```
-
-Functionalliy identical, the only difference is in the name.
 
 **When to use**
 

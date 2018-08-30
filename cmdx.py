@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import time
+import math
 import types
 import logging
 import traceback
@@ -56,6 +57,7 @@ if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
 
 self = sys.modules[__name__]
+self.installed = False
 log = logging.getLogger("cmdx")
 
 # Accessible via `cmdx.NodeReuseCount` etc.
@@ -85,6 +87,31 @@ First = 0
 Last = -1
 
 history = dict()
+
+
+class ModifierError(RuntimeError):
+    def __init__(self, history):
+        tasklist = list()
+        for task in history:
+            cmd, args, kwargs = task
+            args = list(args)
+
+            for index, arg in enumerate(args[:]):
+                if isinstance(arg, Plug):
+                    args[index] = arg.path()
+
+            tasklist += [
+                "%s(%s)" % (cmd, ", ".join(map(repr, args)))
+            ]
+
+        message = (
+            "An unexpected internal failure occurred, "
+            "these tasks were attempted:\n- " +
+            "\n- ".join(tasklist)
+        )
+
+        self.history = history
+        super(ModifierError, self).__init__(message)
 
 
 def withTiming(text="{func}() {time:.2f} ns"):
@@ -448,7 +475,7 @@ class Node(object):
         if not getattr(self._modifier, "isDone", True):
 
             # Only a few attribute types are supported by a modifier
-            if _python_to_mod(value, plug, self._modifier):
+            if _python_to_mod(value, plug, self._modifier._modifier):
                 return
             else:
                 log.warning(
@@ -974,7 +1001,7 @@ class Node(object):
 
     def rename(self, name):
         if not getattr(self._modifier, "isDone", True):
-            return self._modifier.rename(self._mobject, name)
+            return self._modifier.rename(self, name)
 
         mod = om.MDGModifier()
         mod.renameNode(self._mobject, name)
@@ -1771,6 +1798,12 @@ class Plug(object):
             True
             >>> a["myArray"][1] in list(a["myArray"])
             True
+            >>> for single in node["visibility"]:
+            ...   print(single)
+            ...
+            True
+            >>> node = createNode("wtAddMatrix")
+            >>> node["wtMatrix"][0]["weightIn"] = 1.0
 
         """
 
@@ -1783,7 +1816,12 @@ class Plug(object):
                 yield self[index]
 
         else:
-            for value in self.read():
+            values = self.read()
+
+            # Facilitate single-value attributes
+            values = values if isinstance(values, (tuple, list)) else [values]
+
+            for value in values:
                 yield value
 
     def __getitem__(self, index):
@@ -1804,24 +1842,43 @@ class Plug(object):
 
         """
 
-        # Support backwards-indexing
-        if index < 0:
-            index = self.count() - abs(index)
-
         cls = self.__class__
 
-        if self._mplug.isArray:
-            item = self._mplug.elementByLogicalIndex(index)
-            return cls(self._node, item, self._unit)
+        if isinstance(index, int):
+            # Support backwards-indexing
+            if index < 0:
+                index = self.count() - abs(index)
 
-        elif self._mplug.isCompound:
-            item = self._mplug.child(index)
-            return cls(self._node, item, self._unit)
+            if self._mplug.isArray:
+                item = self._mplug.elementByLogicalIndex(index)
+                return cls(self._node, item, self._unit)
 
-        else:
-            raise TypeError(
-                "%s does not support indexing" % self.path()
-            )
+            elif self._mplug.isCompound:
+                item = self._mplug.child(index)
+                return cls(self._node, item, self._unit)
+
+            else:
+                raise TypeError(
+                    "%s does not support indexing" % self.path()
+                )
+
+        elif isinstance(index, string_types):
+            # Compound attributes have no equivalent
+            # to "MDependencyNode.findPlug()" and must
+            # be searched by hand.
+            if self._mplug.isCompound:
+                for child in range(self._mplug.numChildren()):
+                    child = self._mplug.child(child)
+                    _, name = child.name().rsplit(".", 1)
+
+                    if index == name:
+                        return cls(self._node, child)
+
+            else:
+                raise TypeError("'%s' is not a compound attribute"
+                                % self.path())
+
+            raise ExistError("'%s' was not found" % index)
 
     def __setitem__(self, index, value):
         """Write to child of array or compound plug
@@ -2162,7 +2219,7 @@ class Plug(object):
 
     def connect(self, other, force=True):
         if not getattr(self._modifier, "isDone", True):
-            return self._modifier.connect(self._mplug, other._mplug)
+            return self._modifier.connect(self, other, force)
 
         mod = om.MDGModifier()
 
@@ -2608,7 +2665,14 @@ def _python_to_plug(value, plug):
 
 
 def _python_to_mod(value, plug, mod):
-    """Convert `value` into a suitable equivalent for om.MDGModifier"""
+    """Convert `value` into a suitable equivalent for om.MDGModifier
+
+    Arguments:
+        value (object): Value of any type to write into modifier
+        plug (Plug): Plug within which to write value
+        mod (om.MDGModifier): Modifier to use for writing it
+
+    """
 
     mplug = plug._mplug
 
@@ -2763,6 +2827,11 @@ if ENABLE_PEP8:
     as_hex = asHex
 
 
+# Helpful for euler rotations
+degrees = math.degrees
+radians = math.radians
+
+
 def clear():
     """Remove all reused nodes"""
     Singleton._instances.clear()
@@ -2828,24 +2897,30 @@ def decode(node):
         return node.name()
 
 
-# The original class does not support adding
-# members to self at run-time.
-class _MDGModifier(om.MDGModifier):
-    def __init__(self, *args, **kwargs):
-        super(_MDGModifier, self).__init__(*args, **kwargs)
-        self.isDone = False
+def record_history(func):
 
+    @wraps(func)
+    def decorator(self, *args, **kwargs):
+        self._history.append((func.__name__, args, kwargs))
+        return func(self, *args, **kwargs)
 
-class _MDagModifier(om.MDagModifier):
-    def __init__(self, *args, **kwargs):
-        super(_MDagModifier, self).__init__(*args, **kwargs)
-        self.isDone = False
+    return decorator
 
 
 class _BaseModifier(object):
-    """Interactively edit an existing scenegraph with support for undo/redo"""
+    """Interactively edit an existing scenegraph with support for undo/redo
 
-    Type = _MDGModifier
+    Arguments:
+        undoable (bool, optional): Put undoIt on the undo queue
+        interesting (bool, optional): New nodes should appear
+            in the channelbox
+        debug (bool, optional): Include additional debug data,
+            at the expense of performance
+        atomic (bool, optional): Automatically rollback changes on failure
+
+    """
+
+    Type = om.MDGModifier
 
     def __enter__(self):
         return self
@@ -2853,54 +2928,104 @@ class _BaseModifier(object):
     def __exit__(self, exc_type, exc_value, tb):
         self.doIt()
 
-    def __init__(self, undoable=True, interesting=True):
-        self._modifier = self.Type()
-        self._undoable = undoable
-        self._interesting = interesting
+    def __init__(self,
+                 undoable=True,
+                 interesting=True,
+                 debug=True,
+                 atomic=True):
         super(_BaseModifier, self).__init__()
 
+        self._modifier = self.Type()
+        self._history = list()
+        self.isDone = False
+        self._opts = {
+            "undoable": undoable,
+            "interesting": interesting,
+            "debug": debug,
+            "atomic": atomic,
+        }
+
     def doIt(self):
-        if self._undoable:
+        if self._opts["undoable"]:
             commit(self._modifier.undoIt, self._modifier.doIt)
 
-        self._modifier.doIt()
-        self._modifier.isDone = True
+        try:
+            self._modifier.doIt()
+
+        except RuntimeError:
+
+            # Rollback changes
+            if self._opts["atomic"]:
+                self.undoIt()
+
+            raise ModifierError(self._history)
+
+        self.isDone = True
 
     def undoIt(self):
         self._modifier.undoIt()
 
+    @record_history
     def createNode(self, type, name=None):
-        mobj = self._modifier.createNode(type)
+        try:
+            mobj = self._modifier.createNode(type)
+        except TypeError:
+            raise TypeError("'%s' is not a valid node type" % type)
 
         if name is not None:
             self._modifier.renameNode(mobj, name)
 
-        node = Node(mobj, exists=False, modifier=self._modifier)
+        node = Node(mobj, exists=False, modifier=self)
 
-        if not self._interesting:
+        if not self._opts["interesting"]:
             plug = node["isHistoricallyInteresting"]
             _python_to_mod(False, plug, self._modifier)
 
         return node
 
+    @record_history
     def deleteNode(self, node):
         return self._modifier.deleteNode(node._mobject)
 
     delete = deleteNode
 
+    @record_history
     def renameNode(self, node, name):
         return self._modifier.renameNode(node._mobject, name)
 
     rename = renameNode
 
+    @record_history
     def setAttr(self, plug, value):
+        if isinstance(plug, om.MPlug):
+            plug = Plug(plug.node(), plug)
+
         _python_to_mod(value, plug, self._modifier)
 
-    def connect(self, plug1, plug2):
-        plug1 >> plug2
+    @record_history
+    def connect(self, plug1, plug2, force=True):
+        if isinstance(plug1, Plug):
+            plug1 = plug1._mplug
 
+        if isinstance(plug2, Plug):
+            plug2 = plug2._mplug
+
+        if force:
+            # Disconnect any plug connected to `other`
+            for plug in plug2.connectedTo(True, False):
+                self.disconnect(plug, plug2)
+
+        self._modifier.connect(plug1, plug2)
+
+    @record_history
     def disconnect(self, plug1, plug2):
-        plug1 // plug2
+        if isinstance(plug1, Plug):
+            plug1 = plug1._mplug
+
+        if isinstance(plug2, Plug):
+            plug2 = plug2._mplug
+
+        self._modifier.disconnect(plug1, plug2)
 
     if ENABLE_PEP8:
         do_it = doIt
@@ -2914,7 +3039,7 @@ class _BaseModifier(object):
 class DGModifier(_BaseModifier):
     """Modifier for DG nodes"""
 
-    Type = _MDGModifier
+    Type = om.MDGModifier
 
 
 class DagModifier(_BaseModifier):
@@ -2976,17 +3101,23 @@ class DagModifier(_BaseModifier):
 
     """
 
-    Type = _MDagModifier
+    Type = om.MDagModifier
 
+    @record_history
     def createNode(self, type, name=None, parent=None):
         parent = parent._mobject if parent else om.MObject.kNullObj
-        mobj = self._modifier.createNode(type, parent)
+
+        try:
+            mobj = self._modifier.createNode(type, parent)
+        except TypeError:
+            raise TypeError("'%s' is not a valid node type" % type)
 
         if name is not None:
             self._modifier.renameNode(mobj, name)
 
-        return DagNode(mobj, exists=False, modifier=self._modifier)
+        return DagNode(mobj, exists=False, modifier=self)
 
+    @record_history
     def parent(self, node, parent=None):
         parent = parent._mobject if parent is not None else None
         self._modifier.reparentNode(node._mobject, parent)
@@ -3805,11 +3936,8 @@ def commit(undo, redo=lambda: None):
 
     """
 
-    if not ENABLE_UNDO:
+    if not all([self.installed, ENABLE_UNDO]):
         return
-
-    if not hasattr(cmds, command):
-        install()
 
     # Precautionary measure.
     # If this doesn't pass, odds are we've got a race condition.
@@ -3840,28 +3968,28 @@ def install():
 
     """
 
-    if not ENABLE_UNDO:
-        return
+    if ENABLE_UNDO:
+        cmds.loadPlugin(__file__, quiet=True)
 
-    cmds.loadPlugin(__file__, quiet=True)
+    self.installed = True
 
 
 def uninstall():
-    if not ENABLE_UNDO:
-        return
+    if ENABLE_UNDO:
+        # Plug-in may exist in undo queue and
+        # therefore cannot be unloaded until flushed.
+        cmds.flushUndo()
 
-    # Plug-in may exist in undo queue and
-    # therefore cannot be unloaded until flushed.
-    cmds.flushUndo()
+        # Discard shared module
+        shared.undo = None
+        shared.redo = None
+        shared.undos.clear()
+        shared.redos.clear()
+        sys.modules.pop(name, None)
 
-    # Discard shared module
-    shared.undo = None
-    shared.redo = None
-    shared.undos.clear()
-    shared.redos.clear()
-    sys.modules.pop(name, None)
+        cmds.unloadPlugin(os.path.basename(__file__))
 
-    cmds.unloadPlugin(os.path.basename(__file__))
+    self.installed = False
 
 
 def maya_useNewAPI():
