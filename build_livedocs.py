@@ -17,7 +17,8 @@ def parse(fname):
         current_block = None
         current_header = ""
 
-        for line in f:
+        for number, line in enumerate(f):
+            number += 1
 
             # Doctests are within a quadruple hashtag header.
             if line.startswith("### "):
@@ -33,7 +34,7 @@ def parse(fname):
             if line.startswith("```python"):
                 in_block = True
                 current_block = list()
-                current_block.append(current_header)
+                current_block.append(current_header + " L%d" % number)
                 blocks.append(current_block)
 
     tests = list()
