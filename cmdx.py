@@ -51,7 +51,11 @@ else:
     string_types = basestring,
 
 __version__ = "0.3.0"
-__maya_version__ = int(cmds.about(version=True))
+
+try:
+    __maya_version__ = int(cmds.about(version=True))
+except ValueError:
+    __maya_version__ = 2015  # E.g. Preview Release 95
 
 if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
@@ -3936,8 +3940,11 @@ def commit(undo, redo=lambda: None):
 
     """
 
-    if not all([self.installed, ENABLE_UNDO]):
+    if not ENABLE_UNDO:
         return
+
+    if not hasattr(cmds, command):
+        install()
 
     # Precautionary measure.
     # If this doesn't pass, odds are we've got a race condition.
