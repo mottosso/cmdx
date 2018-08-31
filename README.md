@@ -25,6 +25,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See [API Documentation](https://weightshift.io/cmdx/api/) for usage 
+- See `help()` for examples on a particular command, e.g. `help(cmdx.Node)`
 
 ### What is novel?
 
@@ -982,23 +983,23 @@ It's not all roses; in order of severity:
 
 ### Modifier
 
-Modifiers in `cmdx` do what Maya's native Modifiers do, and more.
+Modifiers in `cmdx` extend the native modifiers with these extras.
 
 1. **Automatically undoable** Like `cmds`
 2. **Transactional** Changes are automatically rolled back on error, making every modifier atomic
 3. **Debuggable** Maya's native modifier throws an error without including what or where it happened. `cmdx` provides detailed diagnostics of what was supposed to happen, what happened, attempts to figure out why and what line number it occurred on.
+4. **Name templates** Reduce character count by delegating a "theme" of names across many new nodes.
 
 For example.
 
 ```python
 import cmdx
 
-with cmdx.Modifier() as mod:
-    node1 = mod.createNode("decomposeMatrix", name="Decompose")
-    node2 = mod.createNode("transform")
-    node3 = mod.createNode("transform", parent=node2)
-    mod.connect(node2 + ".worldMatrix", node1 + ".inputMatrix")
-    mod.connect(node1 + ".outputTranslate", node3 + ".translate")
+with cmdx.DagModifier() as mod:
+    node1 = mod.createNode("transform")
+    node2 = mod.createNode("transform", parent=node1)
+    mod.connect(node1 + ".translate", node2 + ".translate")
+    mod.setAttr(node1 + ".rotate", (1, 2, 3))
 ```
 
 Now when calling `undo`, the above lines will be undone as you'd expect.
@@ -1006,7 +1007,7 @@ Now when calling `undo`, the above lines will be undone as you'd expect.
 If you prefer, modern syntax still works here.
 
 ```python
-with cmdx.Modifier() as mod:
+with cmdx.DagModifier() as mod:
     parent = mod.createNode("transform", name="MyParent")
     child = mod.createNode("transform", parent=parent)
     parent["translate"] = (1, 2, 3)
@@ -1016,11 +1017,20 @@ with cmdx.Modifier() as mod:
 And PEP8.
 
 ```python
-with cmdx.Modifier() as mod:
+with cmdx.DagModifier() as mod:
     parent = mod.create_node("transform", name="MyParent")
     child = mod.create_node("transform", parent=parent)
     parent["translate"] = (1, 2, 3)
     parent["rotate"] >> parent["rotate"]
+```
+
+Name templates look like this.
+
+```python
+with cmdx.DagModifier(template="myName_{type}"):
+  node = mod.createNode("transform")
+
+assert node.name() == "myName_transform"
 ```
 
 This makes it easy to move a block of code into a modifier without changing things around. Perhaps to test performance, or to figure out whether undo support is necessary.

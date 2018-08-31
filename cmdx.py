@@ -48,7 +48,7 @@ ENABLE_PLUG_REUSE = True
 if PY3:
     string_types = str,
 else:
-    string_types = basestring,
+    string_types = str, basestring, unicode
 
 __version__ = "0.3.0"
 
@@ -98,12 +98,6 @@ class ModifierError(RuntimeError):
         tasklist = list()
         for task in history:
             cmd, args, kwargs = task
-            args = list(args)
-
-            for index, arg in enumerate(args[:]):
-                if isinstance(arg, Plug):
-                    args[index] = arg.path()
-
             tasklist += [
                 "%s(%s)" % (cmd, ", ".join(map(repr, args)))
             ]
@@ -1288,7 +1282,15 @@ class DagNode(Node):
         other = "typeId" if isinstance(type, om.MTypeId) else "typeName"
 
         for index in range(self._fn.childCount()):
-            mobject = self._fn.child(index)
+            try:
+                mobject = self._fn.child(index)
+
+            except RuntimeError:
+                # TODO: Unsure of exactly when this happens
+                log.warning(
+                    "Child %d of %s not found, this is a bug" % (index, self)
+                )
+                raise
 
             if filter is not None and not mobject.hasFn(filter):
                 continue
@@ -2210,6 +2212,9 @@ class Plug(object):
             raise
 
     def write(self, value):
+        if not getattr(self._modifier, "isDone", True):
+            return self._modifier.setAttr(self, value)
+
         try:
             _python_to_plug(value, self)
             self._cached = value
@@ -2651,7 +2656,7 @@ def _python_to_plug(value, plug):
 
     # Native Python types
 
-    elif isinstance(value, str):
+    elif isinstance(value, string_types):
         plug._mplug.setString(value)
 
     elif isinstance(value, int):
@@ -2664,8 +2669,7 @@ def _python_to_plug(value, plug):
         plug._mplug.setBool(value)
 
     else:
-        log.debug("Unsupported Python type '%s'" % value.__class__)
-        return None
+        raise TypeError("Unsupported Python type '%s'" % value.__class__)
 
 
 def _python_to_mod(value, plug, mod):
@@ -2902,10 +2906,27 @@ def decode(node):
 
 
 def record_history(func):
-
     @wraps(func)
     def decorator(self, *args, **kwargs):
-        self._history.append((func.__name__, args, kwargs))
+        _kwargs = kwargs.copy()
+        _args = list(args)
+
+        # Don't store actual objects,
+        # to facilitate garbage collection.
+        for index, arg in enumerate(args):
+            if isinstance(arg, (Node, Plug)):
+                _args[index] = arg.path()
+            else:
+                _args[index] = repr(arg)
+
+        for key, value in kwargs.items():
+            if isinstance(value, (Node, Plug)):
+                _kwargs[key] = value.path()
+            else:
+                _kwargs[key] = repr(value)
+
+        self._history.append((func.__name__, _args, _kwargs))
+
         return func(self, *args, **kwargs)
 
     return decorator
@@ -2921,6 +2942,8 @@ class _BaseModifier(object):
         debug (bool, optional): Include additional debug data,
             at the expense of performance
         atomic (bool, optional): Automatically rollback changes on failure
+        template (str, optional): Automatically name new nodes using
+            this template
 
     """
 
@@ -2936,17 +2959,20 @@ class _BaseModifier(object):
                  undoable=True,
                  interesting=True,
                  debug=True,
-                 atomic=True):
+                 atomic=True,
+                 template=None):
         super(_BaseModifier, self).__init__()
+        self.isDone = False
 
         self._modifier = self.Type()
         self._history = list()
-        self.isDone = False
+        self._index = 1
         self._opts = {
             "undoable": undoable,
             "interesting": interesting,
             "debug": debug,
             "atomic": atomic,
+            "template": template,
         }
 
     def doIt(self):
@@ -2976,7 +3002,13 @@ class _BaseModifier(object):
         except TypeError:
             raise TypeError("'%s' is not a valid node type" % type)
 
-        if name is not None:
+        template = self._opts["template"]
+        if name or template:
+            name = (template or "{name}").format(
+                name=name or "",
+                type=type,
+                index=self._index,
+            )
             self._modifier.renameNode(mobj, name)
 
         node = Node(mobj, exists=False, modifier=self)
@@ -2985,6 +3017,7 @@ class _BaseModifier(object):
             plug = node["isHistoricallyInteresting"]
             _python_to_mod(False, plug, self._modifier)
 
+        self._index += 1
         return node
 
     @record_history
@@ -3103,6 +3136,26 @@ class DagModifier(_BaseModifier):
         >>> node2.name() == "NotUnique2"
         True
 
+    Deletion works too
+        >>> _ = cmds.file(new=True, force=True)
+        >>> mod = DagModifier()
+        >>> parent = mod.createNode("transform", name="myParent")
+        >>> child = mod.createNode("transform", name="myChild", parent=parent)
+        >>> mod.doIt()
+        >>> "myParent" in cmds.ls()
+        True
+        >>> "myChild" in cmds.ls()
+        True
+        >>> parent.child().name()
+        u'myChild'
+        >>> mod = DagModifier()
+        >>> _ = mod.delete(child)
+        >>> mod.doIt()
+        >>> parent.child() is None
+        True
+        >>> "myChild" in cmds.ls()
+        False
+
     """
 
     Type = om.MDagModifier
@@ -3116,7 +3169,13 @@ class DagModifier(_BaseModifier):
         except TypeError:
             raise TypeError("'%s' is not a valid node type" % type)
 
-        if name is not None:
+        template = self._opts["template"]
+        if name or template:
+            name = (template or "{name}").format(
+                name=name or "",
+                type=type,
+                index=self._index,
+            )
             self._modifier.renameNode(mobj, name)
 
         return DagNode(mobj, exists=False, modifier=self)
