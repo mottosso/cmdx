@@ -3920,7 +3920,7 @@ command = "_apiUndo_%s" % __version__.replace(".", "_")
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
-name = "_cmdxShared_%s" % __name__.replace(".", "_")
+name = "_cmdxShared_"
 if name not in sys.modules:
     sys.modules[name] = types.ModuleType(name)
 
@@ -3965,6 +3965,7 @@ def commit(undo, redo=lambda: None):
     shared.redos[shared.redo] = redo
 
     # Let Maya know that something is undoable
+    print(shared.undo)
     getattr(cmds, command)()
 
 
@@ -4005,6 +4006,7 @@ def maya_useNewAPI():
 
 class _apiUndo(om.MPxCommand):
     def doIt(self, args):
+        print("Committing %s to undo.." % shared.undo)
         self.undo = shared.undo
         self.redo = shared.redo
 
