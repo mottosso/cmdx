@@ -54,7 +54,7 @@ __version__ = "0.3.0"
 
 try:
     __maya_version__ = int(cmds.about(version=True))
-except ValueError:
+except (AttributeError, ValueError):
     __maya_version__ = 2015  # E.g. Preview Release 95
 
 if not IGNORE_VERSION:
