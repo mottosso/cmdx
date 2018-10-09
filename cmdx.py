@@ -11,7 +11,7 @@ import operator
 from functools import wraps
 
 from maya import cmds
-from maya.api import OpenMaya as om
+from maya.api import OpenMaya as om, OpenMayaAnim as oma
 from maya import OpenMaya as om1
 
 PY3 = sys.version_info[0] == 3
@@ -89,6 +89,11 @@ GlobalDependencyNode = om.MFnDependencyNode()
 
 First = 0
 Last = -1
+
+# Animation curve interpolation, from MFnAnimCurve::TangentType
+Stepped = 5
+Linear = 2
+Smooth = 4
 
 history = dict()
 
@@ -291,6 +296,8 @@ class Singleton(type):
             sup = DagNode
         elif mobject.hasFn(om.MFn.kSet):
             sup = ObjectSet
+        elif mobject.hasFn(om.MFn.kAnimCurve):
+            sup = AnimCurve
         else:
             sup = Node
 
@@ -665,6 +672,19 @@ class Node(object):
 
     def isLocked(self):
         return self._fn.isLocked
+
+    @property
+    def storable(self):
+        """Whether or not to save this node with the file"""
+
+        # How is this value queried?
+        return None
+
+    @storable.setter
+    def storable(self, value):
+
+        # The original function is a double negative
+        self._fn.setDoNotWrite(not bool(value))
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -1243,12 +1263,13 @@ class DagNode(Node):
         if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
 
-    def children(self, type=None, filter=om.MFn.kTransform):
+    def children(self, type=None, filter=om.MFn.kTransform, query=None):
         """Return children of node
 
         Arguments:
             type (str, optional): Return only children that match this type
             filter (int, optional): Return only children with this function set
+            query (dict, optional): Limit output to nodes with these attributes
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1296,13 +1317,24 @@ class DagNode(Node):
                 continue
 
             if not type or op(type, getattr(Fn(mobject), other)):
-                yield cls(mobject)
+                node = cls(mobject)
+
+                if query is None:
+                    yield node
+
+                elif isinstance(query, dict):
+                    if all(node[key] == value for key, value in query.items()):
+                        yield node
+
+                else:
+                    if all(key in node for key in query):
+                        yield node
 
     def child(self, type=None, filter=om.MFn.kTransform):
         return next(self.children(type, filter), None)
 
-    def shapes(self, type=None):
-        return self.children(type, kShape)
+    def shapes(self, type=None, query=None):
+        return self.children(type, kShape, query)
 
     def shape(self, type=None):
         return next(self.shapes(type), None)
@@ -1575,6 +1607,22 @@ class ObjectSet(Node):
 
             if not type or op(type, getattr(node._fn, other)):
                 yield node
+
+
+class AnimCurve(Node):
+    if __maya_version__ >= 2016:
+        def __init__(self, mobj, exists=True, modifier=None):
+            super(AnimCurve, self).__init__(mobj, exists, modifier)
+            self._fna = oma.MFnAnimCurve(mobj)
+
+        def key(self, time, value, interpolation=Linear):
+            time = om.MTime(time, om.MTime.uiUnit())
+            index = self._fna.find(time)
+
+            if index:
+                self._fna.setValue(index, value)
+            else:
+                self._fna.addKey(time, value, interpolation, interpolation)
 
 
 class Plug(object):
