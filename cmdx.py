@@ -11,7 +11,7 @@ import operator
 from functools import wraps
 
 from maya import cmds
-from maya.api import OpenMaya as om
+from maya.api import OpenMaya as om, OpenMayaAnim as oma
 from maya import OpenMaya as om1
 
 PY3 = sys.version_info[0] == 3
@@ -48,7 +48,7 @@ ENABLE_PLUG_REUSE = True
 if PY3:
     string_types = str,
 else:
-    string_types = basestring,
+    string_types = str, basestring, unicode
 
 __version__ = "0.3.0"
 
@@ -90,6 +90,11 @@ GlobalDependencyNode = om.MFnDependencyNode()
 First = 0
 Last = -1
 
+# Animation curve interpolation, from MFnAnimCurve::TangentType
+Stepped = 5
+Linear = 2
+Smooth = 4
+
 history = dict()
 
 
@@ -98,12 +103,6 @@ class ModifierError(RuntimeError):
         tasklist = list()
         for task in history:
             cmd, args, kwargs = task
-            args = list(args)
-
-            for index, arg in enumerate(args[:]):
-                if isinstance(arg, Plug):
-                    args[index] = arg.path()
-
             tasklist += [
                 "%s(%s)" % (cmd, ", ".join(map(repr, args)))
             ]
@@ -297,6 +296,8 @@ class Singleton(type):
             sup = DagNode
         elif mobject.hasFn(om.MFn.kSet):
             sup = ObjectSet
+        elif mobject.hasFn(om.MFn.kAnimCurve):
+            sup = AnimCurve
         else:
             sup = Node
 
@@ -671,6 +672,19 @@ class Node(object):
 
     def isLocked(self):
         return self._fn.isLocked
+
+    @property
+    def storable(self):
+        """Whether or not to save this node with the file"""
+
+        # How is this value queried?
+        return None
+
+    @storable.setter
+    def storable(self, value):
+
+        # The original function is a double negative
+        self._fn.setDoNotWrite(not bool(value))
 
     # Module-level branch; evaluated on import
     if ENABLE_PLUG_REUSE:
@@ -1249,7 +1263,11 @@ class DagNode(Node):
         if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
 
-    def children(self, type=None, filter=om.MFn.kTransform, contains=None):
+    def children(self,
+                 type=None,
+                 filter=om.MFn.kTransform,
+                 query=None,
+                 contains=None):
         """Return children of node
 
         All returned children are transform nodes, as specified by the
@@ -1261,6 +1279,7 @@ class DagNode(Node):
             type (str, optional): Return only children that match this type
             filter (int, optional): Return only children with this function set
             contains (str, optional): Child must have a shape of this type
+            query (dict, optional): Limit output to nodes with these attributes
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1283,6 +1302,15 @@ class DagNode(Node):
             True
             >>> a.child(contains="nurbsCurve") is None
             True
+            >>> b["myAttr"] = Double(default=5)
+            >>> a.child(query=["myAttr"]) == b
+            True
+            >>> a.child(query=["noExist"]) is None
+            True
+            >>> a.child(query={"myAttr": 5}) == b
+            True
+            >>> a.child(query={"myAttr": 1}) is None
+            True
 
         """
 
@@ -1300,21 +1328,47 @@ class DagNode(Node):
         other = "typeId" if isinstance(type, om.MTypeId) else "typeName"
 
         for index in range(self._fn.childCount()):
-            mobject = self._fn.child(index)
+            try:
+                mobject = self._fn.child(index)
+
+            except RuntimeError:
+                # TODO: Unsure of exactly when this happens
+                log.warning(
+                    "Child %d of %s not found, this is a bug" % (index, self)
+                )
+                raise
 
             if filter is not None and not mobject.hasFn(filter):
                 continue
 
             if not type or op(type, getattr(Fn(mobject), other)):
                 node = cls(mobject)
+
                 if not contains or node.shape(type=contains):
-                    yield node
+                    if query is None:
+                        yield node
 
-    def child(self, type=None, filter=om.MFn.kTransform, contains=None):
-        return next(self.children(type, filter, contains), None)
+                    elif isinstance(query, dict):
+                        try:
+                            if all(node[key] == value
+                                   for key, value in query.items()):
+                                yield node
+                        except ExistError:
+                            continue
 
-    def shapes(self, type=None):
-        return self.children(type, kShape)
+                    else:
+                        if all(key in node for key in query):
+                            yield node
+
+    def child(self,
+              type=None,
+              filter=om.MFn.kTransform,
+              query=None,
+              contains=None):
+        return next(self.children(type, filter, query, contains), None)
+
+    def shapes(self, type=None, query=None):
+        return self.children(type, kShape, query)
 
     def shape(self, type=None):
         return next(self.shapes(type), None)
@@ -1587,6 +1641,22 @@ class ObjectSet(Node):
 
             if not type or op(type, getattr(node._fn, other)):
                 yield node
+
+
+class AnimCurve(Node):
+    if __maya_version__ >= 2016:
+        def __init__(self, mobj, exists=True, modifier=None):
+            super(AnimCurve, self).__init__(mobj, exists, modifier)
+            self._fna = oma.MFnAnimCurve(mobj)
+
+        def key(self, time, value, interpolation=Linear):
+            time = om.MTime(time, om.MTime.uiUnit())
+            index = self._fna.find(time)
+
+            if index:
+                self._fna.setValue(index, value)
+            else:
+                self._fna.addKey(time, value, interpolation, interpolation)
 
 
 class Plug(object):
@@ -2241,6 +2311,9 @@ class Plug(object):
             raise
 
     def write(self, value):
+        if not getattr(self._modifier, "isDone", True):
+            return self._modifier.setAttr(self, value)
+
         try:
             _python_to_plug(value, self)
             self._cached = value
@@ -2839,7 +2912,7 @@ def _python_to_plug(value, plug):
 
     # Native Python types
 
-    elif isinstance(value, str):
+    elif isinstance(value, string_types):
         plug._mplug.setString(value)
 
     elif isinstance(value, int):
@@ -2852,8 +2925,7 @@ def _python_to_plug(value, plug):
         plug._mplug.setBool(value)
 
     else:
-        log.debug("Unsupported Python type '%s'" % value.__class__)
-        return None
+        raise TypeError("Unsupported Python type '%s'" % value.__class__)
 
 
 def _python_to_mod(value, plug, mod):
@@ -3090,10 +3162,27 @@ def decode(node):
 
 
 def record_history(func):
-
     @wraps(func)
     def decorator(self, *args, **kwargs):
-        self._history.append((func.__name__, args, kwargs))
+        _kwargs = kwargs.copy()
+        _args = list(args)
+
+        # Don't store actual objects,
+        # to facilitate garbage collection.
+        for index, arg in enumerate(args):
+            if isinstance(arg, (Node, Plug)):
+                _args[index] = arg.path()
+            else:
+                _args[index] = repr(arg)
+
+        for key, value in kwargs.items():
+            if isinstance(value, (Node, Plug)):
+                _kwargs[key] = value.path()
+            else:
+                _kwargs[key] = repr(value)
+
+        self._history.append((func.__name__, _args, _kwargs))
+
         return func(self, *args, **kwargs)
 
     return decorator
@@ -3109,6 +3198,8 @@ class _BaseModifier(object):
         debug (bool, optional): Include additional debug data,
             at the expense of performance
         atomic (bool, optional): Automatically rollback changes on failure
+        template (str, optional): Automatically name new nodes using
+            this template
 
     """
 
@@ -3124,17 +3215,20 @@ class _BaseModifier(object):
                  undoable=True,
                  interesting=True,
                  debug=True,
-                 atomic=True):
+                 atomic=True,
+                 template=None):
         super(_BaseModifier, self).__init__()
+        self.isDone = False
 
         self._modifier = self.Type()
         self._history = list()
-        self.isDone = False
+        self._index = 1
         self._opts = {
             "undoable": undoable,
             "interesting": interesting,
             "debug": debug,
             "atomic": atomic,
+            "template": template,
         }
 
     def doIt(self):
@@ -3164,7 +3258,13 @@ class _BaseModifier(object):
         except TypeError:
             raise TypeError("'%s' is not a valid node type" % type)
 
-        if name is not None:
+        template = self._opts["template"]
+        if name or template:
+            name = (template or "{name}").format(
+                name=name or "",
+                type=type,
+                index=self._index,
+            )
             self._modifier.renameNode(mobj, name)
 
         node = Node(mobj, exists=False, modifier=self)
@@ -3173,6 +3273,7 @@ class _BaseModifier(object):
             plug = node["isHistoricallyInteresting"]
             _python_to_mod(False, plug, self._modifier)
 
+        self._index += 1
         return node
 
     @record_history
@@ -3294,6 +3395,26 @@ class DagModifier(_BaseModifier):
         >>> node2.name() == "NotUnique2"
         True
 
+    Deletion works too
+        >>> _ = cmds.file(new=True, force=True)
+        >>> mod = DagModifier()
+        >>> parent = mod.createNode("transform", name="myParent")
+        >>> child = mod.createNode("transform", name="myChild", parent=parent)
+        >>> mod.doIt()
+        >>> "myParent" in cmds.ls()
+        True
+        >>> "myChild" in cmds.ls()
+        True
+        >>> parent.child().name()
+        u'myChild'
+        >>> mod = DagModifier()
+        >>> _ = mod.delete(child)
+        >>> mod.doIt()
+        >>> parent.child() is None
+        True
+        >>> "myChild" in cmds.ls()
+        False
+
     """
 
     Type = om.MDagModifier
@@ -3307,7 +3428,13 @@ class DagModifier(_BaseModifier):
         except TypeError:
             raise TypeError("'%s' is not a valid node type" % type)
 
-        if name is not None:
+        template = self._opts["template"]
+        if name or template:
+            name = (template or "{name}").format(
+                name=name or "",
+                type=type,
+                index=self._index,
+            )
             self._modifier.renameNode(mobj, name)
 
         return DagNode(mobj, exists=False, modifier=self)
