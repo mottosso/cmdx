@@ -91,7 +91,7 @@ def test_createNode_performance():
     versions = (
         ("mel", lambda: mel.eval("createNode \"transform\"")),
         ("cmds", lambda: cmds.createNode("transform")),
-        ("cmdx", lambda: cmdx.createNode(cmdx.Transform)),
+        ("cmdx", lambda: cmdx.createNode(cmdx.tTransform)),
         # ("PyMEL", lambda: pm.createNode("transform")),
         ("API 1.0", lambda: om1.MFnDagNode().create("transform")),
         ("API 2.0", lambda: om2.MFnDagNode().create("transform")),

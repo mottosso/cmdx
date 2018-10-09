@@ -279,7 +279,7 @@ def test_descendents_typeid():
     c = cmdx.createNode("transform", parent=p)
     m = cmdx.createNode("mesh", parent=c)
 
-    descendents = list(gp.descendents(type=cmdx.Mesh))
+    descendents = list(gp.descendents(type=cmdx.tMesh))
     assert_equals(descendents, [m])
 
 
@@ -349,7 +349,7 @@ def test_timings():
 def test_nodeoperators():
     """Node operators works"""
 
-    node = cmdx.createNode(cmdx.Transform, name="myNode")
+    node = cmdx.createNode(cmdx.tTransform, name="myNode")
     assert_equals(node, "|myNode")
     assert_not_equals(node, "|NotEquals")
     assert_equals(str(node), repr(node))

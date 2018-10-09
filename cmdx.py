@@ -638,7 +638,7 @@ class Node(object):
 
         Example:
             >>> node = createNode("transform")
-            >>> node.typeId == Transform
+            >>> node.typeId == tTransform
             True
 
         """
@@ -1249,12 +1249,18 @@ class DagNode(Node):
         if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
 
-    def children(self, type=None, filter=om.MFn.kTransform):
+    def children(self, type=None, filter=om.MFn.kTransform, contains=None):
         """Return children of node
+
+        All returned children are transform nodes, as specified by the
+        `filter` argument. For shapes, use the :func:`shapes` method.
+        The `contains` argument only returns transform nodes containing
+        a shape of the type provided.
 
         Arguments:
             type (str, optional): Return only children that match this type
             filter (int, optional): Return only children with this function set
+            contains (str, optional): Child must have a shape of this type
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1270,6 +1276,12 @@ class DagNode(Node):
             >>> c.child(type="mesh", filter=None) == d
             True
             >>> c.child(type=("mesh", "transform"), filter=None) == d
+            True
+            >>> a.child() == b
+            True
+            >>> a.child(contains="mesh") == c
+            True
+            >>> a.child(contains="nurbsCurve") is None
             True
 
         """
@@ -1294,10 +1306,12 @@ class DagNode(Node):
                 continue
 
             if not type or op(type, getattr(Fn(mobject), other)):
-                yield cls(mobject)
+                node = cls(mobject)
+                if not contains or node.shape(type=contains):
+                    yield node
 
-    def child(self, type=None, filter=om.MFn.kTransform):
-        return next(self.children(type, filter), None)
+    def child(self, type=None, filter=om.MFn.kTransform, contains=None):
+        return next(self.children(type, filter, contains), None)
 
     def shapes(self, type=None):
         return self.children(type, kShape)
@@ -1329,7 +1343,7 @@ class DagNode(Node):
                 >>> parent = createNode("transform", parent=grandparent)
                 >>> child = createNode("transform", parent=parent)
                 >>> mesh = createNode("mesh", parent=child)
-                >>> it = grandparent.descendents(type=Mesh)
+                >>> it = grandparent.descendents(type=tMesh)
                 >>> next(it) == mesh
                 True
                 >>> next(it)
@@ -1378,7 +1392,7 @@ class DagNode(Node):
                 >>> parent = createNode("transform", parent=grandparent)
                 >>> child = createNode("transform", parent=parent)
                 >>> mesh = createNode("mesh", parent=child)
-                >>> it = grandparent.descendents(type=Mesh)
+                >>> it = grandparent.descendents(type=tMesh)
                 >>> next(it) == mesh
                 True
                 >>> next(it)
@@ -1653,6 +1667,19 @@ class Plug(object):
         if isinstance(other, Plug):
             other = other.read()
         return self.read() != other
+
+    def __neg__(self):
+        """Negate unary operator
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["visibility"] = 1
+            >>> -node["visibility"]
+            -1
+
+        """
+
+        return -self.read()
 
     def __div__(self, other):
         """Python 2.x division
@@ -2047,6 +2074,10 @@ class Plug(object):
     def asQuaternion(self, time=None):
         pass
 
+    def asVector(self):
+        assert self.isArray or self.isCompound, "'%s' not an array" % self
+        return Vector(self.read())
+
     @property
     def locked(self):
         return self._mplug.isLocked
@@ -2324,12 +2355,97 @@ class Plug(object):
 
 
 class TransformationMatrix(om.MTransformationMatrix):
+    """A more readable version of Maya's MTransformationMatrix
+
+    Added:
+        - Takes tuples/lists in place of MVector and other native types
+        - Support for multiplication
+        - Support for getting individual axes
+        - Support for direct access to the quaternion
+
+    Arguments:
+        matrix (Matrix, TransformationMatrix, optional): Original constructor
+        translate (tuple, Vector, optional): Initial translate value
+        rotate (tuple, Vector, optional): Initial rotate value
+        scale (tuple, Vector, optional): Initial scale value
+
+    """
+
+    def __init__(self, matrix=None, translate=None, rotate=None, scale=None):
+        super(TransformationMatrix, self).__init__(matrix)
+
+        if translate:
+            self.setTranslation(translate)
+
+        if rotate:
+            self.setRotation(rotate)
+
+        if scale:
+            self.setScale(scale)
+
+    def __mul__(self, other):
+        if isinstance(other, (tuple, list)):
+            other = Vector(*other)
+
+        if isinstance(other, om.MVector):
+            p = self.translation()
+            q = self.quaternion()
+            return p + q * other
+
+        else:
+            raise TypeError(
+                "unsupported operand type(s) for *: '%s' and '%s'"
+                % (type(self).__name__, type(other).__name__)
+            )
+
+    @property
+    def xAxis(self):
+        return self.quaternion() * Vector(1, 0, 0)
+
+    @property
+    def yAxis(self):
+        return self.quaternion() * Vector(0, 1, 0)
+
+    @property
+    def zAxis(self):
+        return self.quaternion() * Vector(0, 0, 1)
+
+    def translateBy(self, vec, space=None):
+        space = space or kTransform
+        if isinstance(vec, (tuple, list)):
+            vec = Vector(vec)
+        return super(TransformationMatrix, self).translateBy(vec, space)
+
+    def rotateBy(self, vec, space=None):
+        """Handle arguments conveniently
+
+        - Allow for optional `space` argument
+        - Automatically convert tuple to Vector
+
+        """
+
+        space = space or kTransform
+        if isinstance(vec, (tuple, list)):
+            vec = Vector(vec)
+
+        if isinstance(vec, om.MVector):
+            vec = EulerRotation(vec)
+
+        return super(TransformationMatrix, self).rotateBy(vec, space)
+
+    def quaternion(self):
+        """Return transformation matrix as a Quaternion"""
+        return Quaternion(self.rotation(asQuaternion=True))
+
     def translation(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or kTransform
         return super(TransformationMatrix, self).translation(space)
 
     def setTranslation(self, trans, space=None):
+        if isinstance(trans, (tuple, list)):
+            trans = Vector(*trans)
+
         space = space or kTransform
         return super(TransformationMatrix, self).setTranslation(trans, space)
 
@@ -2340,12 +2456,46 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     def setScale(self, seq, space=None):
         """This method does not typically support optional arguments"""
+        if isinstance(seq, (tuple, list)):
+            seq = Vector(*seq)
+
         space = space or kTransform
         return super(TransformationMatrix, self).setScale(seq, space)
 
+    def rotation(self, asQuaternion=False):
+        return super(TransformationMatrix, self).rotation(asQuaternion)
+
+    def setRotation(self, rot):
+        """Faciliate passing of three naked values as rotation"""
+
+        if isinstance(rot, (tuple, list)):
+            try:
+                rot = Vector(rot)
+            except ValueError:
+                raise ValueError(
+                    "I tried automatically converting your "
+                    "tuple to a Vector, but couldn't.."
+                )
+
+        if isinstance(rot, Vector):
+            rot = EulerRotation(rot)
+
+        return super(TransformationMatrix, self).setRotation(rot)
+
     if ENABLE_PEP8:
+        x_axis = xAxis
+        y_axis = yAxis
+        z_axis = zAxis
+        translate_by = translateBy
+        rotate_by = rotateBy
         set_translation = setTranslation
+        set_rotation = setRotation
         set_scale = setScale
+
+
+# Alias
+Transform = TransformationMatrix
+Tm = TransformationMatrix
 
 
 class Vector(om.MVector):
@@ -2359,6 +2509,43 @@ class Vector(om.MVector):
         maya.api.OpenMaya.MVector(0, 0, 1)
 
     """
+
+
+# Alias, it can't take anything other than values
+# and yet it isn't explicit in its name.
+Vector3 = Vector
+
+
+class Quaternion(om.MQuaternion):
+    """Maya's MQuaternion
+
+    Example:
+        >>> q = Quaternion(0, 0, 0, 1)
+        >>> v = Vector(1, 2, 3)
+        >>> isinstance(q * v, Vector)
+        True
+
+    """
+
+    def __mul__(self, other):
+        if isinstance(other, (tuple, list)):
+            other = Vector(*other)
+
+        if isinstance(other, om.MVector):
+            vec = Vector(self.x, self.y, self.z)
+            uv = (vec ^ other) * 2.0
+            return Vector(other + (self.w * uv) + (vec ^ uv))
+
+        else:
+            return super(Quaternion, self).__mul__(other)
+
+
+class EulerRotation(om.MEulerRotation):
+    pass
+
+
+# Alias
+Euler = EulerRotation
 
 
 def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
@@ -2409,6 +2596,7 @@ def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
 
 class CachedPlug(Plug):
     """Returned in place of an actual plug"""
+
     def __init__(self, value):
         self._value = value
 
@@ -3001,35 +3189,38 @@ class _BaseModifier(object):
 
     @record_history
     def setAttr(self, plug, value):
+        if isinstance(value, Plug):
+            value = value.read()
+
         if isinstance(plug, om.MPlug):
-            plug = Plug(plug.node(), plug)
+            value = Plug(plug.node(), plug).read()
 
         _python_to_mod(value, plug, self._modifier)
 
     @record_history
-    def connect(self, plug1, plug2, force=True):
-        if isinstance(plug1, Plug):
-            plug1 = plug1._mplug
+    def connect(self, src, dst, force=True):
+        if isinstance(src, Plug):
+            src = src._mplug
 
-        if isinstance(plug2, Plug):
-            plug2 = plug2._mplug
+        if isinstance(dst, Plug):
+            dst = dst._mplug
 
         if force:
             # Disconnect any plug connected to `other`
-            for plug in plug2.connectedTo(True, False):
-                self.disconnect(plug, plug2)
+            for plug in dst.connectedTo(True, False):
+                self.disconnect(plug, dst)
 
-        self._modifier.connect(plug1, plug2)
+        self._modifier.connect(src, dst)
 
     @record_history
-    def disconnect(self, plug1, plug2):
-        if isinstance(plug1, Plug):
-            plug1 = plug1._mplug
+    def disconnect(self, src, dst):
+        if isinstance(src, Plug):
+            src = src._mplug
 
-        if isinstance(plug2, Plug):
-            plug2 = plug2._mplug
+        if isinstance(dst, Plug):
+            dst = dst._mplug
 
-        self._modifier.disconnect(plug1, plug2)
+        self._modifier.disconnect(src, dst)
 
     if ENABLE_PEP8:
         do_it = doIt
@@ -3159,7 +3350,7 @@ def createNode(type, name=None, parent=None):
 
     Example:
         >>> node = createNode("transform")  # Type as string
-        >>> node = createNode(Transform)  # Type as ID
+        >>> node = createNode(tTransform)  # Type as ID
 
     """
 
@@ -3965,7 +4156,6 @@ def commit(undo, redo=lambda: None):
     shared.redos[shared.redo] = redo
 
     # Let Maya know that something is undoable
-    print(shared.undo)
     getattr(cmds, command)()
 
 
@@ -4006,7 +4196,6 @@ def maya_useNewAPI():
 
 class _apiUndo(om.MPxCommand):
     def doIt(self, args):
-        print("Committing %s to undo.." % shared.undo)
         self.undo = shared.undo
         self.redo = shared.redo
 
@@ -4051,21 +4240,21 @@ def uninitializePlugin(plugin):
 # --------------------------------------------------------
 
 
-AddDoubleLinear = om.MTypeId(0x4441444c)
-AddMatrix = om.MTypeId(0x44414d58)
-AngleBetween = om.MTypeId(0x4e414254)
-BlendShape = om.MTypeId(0x46424c53)
-MultMatrix = om.MTypeId(0x444d544d)
-AngleDimension = om.MTypeId(0x4147444e)
-BezierCurve = om.MTypeId(0x42435256)
-Camera = om.MTypeId(0x4443414d)
-Choice = om.MTypeId(0x43484345)
-Chooser = om.MTypeId(0x43484f4f)
-Condition = om.MTypeId(0x52434e44)
-Mesh = om.MTypeId(0x444d5348)
-NurbsCurve = om.MTypeId(0x4e435256)
-NurbsSurface = om.MTypeId(0x4e535246)
-Joint = om.MTypeId(0x4a4f494e)
-Transform = om.MTypeId(0x5846524d)
-TransformGeometry = om.MTypeId(0x5447454f)
-WtAddMatrix = om.MTypeId(0x4457414d)
+tAddDoubleLinear = om.MTypeId(0x4441444c)
+tAddMatrix = om.MTypeId(0x44414d58)
+tAngleBetween = om.MTypeId(0x4e414254)
+tBlendShape = om.MTypeId(0x46424c53)
+tMultMatrix = om.MTypeId(0x444d544d)
+tAngleDimension = om.MTypeId(0x4147444e)
+tBezierCurve = om.MTypeId(0x42435256)
+tCamera = om.MTypeId(0x4443414d)
+tChoice = om.MTypeId(0x43484345)
+tChooser = om.MTypeId(0x43484f4f)
+tCondition = om.MTypeId(0x52434e44)
+tMesh = om.MTypeId(0x444d5348)
+tNurbsCurve = om.MTypeId(0x4e435256)
+tNurbsSurface = om.MTypeId(0x4e535246)
+tJoint = om.MTypeId(0x4a4f494e)
+tTransform = om.MTypeId(0x5846524d)
+tTransformGeometry = om.MTypeId(0x5447454f)
+tWtAddMatrix = om.MTypeId(0x4457414d)

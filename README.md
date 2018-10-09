@@ -62,6 +62,7 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
   - [Cached](#cached)
   - [Time](#time)
   - [Native Types](#native-types)
+  - [Contains](#contains)
 - [Connections](#connections)
 - [Iterators](#iterators)
 - [Transactions](#transactions)
@@ -560,20 +561,20 @@ cmdx.createNode(cmdx.Transform)
 
 Only the most commonly used and performance sensitive types are available as explicit types.
 
-- `AddDoubleLinear` 
-- `AddMatrix` 
-- `AngleBetween` 
-- `MultMatrix` 
-- `AngleDimension` 
-- `BezierCurve` 
-- `BlendShape` 
-- `Camera` 
-- `Choice` 
-- `Chooser` 
-- `Condition` 
-- `Transform` 
-- `TransformGeometry` 
-- `WtAddMatrix` 
+- `tAddDoubleLinear` 
+- `tAddMatrix` 
+- `tAngleBetween` 
+- `tMultMatrix` 
+- `tAngleDimension` 
+- `tBezierCurve` 
+- `tBlendShape` 
+- `tCamera` 
+- `tChoice` 
+- `tChooser` 
+- `tCondition` 
+- `tTransform` 
+- `tTransformGeometry` 
+- `tWtAddMatrix` 
 
 See [API Documentation](https://weightshift.io/cmdx/api/) for more.
 
@@ -802,7 +803,7 @@ nodeC["rotate"] = tmA.rotation()
 
 Now `nodeC` will share the same *worldspace* orientation as `nodeA` (note that `nodeB` was not rotated).
 
-**Matrix Multiplication**
+##### Matrix Multiplication
 
 One useful aspect of native types is that you can leverage their operators, such as multiplication.
 
@@ -814,9 +815,9 @@ relativeTranslate = tm.translation()
 relativeRotate = tm.rotation()
 ```
 
-**Vector Operations**
+##### Vector Operations
 
-Maya's `MVector` is exposed via `cmdx.Vector`.
+Maya's `MVector` is exposed as `cmdx.Vector`.
 
 ```python
 from maya.api import OpenMaya as om
@@ -831,11 +832,92 @@ vec * cmdx.Vector(0, 1, 0) == 0.0
 vec ^ cmdx.Vector(0, 1, 0) == om.MVector(0, 0, 1)
 ```
 
-**Available types**
+##### EulerRotation Operations
+
+Maya's `MEulerRotation` is exposed as `cmdx.EulerRotation` and `cmdx.Euler`
+
+##### TransformationMatrix Operations
+
+Maya's `MTransformationMatrix` is exposed as `cmdx.TransformationMatrix`, `cmdx.Transform` and `cmdx.Tm`.
+
+Editing the `cmdx` version of a Tm is meant to be more readable and usable in maths operations.
+
+```python
+import cmdx
+from maya.api import OpenMaya as om
+
+# Original
+tm = om.MTransformationMatrix()
+tm.setTranslation(om.MVector(0, 0, 0))
+tm.setRotation(om.MEulerRotation(cmdx.radians(90), 0, 0, cmdx.kXYZ))
+
+# cmdx
+tm = cmdx.Tm()
+tm.setTranslation((0, 0, 0))
+tm.setRotation((90, 0, 0))
+```
+
+In this example, `cmdx` assumes an `MVector` on passing a tuple, and that when you specify a rotation you intended to use the same unit as your UI is setup to display, in most cases degrees.
+
+In addition to the default methods, it can also do multiplication of vectors, to e.g. transform a point into the space of a given transform.
+
+```python
+import cmdx
+
+tm = cmdx.TransformationMatrix()
+tm.setTranslation((0, 0, 0))
+tm.setRotation((90, 0, 0))
+
+pos = cmdx.Vector(0, 1, 0)
+
+# Move a point 1 unit in Y, as though it was a child
+# of a transform that is rotated 90 degrees in X,
+# the resulting position should yield Z=1
+newpos = tm * pos
+assert newpos == cmdx.Vector(0, 0, 1)
+```
+
+##### Quaternion Operations
+
+Maya's `MQuaternion` is exposed via `cmdx.Quaternion`
+
+In addition to its default methods, it can also do multiplication with a vector.
+
+```python
+q = Quaternion(0, 0, 0, 1)
+v = Vector(1, 2, 3)
+assert isinstance(q * v, Vector)
+```
+
+##### Available types
 
 - `asDouble()` -> `float`
 - `asMatrix()` -> `MMatrix`
 - `asTransformationMatrix()` (alias `asTm()`) -> `MTransformationMatrix`
+- `asQuaternion()` -> `MQuaternion`
+- `asVector` -> `MVector`
+
+<br>
+
+### Contains
+
+Sometimes, it only makes sense to query the children of a node for children with a shape of a particular type. For example, you may only interested in children with a shape node.
+
+```python
+import cmdx
+
+a = createNode("transform", "a")
+b = createNode("transform", "b", parent=a)
+c = createNode("transform", "c", parent=a)
+d = createNode("mesh", "d", parent=c)
+
+# Return children with a `mesh` shape
+assert b.child(contains="mesh") == c
+
+# As the parent has children, but none with a mesh
+# the below would return nothing.
+assert b.child(contains="nurbsCurve") != c
+```
 
 <br>
 
