@@ -11,7 +11,7 @@ import operator
 from functools import wraps
 
 from maya import cmds
-from maya.api import OpenMaya as om, OpenMayaAnim as oma
+from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1
 
 PY3 = sys.version_info[0] == 3
@@ -4174,3 +4174,179 @@ Joint = om.MTypeId(0x4a4f494e)
 Transform = om.MTypeId(0x5846524d)
 TransformGeometry = om.MTypeId(0x5447454f)
 WtAddMatrix = om.MTypeId(0x4457414d)
+
+
+# --------------------------------------------------------
+#
+# Plug-ins
+#
+# --------------------------------------------------------
+
+InstalledPlugins = list()
+
+
+class MetaNode(type):
+    def __init__(cls, *args, **kwargs):
+        assert isinstance(cls.name, str)
+        assert isinstance(cls.defaults, dict)
+        assert isinstance(cls.attributes, list)
+        assert isinstance(cls.version, tuple)
+        assert cls.typeid != -1, "Requires a unique MTypeId"
+
+        # Support Divider plug-in, without name for readability.
+        # E.g. Divider("_", "Label") -> Divider("Label")
+        index = 1
+        for attribute in cls.attributes:
+            if isinstance(attribute, Divider):
+                attribute["name"] = "_" * index
+                attribute["shortName"] = "_" * index
+                index += 1
+
+        # Ensure no duplicates
+        assert len(set(cls.attributes)) == len(cls.attributes), (
+            "One or more attributes in '%s' was found more than once"
+            % cls.__name__
+        )
+
+        def findAttribute(self, name):
+            return {attr["name"]: attr for attr in self.attributes}.get(name)
+
+        def findPlug(self, node, name):
+            try:
+                mobj = self.findAttribute(name)["mobject"]
+                return om.MPlug(node, mobj)
+            except KeyError:
+                return None
+
+        cls.findAttribute = findAttribute
+        cls.findPlug = findPlug
+
+        return super(MetaNode, cls).__init__(*args, **kwargs)
+
+
+class Node(om.MPxNode):
+    """Abstract baseclass for a Maya DG node
+
+    Attributes:
+        name (str): Name used in e.g. cmds.createNode
+        id (int): Unique ID from Autodesk (see Ids above)
+        version (tuple, optional): Optional version number for plug-in node
+        attributes (tuple, optional): Attributes of node
+        defaults (dict, optional): Dictionary of default values
+
+    """
+
+    __metaclass__ = MetaNode
+
+    typeid = -1
+    name = "defaultNode"
+    version = (0, 0)
+    attributes = list()
+    affects = dict()
+    ranges = dict()
+    defaults = {}
+
+
+class Shape(om.MPxSurface):
+    """Abstract baseclass for a Maya shape
+
+    Attributes:
+        name (str): Name used in e.g. cmds.createNode
+        id (int): Unique ID from Autodesk (see Ids above)
+        version (tuple, optional): Optional version number for plug-in node
+        attributes (tuple, optional): Attributes of node
+        defaults (dict, optional): Dictionary of default values
+
+    """
+
+    __metaclass__ = MetaNode
+
+    typeid = -1
+    name = "defaultNode"
+    version = (0, 0)
+    attributes = list()
+    affects = dict()
+    ranges = dict()
+    defaults = {}
+
+
+class Locator(omui.MPxLocatorNode):
+    """Abstract baseclass for a Maya locator
+
+    Attributes:
+        name (str): Name used in e.g. cmds.createNode
+        id (int): Unique ID from Autodesk (see Ids above)
+        version (tuple, optional): Optional version number for plug-in node
+        attributes (tuple, optional): Attributes of node
+        defaults (dict, optional): Dictionary of default values
+
+    """
+
+    __metaclass__ = MetaNode
+
+    name = "defaultNode"
+    typeid = -1
+    classification = "drawdb/geometry/custom"
+    version = (0, 0)
+    attributes = list()
+    affects = dict()
+    ranges = dict()
+    defaults = {}
+
+
+def initialize(Plugin, Manipulator=None):
+    def _nodeInit():
+        nameToAttr = {}
+        for attr in Plugin.attributes:
+            mattr = attr.create(Plugin)
+            Plugin.addAttribute(mattr)
+            nameToAttr[attr["name"]] = mattr
+
+        for src, dst in Plugin.affects:
+            Plugin.attributeAffects(nameToAttr[src], nameToAttr[dst])
+
+        if Manipulator:
+            om.MPxManipContainer.addToManipConnectTable(Plugin.id)
+
+    def _nodeCreator():
+        return Plugin()
+
+    def initializePlugin(obj):
+        version = ".".join(map(str, Plugin.version))
+        plugin = om.MFnPlugin(obj, "WeightShift", version, "Any")
+
+        try:
+            if issubclass(Plugin, Node):
+                plugin.registerNode(Plugin.name,
+                                    Plugin.id,
+                                    _nodeCreator,
+                                    _nodeInit)
+            elif issubclass(Plugin, Locator):
+                plugin.registerNode(Plugin.name,
+                                    Plugin.id,
+                                    _nodeCreator,
+                                    _nodeInit,
+                                    om.MPxNode.kLocatorNode,
+                                    Plugin.classification)
+
+            else:
+                raise TypeError("Unsupported subclass: '%s'" % Plugin)
+
+        except Exception:
+            raise
+
+        else:
+            # Maintain reference to original class
+            InstalledPlugins.append(Plugin)
+
+    return initializePlugin
+
+
+def uninitialize(Plugin, Manipulator=None):
+    def uninitializePlugin(obj):
+        om.MFnPlugin(obj).deregisterNode(Plugin.id)
+
+        if Manipulator:
+            om.MFnPlugin(obj).deregisterNode(Manipulator.id)
+
+    return uninitializePlugin
