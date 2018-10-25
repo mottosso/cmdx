@@ -2149,6 +2149,11 @@ class Plug(object):
         return Vector(self.read())
 
     @property
+    def connected(self):
+        """Return whether or not this attribute is connected (to anything)"""
+        return self.connection() is not None
+
+    @property
     def locked(self):
         return self._mplug.isLocked
 
