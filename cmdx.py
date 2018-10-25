@@ -2424,6 +2424,7 @@ class Plug(object):
         as_transformation_matrix = asTransformationMatrix
         as_euler_rotation = asEulerRotation
         as_quaternion = asQuaternion
+        as_vector = asVector
         channel_box = channelBox
 
 
@@ -2445,7 +2446,11 @@ class TransformationMatrix(om.MTransformationMatrix):
     """
 
     def __init__(self, matrix=None, translate=None, rotate=None, scale=None):
-        super(TransformationMatrix, self).__init__(matrix)
+
+        # It doesn't like being handed `None`
+        args = [matrix] if matrix is not None else []
+
+        super(TransformationMatrix, self).__init__(*args)
 
         if translate:
             self.setTranslation(translate)
@@ -2539,12 +2544,13 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).rotation(asQuaternion)
 
     def setRotation(self, rot):
-        """Faciliate passing of three naked values as rotation"""
+        """Interpret three values as an euler rotation"""
 
         if isinstance(rot, (tuple, list)):
             try:
                 rot = Vector(rot)
             except ValueError:
+                traceback.print_exc()
                 raise ValueError(
                     "I tried automatically converting your "
                     "tuple to a Vector, but couldn't.."
@@ -2555,6 +2561,12 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         return super(TransformationMatrix, self).setRotation(rot)
 
+    def asMatrix(self):
+        return super(TransformationMatrix, self).asMatrix()
+
+    def asMatrixInverse(self):
+        return super(TransformationMatrix, self).asMatrixInverse()
+
     if ENABLE_PEP8:
         x_axis = xAxis
         y_axis = yAxis
@@ -2564,6 +2576,8 @@ class TransformationMatrix(om.MTransformationMatrix):
         set_translation = setTranslation
         set_rotation = setRotation
         set_scale = setScale
+        as_matrix = asMatrix
+        as_matrix_inverse = asMatrixInverse
 
 
 # Alias
@@ -2587,6 +2601,14 @@ class Vector(om.MVector):
 # Alias, it can't take anything other than values
 # and yet it isn't explicit in its name.
 Vector3 = Vector
+
+
+class Point(om.MPoint):
+    """Maya's MPoint"""
+
+
+class BoundingBox(om.MBoundingBox):
+    """Maya's MBoundingBox"""
 
 
 class Quaternion(om.MQuaternion):
@@ -2614,7 +2636,11 @@ class Quaternion(om.MQuaternion):
 
 
 class EulerRotation(om.MEulerRotation):
-    pass
+    def asQuaternion(self):
+        return super(EulerRotation, self).asQuaternion()
+
+    if ENABLE_PEP8:
+        as_quaternion = asQuaternion
 
 
 # Alias
@@ -3859,7 +3885,6 @@ class _AbstractAttribute(dict):
 
     def __init__(self,
                  name,
-                 shortName=None,
                  default=None,
                  label=None,
 
@@ -3875,27 +3900,28 @@ class _AbstractAttribute(dict):
                  array=False,
                  connectable=True):
 
-        self["name"] = name
-        self["shortName"] = shortName or name
-        self["label"] = label
-        self["default"] = default or self.Default
+        args = locals().copy()
+        args.pop("self")
 
-        self["writable"] = writable or self.Writable
-        self["readable"] = readable or self.Readable
-        self["cached"] = cached or self.Cached
-        self["storable"] = storable or self.Storable
-        self["keyable"] = keyable or self.Keyable
-        self["hidden"] = hidden or self.Hidden
-        self["channelBox"] = channelBox or self.ChannelBox
-        self["array"] = array or self.Array
-        self["connectable"] = connectable or self.Connectable
-        self["min"] = min
-        self["max"] = max
+        self["name"] = args.pop("name")
+        self["label"] = args.pop("label")
+        self["default"] = args.pop("default")
+
+        # Exclusive to numeric attributes
+        self["min"] = args.pop("min")
+        self["max"] = args.pop("max")
 
         # Filled in on creation
         self["mobject"] = None
 
-    def default(self):
+        # MyName -> myName
+        self["shortName"] = self["name"][0].lower() + self["name"][1:]
+
+        for key, value in args.items():
+            default = getattr(self, key[0].upper() + key[1:])
+            self[key] = value if value is not None else default
+
+    def default(self, cls=None):
         """Return one of three available values
 
         Resolution order:
@@ -3908,12 +3934,15 @@ class _AbstractAttribute(dict):
         if self["default"] is not None:
             return self["default"]
 
+        if cls is not None:
+            return cls.defaults.get(self["name"], self.Default)
+
         return self.Default
 
     def type(self):
         return self.Type
 
-    def create(self):
+    def create(self, cls=None):
         args = [
             arg
             for arg in (self["name"],
@@ -3922,7 +3951,7 @@ class _AbstractAttribute(dict):
             if arg is not None
         ]
 
-        default = self.default()
+        default = self.default(cls)
         if default:
             if isinstance(default, (list, tuple)):
                 args += default
@@ -3962,15 +3991,15 @@ class Enum(_AbstractAttribute):
 
     Keyable = True
 
-    def __init__(self, name, fields=None, default=0, label=None):
-        super(Enum, self).__init__(name, default, label)
+    def __init__(self, name, fields=None, default=0, label=None, **kwargs):
+        super(Enum, self).__init__(name, default, label, **kwargs)
 
         self.update({
             "fields": fields or (name,),
         })
 
-    def create(self):
-        attr = super(Enum, self).create()
+    def create(self, cls=None):
+        attr = super(Enum, self).create(cls)
 
         for index, field in enumerate(self["fields"]):
             self.Fn.addField(field, index)
@@ -3993,8 +4022,8 @@ class String(_AbstractAttribute):
     Type = om.MFnData.kString
     Default = ""
 
-    def default(self):
-        default = super(String, self).default()
+    def default(self, cls=None):
+        default = super(String, self).default(cls)
         return om.MFnStringData().create(default)
 
     def read(self, data):
@@ -4018,7 +4047,7 @@ class Matrix(_AbstractAttribute):
     Keyable = False
     Hidden = False
 
-    def default(self):
+    def default(self, cls=None):
         return None
 
     def read(self, data):
@@ -4048,7 +4077,7 @@ class Double3(_AbstractAttribute):
     Type = None
     Default = (0.0,) * 3
 
-    def default(self):
+    def default(self, cls=None):
         default = self.get("default")
 
         # Support single-value default
@@ -4088,8 +4117,8 @@ class AbstractUnit(_AbstractAttribute):
 
 
 class Angle(AbstractUnit):
-    def default(self):
-        default = super(Angle, self).default()
+    def default(self, cls=None):
+        default = super(Angle, self).default(cls)
 
         # When no unit was explicitly passed, assume degrees
         if not isinstance(default, om.MAngle):
@@ -4099,8 +4128,8 @@ class Angle(AbstractUnit):
 
 
 class Time(AbstractUnit):
-    def default(self):
-        default = super(Time, self).default()
+    def default(self, cls=None):
+        default = super(Time, self).default(cls)
 
         # When no unit was explicitly passed, assume seconds
         if not isinstance(default, om.MTime):
@@ -4110,8 +4139,8 @@ class Time(AbstractUnit):
 
 
 class Distance(AbstractUnit):
-    def default(self):
-        default = super(Distance, self).default()
+    def default(self, cls=None):
+        default = super(Distance, self).default(cls)
 
         # When no unit was explicitly passed, assume centimeters
         if not isinstance(default, om.MDistance):
@@ -4141,13 +4170,13 @@ class Compound(_AbstractAttribute):
 
         super(Compound, self).__init__(name, **kwargs)
 
-    def default(self):
+    def default(self, cls=None):
         # Compound itself has no defaults, only it's children do
         pass
 
-    def create(self):
-        mobj = super(Compound, self).create()
-        default = super(Compound, self).default()
+    def create(self, cls=None):
+        mobj = super(Compound, self).create(cls)
+        default = super(Compound, self).default(cls)
 
         for index, child in enumerate(self["children"]):
             # Forward attributes from parent to child
@@ -4163,7 +4192,7 @@ class Compound(_AbstractAttribute):
             if child["default"] is None and default is not None:
                 child["default"] = default[index]
 
-            self.Fn.addChild(child.create())
+            self.Fn.addChild(child.create(cls))
 
         return mobj
 
@@ -4394,6 +4423,11 @@ tWtAddMatrix = om.MTypeId(0x4457414d)
 # --------------------------------------------------------
 
 InstalledPlugins = list()
+TypeId = om.MTypeId
+
+# Get your unique ID from Autodesk, the below
+# should not be trusted for production.
+StartId = int(os.getenv("CMDX_BASETYPEID", "0x12b9c0"), 0)
 
 
 class MetaNode(type):
@@ -4402,7 +4436,9 @@ class MetaNode(type):
         assert isinstance(cls.defaults, dict)
         assert isinstance(cls.attributes, list)
         assert isinstance(cls.version, tuple)
-        assert cls.typeid != -1, "Requires a unique MTypeId"
+
+        if isinstance(cls.typeid, (int, float)):
+            cls.typeid = TypeId(cls.typeid)
 
         # Support Divider plug-in, without name for readability.
         # E.g. Divider("_", "Label") -> Divider("Label")
@@ -4435,7 +4471,7 @@ class MetaNode(type):
         return super(MetaNode, cls).__init__(*args, **kwargs)
 
 
-class Node(om.MPxNode):
+class DgNode(om.MPxNode):
     """Abstract baseclass for a Maya DG node
 
     Attributes:
@@ -4449,7 +4485,7 @@ class Node(om.MPxNode):
 
     __metaclass__ = MetaNode
 
-    typeid = -1
+    typeid = TypeId(StartId)
     name = "defaultNode"
     version = (0, 0)
     attributes = list()
@@ -4458,7 +4494,7 @@ class Node(om.MPxNode):
     defaults = {}
 
 
-class Shape(om.MPxSurface):
+class ShapeNode(om.MPxSurfaceShape):
     """Abstract baseclass for a Maya shape
 
     Attributes:
@@ -4472,7 +4508,7 @@ class Shape(om.MPxSurface):
 
     __metaclass__ = MetaNode
 
-    typeid = -1
+    typeid = TypeId(StartId)
     name = "defaultNode"
     version = (0, 0)
     attributes = list()
@@ -4481,7 +4517,7 @@ class Shape(om.MPxSurface):
     defaults = {}
 
 
-class Locator(omui.MPxLocatorNode):
+class LocatorNode(omui.MPxLocatorNode):
     """Abstract baseclass for a Maya locator
 
     Attributes:
@@ -4496,7 +4532,7 @@ class Locator(omui.MPxLocatorNode):
     __metaclass__ = MetaNode
 
     name = "defaultNode"
-    typeid = -1
+    typeid = TypeId(StartId)
     classification = "drawdb/geometry/custom"
     version = (0, 0)
     attributes = list()
@@ -4517,7 +4553,7 @@ def initialize(Plugin, Manipulator=None):
             Plugin.attributeAffects(nameToAttr[src], nameToAttr[dst])
 
         if Manipulator:
-            om.MPxManipContainer.addToManipConnectTable(Plugin.id)
+            om.MPxManipContainer.addToManipConnectTable(Plugin.typeid)
 
     def _nodeCreator():
         return Plugin()
@@ -4527,14 +4563,14 @@ def initialize(Plugin, Manipulator=None):
         plugin = om.MFnPlugin(obj, "WeightShift", version, "Any")
 
         try:
-            if issubclass(Plugin, Node):
+            if issubclass(Plugin, DgNode):
                 plugin.registerNode(Plugin.name,
-                                    Plugin.id,
+                                    Plugin.typeid,
                                     _nodeCreator,
                                     _nodeInit)
-            elif issubclass(Plugin, Locator):
+            elif issubclass(Plugin, LocatorNode):
                 plugin.registerNode(Plugin.name,
-                                    Plugin.id,
+                                    Plugin.typeid,
                                     _nodeCreator,
                                     _nodeInit,
                                     om.MPxNode.kLocatorNode,
@@ -4555,9 +4591,9 @@ def initialize(Plugin, Manipulator=None):
 
 def uninitialize(Plugin, Manipulator=None):
     def uninitializePlugin(obj):
-        om.MFnPlugin(obj).deregisterNode(Plugin.id)
+        om.MFnPlugin(obj).deregisterNode(Plugin.typeid)
 
         if Manipulator:
-            om.MFnPlugin(obj).deregisterNode(Manipulator.id)
+            om.MFnPlugin(obj).deregisterNode(Manipulator.typeid)
 
     return uninitializePlugin

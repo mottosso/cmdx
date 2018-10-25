@@ -32,6 +32,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 With [so many options](#comparison) for interacting with Maya, when or why should you choose `cmdx`?
 
 - [Performance](#performance)
+- [Declarative plug-ins](#plugins)
 - [Node and attribute reuse](#query-reduction)
 - [Transactions](#transactions)
 - [Hashable References](#hashable-references)
@@ -65,6 +66,10 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
   - [Native Types](#native-types)
   - [Contains](#contains)
 - [Connections](#connections)
+- [Plug-ins](#plugins)
+  - [Draw](#draw)
+  - [Compute](#compute)
+  - [Manipulators](#manipulators)
 - [Iterators](#iterators)
 - [Transactions](#transactions)
 - [Modifier](#modifier)
@@ -1022,6 +1027,209 @@ Legacy syntax is also supported, and is almost as fast - the overhead is one add
 ```python
 cmdx.connectAttr(a + ".translateX", b + ".translateX")
 ```
+
+<br>
+
+### Plug-ins
+
+`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins. It also comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
+
+**Before**
+
+```python
+from maya.api import OpenMaya as om
+
+class MyNode(om.MPxNode):
+    name = "myNode"
+    typeid = om.MTypeId(0x85006)
+
+    @staticmethod
+    def initializer():
+        tAttr = om.MFnTypedAttribute()
+
+        MyNode.myString = tAttr.create(
+            "myString", "myString", om.MFnData.kString)
+        tAttr.writable = True
+        tAttr.storable = True
+        tAttr.hidden = True
+        tAttr.array = True
+
+        mAttr = om.MFnMessageAttribute()
+        MyNode.myMessage = mAttr.create("myMessage", "myMessage")
+        mAttr.writable = True
+        mAttr.storable = True
+        mAttr.hidden = True
+        mAttr.array = True
+
+        xAttr = om.MFnMatrixAttribute()
+        MyNode.myMatrix = xAttr.create("myMatrix", "myMatrix")
+        xAttr.writable = True
+        xAttr.storable = True
+        xAttr.hidden = True
+        xAttr.array = True
+
+        uniAttr = om.MFnUnitAttribute()
+        MyNode.currentTime = uniAttr.create(
+            "currentTime", "ctm", om.MFnUnitAttribute.kTime, 0.0)
+
+        MyNode.addAttribute(MyNode.myString)
+        MyNode.addAttribute(MyNode.myMessage)
+        MyNode.addAttribute(MyNode.myMatrix)
+        MyNode.addAttribute(MyNode.currentTime)
+
+        MyNode.attributeAffects(MyNode.myString, MyNode.myMatrix)
+        MyNode.attributeAffects(MyNode.myMessage, MyNode.myMatrix)
+        MyNode.attributeAffects(MyNode.currentTime, MyNode.myMatrix)
+
+```
+
+**After**
+
+Here is the equivalent plug-in, written with `cmdx`.
+
+```python
+import cmdx
+
+class MyNode(cmdx.DgNode):
+    name = "myNode"
+    typeid = cmdx.MTypeId(0x85006)
+
+    attributes = [
+        cmdx.String("myString"),
+        cmdx.Message("myMessage"),
+        cmdx.Matrix("myMatrix"),
+        cmdx.Time("myTime", default=0.0),
+    ]
+
+    affects = [
+        ("myString", "myMatrix"),
+        ("myMessage", "myMatrix"),
+        ("myTime", "myMatrix"),
+    ]
+```
+
+#### Defaults
+
+Defaults can either be specified as an argument to the attribute, e.g. `cmdx.Double("MyAttr", default=5.0)` or in a separate dictionary.
+
+This can be useful if you need to synchronise defaults between, say, a plug-in and external physics simulation software and if you automatically generate documentation from your attributes and need to access their defaults from another environment, such as sphinx.
+
+```python
+import cmdx
+import external_library
+
+class MyNode(cmdx.DgNode):
+    name = "myNode"
+    typeid = cmdx.MTypeId(0x85006)
+
+    defaults = external_library.get_defaults()
+
+    attributes = [
+        cmdx.String("myString"),
+        cmdx.Message("myMessage"),
+        cmdx.Matrix("myMatrix"),
+        cmdx.Time("myTime"),
+    ]
+
+```
+
+Where `defaults` is a plain dictionary.
+
+```python
+import cmdx
+
+
+class MyNode(cmdx.DgNode):
+    name = "myNode"
+    typeid = cmdx.MTypeId(0x85006)
+
+    defaults = {
+        "myString": "myDefault",
+        "myTime": 1.42,
+    }
+
+    attributes = [
+        cmdx.String("myString"),
+        cmdx.Message("myMessage"),
+        cmdx.Matrix("myMatrix"),
+        cmdx.Time("myTime"),
+    ]
+```
+
+This can be used with libraries such as [`jsonschema`](https://json-schema.org/), which is supported by other languages and libraries like C++ and sphinx.
+
+<br>
+
+#### Draw()
+
+`cmdx` exposes the native math libraries of Maya, and extends these with additional functionality useful for drawing to the viewport.
+
+```python
+from weightshift.vendor import cmdx
+from maya.api import OpenMaya as om
+from maya import OpenMayaRender as omr1
+
+renderer = omr1.MHardwareRenderer.theRenderer()
+gl = renderer.glFunctionTable()
+maya_useNewAPI = True
+
+
+class MyNode(cmdx.LocatorNode):
+    name = "myNode"
+
+    classification = "drawdb/geometry/custom"
+    typeid = cmdx.TypeId(0x13b992)
+    attributes = [
+        cmdx.Distance("Length", default=5)
+    ]
+
+    def draw(self, view, path, style, status):
+        this = cmdx.Node(self.thisMObject())
+        length = this["Length", cmdx.Cached].read()
+
+        start = cmdx.Vector(0, 0, 0)
+        end = cmdx.Vector(length, 0, 0)
+
+        gl.glBegin(omr1.MGL_LINES)
+        gl.glColor3f(0.1, 0.65, 0.0)
+        gl.glVertex3f(start.x, start.y, start.z)
+        gl.glVertex3f(end.x, end.y, end.z)
+        gl.glEnd()
+
+        view.endGL()
+
+    def isBounded(self):
+        return True
+
+    def boundingBox(self):
+        this = cmdx.Node(self.thisMObject())
+        multiplier = this["Length", cmdx.Meters].read()
+        corner1 = cmdx.Point(-multiplier, -multiplier, -multiplier)
+        corner2 = cmdx.Point(multiplier, multiplier, multiplier)
+        return cmdx.BoundingBox(corner1, corner2)
+
+
+initializePlugin = cmdx.initialize(MyNode)
+uninitializePlugin = cmdx.uninitialize(MyNode)
+```
+
+Of interest is the..
+
+1. `cmdx.Node(self.thisMObject())` A one-off (small) cost, utilising the [Node Re-use](#node-reuse) mechanism of `cmdx` to optimise instantiation of new objects.
+2. Attribute access via `["Length"]`, fast and readable compared to its `OpenMaya` equivalent
+3. Custom units via `["Length", cmdx.Meters]`
+4. Custom vectors via `cmdx.Vector()`
+5. Attribute value re-use, via `cmdx.Cached`. `boundingBox` is called first, computing the value of `Length`, which is later re-used in `draw()`; saving on previous FPS
+
+<br>
+
+#### Compute()
+
+
+
+#### Attribute Editor Template
+
+Generate templates from your plug-ins automatically.
 
 <br>
 
