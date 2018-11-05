@@ -110,8 +110,8 @@ def test_createNode_performance():
         timings["createNode"]["cmdx"]["percall"]
     )
 
-    assert_greater(cmdx_vs_cmds, 0.6)  # at least 60% of cmds
-    assert_greater(cmdx_vs_api, 0.25)  # at least quarter of API 2.0
+    assert_greater(cmdx_vs_cmds, 0.5)  # at least 2x faster than cmds
+    assert_greater(cmdx_vs_api, 0.25)  # at least quarter of speed of API 2.0
 
 
 @flaky

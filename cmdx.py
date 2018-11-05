@@ -773,7 +773,7 @@ class Node(object):
 
         Examples:
             >>> node = createNode("transform")
-            >>> node.update({"tx": 5.0, "ry": (cmdx.Degrees, 30.0)})
+            >>> node.update({"tx": 5.0, ("ry", Degrees): 30.0})
             >>> node["tx"]
             5.0
 
@@ -3632,7 +3632,6 @@ def addAttr(node,
         }[attributeType]
 
     kwargs = {
-        "shortName": shortName,
         "default": defaultValue
     }
 
