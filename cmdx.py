@@ -80,6 +80,10 @@ TimeUnit = om.MTime.uiUnit()
 DistanceUnit = om.MDistance.uiUnit()
 AngleUnit = om.MAngle.uiUnit()
 
+MTime = om.MTime
+MDistance = om.MDistance
+MAngle = om.MAngle
+
 ExistError = type("ExistError", (RuntimeError,), {})
 DoNothing = None
 
@@ -759,6 +763,25 @@ class Node(object):
 
             return self._fn.findPlug(name, False)
 
+    def update(self, attrs):
+        """Apply a series of attributes all at once
+
+        This operates similar to a Python dictionary.
+
+        Arguments:
+            attrs (dict): Key/value pairs of name and attribute
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node.update({"tx": 5.0, "ry": (cmdx.Degrees, 30.0)})
+            >>> node["tx"]
+            5.0
+
+        """
+
+        for key, value in attrs.items():
+            self[key] = value
+
     def clear(self):
         """Clear transient state
 
@@ -828,28 +851,7 @@ class Node(object):
 
     # Alias
     path = name
-
-    def update(self, attrs):
-        """Add `attrs` to self
-
-        Arguments:
-            attrs (dict): Key/value pairs of name and attribute
-
-        Example:
-            >>> node = createNode("transform")
-            >>> node.update({
-            ...   "translateX": 1.0,
-            ...   "translateY": 1.0,
-            ...   "translateZ": 5.0,
-            ... })
-            ...
-            >>> node["tx"] == 1.0
-            True
-
-        """
-
-        for key, value in attrs.items():
-            self[key] = value
+    shortestPath = name
 
     def pop(self, key):
         """Delete an attribute
@@ -1037,6 +1039,7 @@ class Node(object):
         add_attr = addAttr
         has_attr = hasAttr
         delete_attr = deleteAttr
+        shortest_path = shortestPath
 
 
 class DagNode(Node):
@@ -1657,6 +1660,31 @@ class AnimCurve(Node):
                 self._fna.setValue(index, value)
             else:
                 self._fna.addKey(time, value, interpolation, interpolation)
+
+        def keys(self, times, values, interpolation=Linear):
+            times = map(lambda t: om.MTime(t, TimeUnit), times)
+
+            try:
+                self._fna.addKeys(times, values)
+
+            except RuntimeError:
+                # The error provided by Maya aren't very descriptive,
+                # help a brother out by look for common problems.
+
+                if not times:
+                    log.error("No times were provided: %s" % str(times))
+
+                if not values:
+                    log.error("No values were provided: %s" % str(values))
+
+                if len(values) != len(times):
+                    log.error(
+                        "Count mismatch; len(times)=%d, len(values)=%d" % (
+                            len(times), len(values)
+                        )
+                    )
+
+                raise
 
 
 class Plug(object):
@@ -4083,10 +4111,10 @@ class Double3(_AbstractAttribute):
     Default = (0.0,) * 3
 
     def default(self, cls=None):
-        default = self.get("default")
+        default = self.get("default") or 0.0
 
         # Support single-value default
-        if isinstance(default, int):
+        if not isinstance(default, (tuple, list)):
             default = (default, default, default)
 
         children = list()
@@ -4460,8 +4488,10 @@ class MetaNode(type):
             % cls.__name__
         )
 
+        attributes = {attr["name"]: attr for attr in cls.attributes}
+
         def findAttribute(self, name):
-            return {attr["name"]: attr for attr in self.attributes}.get(name)
+            return attributes.get(name)
 
         def findPlug(self, node, name):
             try:
@@ -4472,6 +4502,9 @@ class MetaNode(type):
 
         cls.findAttribute = findAttribute
         cls.findPlug = findPlug
+
+        cls.find_plug = findPlug
+        cls.find_attribute = findAttribute
 
         return super(MetaNode, cls).__init__(*args, **kwargs)
 
@@ -4494,7 +4527,7 @@ class DgNode(om.MPxNode):
     name = "defaultNode"
     version = (0, 0)
     attributes = list()
-    affects = dict()
+    affects = list()
     ranges = dict()
     defaults = {}
 
@@ -4517,7 +4550,7 @@ class ShapeNode(om.MPxSurfaceShape):
     name = "defaultNode"
     version = (0, 0)
     attributes = list()
-    affects = dict()
+    affects = list()
     ranges = dict()
     defaults = {}
 
@@ -4541,7 +4574,7 @@ class LocatorNode(omui.MPxLocatorNode):
     classification = "drawdb/geometry/custom"
     version = (0, 0)
     attributes = list()
-    affects = dict()
+    affects = list()
     ranges = dict()
     defaults = {}
 
@@ -4555,6 +4588,7 @@ def initialize(Plugin, Manipulator=None):
             nameToAttr[attr["name"]] = mattr
 
         for src, dst in Plugin.affects:
+            log.debug("'%s' affects '%s'" % (src, dst))
             Plugin.attributeAffects(nameToAttr[src], nameToAttr[dst])
 
         if Manipulator:
