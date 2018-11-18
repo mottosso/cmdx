@@ -3922,7 +3922,7 @@ def curve(parent, points, degree=1, form=kOpen):
     return encode(shapeFn.fullPathName())
 
 
-def lookAt(eye, center, up=None):
+def lookAt(origin, center, up=None):
     """Build a (left-handed) look-at matrix
 
     See glm::glc::matrix_transform::lookAt for reference
@@ -3930,19 +3930,29 @@ def lookAt(eye, center, up=None):
              + Z (up)
             /
            /
-    (eye) o------ + X (center)
+    (origin) o------ + X (center)
            \
             + Y
 
     Arguments:
-        eye (Vector): Starting position
+        origin (Vector): Starting position
         center (Vector): Point towards this
         up (Vector, optional): Up facing this way, defaults to Y-up
 
+    Example:
+        >>> mat = lookAt(
+        ...   (0, 0, 0),  # Relative the origin..
+        ...   (1, 0, 0),  # X-axis points towards global X
+        ...   (0, 1, 0)   # Z-axis points towards global Y
+        ... )
+        >>> tm = Transform(mat)
+        >>> tm.rotation().x
+        -90
+
     """
 
-    if isinstance(eye, (tuple, list)):
-        eye = Vector(eye)
+    if isinstance(origin, (tuple, list)):
+        origin = Vector(origin)
 
     if isinstance(center, (tuple, list)):
         center = Vector(center)
@@ -3952,8 +3962,8 @@ def lookAt(eye, center, up=None):
 
     up = up or Vector(0, 1, 0)
 
-    x = (center - eye).normalize()
-    y = ((center - eye) ^ (center - up)).normalize()
+    x = (center - origin).normalize()
+    y = ((center - origin) ^ (center - up)).normalize()
     z = x ^ y
 
     return MatrixType((
