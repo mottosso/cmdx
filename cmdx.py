@@ -80,9 +80,14 @@ TimeUnit = om.MTime.uiUnit()
 DistanceUnit = om.MDistance.uiUnit()
 AngleUnit = om.MAngle.uiUnit()
 
+# DEPRECATED
 MTime = om.MTime
 MDistance = om.MDistance
 MAngle = om.MAngle
+
+TimeType = om.MTime
+DistanceType = om.MDistance
+AngleType = om.MAngle
 
 ExistError = type("ExistError", (RuntimeError,), {})
 DoNothing = None
@@ -176,6 +181,7 @@ class _Type(int):
     """Facilitate use of isinstance(space, _Type)"""
 
 
+MFn = om.MFn
 kDagNode = _Type(om.MFn.kDagNode)
 kShape = _Type(om.MFn.kShape)
 kTransform = _Type(om.MFn.kTransform)
@@ -187,17 +193,26 @@ class _Space(int):
 
 
 # Spaces
+
+# DEPRECATED
 World = _Space(om.MSpace.kWorld)
 Object = _Space(om.MSpace.kObject)
 Transform = _Space(om.MSpace.kTransform)
 PostTransform = _Space(om.MSpace.kPostTransform)
 PreTransform = _Space(om.MSpace.kPreTransform)
 
+# DEPRECATED
 kWorld = World
 kObject = Object
 kTransform = Transform
 kPostTransform = PostTransform
 kPreTransform = PreTransform
+
+sWorld = World
+sObject = Object
+sTransform = Transform
+sPostTransform = PostTransform
+sPreTransform = PreTransform
 
 kXYZ = om.MEulerRotation.kXYZ
 kYZX = om.MEulerRotation.kYZX
@@ -464,10 +479,18 @@ class Node(object):
             if isinstance(value[0], type):
                 if issubclass(value[0], _AbstractAttribute):
                     Attribute, kwargs = value
-                    attr = Attribute(key, **kwargs).create()
+                    attr = Attribute(key, **kwargs)
+
+                    if isinstance(attr, Divider):
+                        indent = "_"
+                        while indent in self:
+                            indent += "_"
+
+                        attr["name"] = indent
+                        attr["shortName"] = indent
 
                     try:
-                        return self.addAttr(attr)
+                        return self.addAttr(attr.create())
 
                     except RuntimeError:
                         # NOTE: I can't be sure this is the only occasion
@@ -2503,6 +2526,9 @@ class TransformationMatrix(om.MTransformationMatrix):
             q = self.quaternion()
             return p + q * other
 
+        elif isinstance(other, om.MMatrix):
+            return type(self)(self.asMatrix() * other)
+
         else:
             raise TypeError(
                 "unsupported operand type(s) for *: '%s' and '%s'"
@@ -2613,9 +2639,14 @@ class TransformationMatrix(om.MTransformationMatrix):
         as_matrix_inverse = asMatrixInverse
 
 
+class MatrixType(om.MMatrix):
+    pass
+
+
 # Alias
 Transform = TransformationMatrix
 Tm = TransformationMatrix
+Mat = MatrixType
 
 
 class Vector(om.MVector):
@@ -2961,7 +2992,14 @@ def _python_to_plug(value, plug):
     elif isinstance(value, om.MTime):
         plug._mplug.setMTime(value)
 
+    elif isinstance(value, om.MQuaternion):
+        _python_to_plug(value.asEulerRotation(), plug)
+
     elif isinstance(value, om.MVector):
+        for index, value in enumerate(value):
+            _python_to_plug(value, plug[index])
+
+    elif isinstance(value, om.MPoint):
         for index, value in enumerate(value):
             _python_to_plug(value, plug[index])
 
@@ -3265,9 +3303,16 @@ class _BaseModifier(object):
     Type = om.MDGModifier
 
     def __enter__(self):
+        self.isContext = True
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
+
+        # Support calling `doIt` during a context,
+        # without polluting the undo queue.
+        if self.isContext and self._opts["undoable"]:
+            commit(self._modifier.undoIt, self._modifier.doIt)
+
         self.doIt()
 
     def __init__(self,
@@ -3278,6 +3323,7 @@ class _BaseModifier(object):
                  template=None):
         super(_BaseModifier, self).__init__()
         self.isDone = False
+        self.isContext = False
 
         self._modifier = self.Type()
         self._history = list()
@@ -3291,7 +3337,7 @@ class _BaseModifier(object):
         }
 
     def doIt(self):
-        if self._opts["undoable"]:
+        if (not self.isContext) and self._opts["undoable"]:
             commit(self._modifier.undoIt, self._modifier.doIt)
 
         try:
@@ -3805,8 +3851,31 @@ def editCurve(parent, points, degree=1, form=kOpen):
 
 
 def curve(parent, points, degree=1, form=kOpen):
+    """Create a NURBS curve from a series of points
+
+    Arguments:
+        parent (DagNode): Parent to resulting shape node
+        points (list): One tuples per point, with 3 floats each
+        degree (int, optional): Degree of curve, 1 is linear
+        form (int, optional): Whether to close the curve or not
+
+    Example:
+        >>> parent = createNode("transform")
+        >>> shape = curve(parent, [
+        ...     (0, 0, 0),
+        ...     (0, 1, 0),
+        ...     (0, 2, 0),
+        ... ])
+        ...
+
+    """
+
     assert isinstance(parent, DagNode), (
         "parent must be of type cmdx.DagNode"
+    )
+
+    assert parent._modifier is None or parent._modifier.isDone, (
+        "curve() currently doesn't work with a modifier"
     )
 
     # Superimpose end knots
@@ -3851,6 +3920,52 @@ def curve(parent, points, degree=1, form=kOpen):
 
     shapeFn = om1.MFnDagNode(mobj)
     return encode(shapeFn.fullPathName())
+
+
+def lookAt(eye, center, up=None):
+    """Build a (left-handed) look-at matrix
+
+    See glm::glc::matrix_transform::lookAt for reference
+
+             + Z (up)
+            /
+           /
+    (eye) o------ + X (center)
+           \
+            + Y
+
+    Arguments:
+        eye (Vector): Starting position
+        center (Vector): Point towards this
+        up (Vector, optional): Up facing this way, defaults to Y-up
+
+    """
+
+    if isinstance(eye, (tuple, list)):
+        eye = Vector(eye)
+
+    if isinstance(center, (tuple, list)):
+        center = Vector(center)
+
+    if up is not None and isinstance(up, (tuple, list)):
+        up = Vector(up)
+
+    up = up or Vector(0, 1, 0)
+
+    x = (center - eye).normalize()
+    y = ((center - eye) ^ (center - up)).normalize()
+    z = x ^ y
+
+    return MatrixType((
+        x[0], x[1], x[2], 0,
+        y[0], y[1], y[2], 0,
+        z[0], z[1], z[2], 0,
+        0, 0, 0, 0
+    ))
+
+
+if ENABLE_PEP8:
+    look_at = lookAt
 
 
 # --------------------------------------------------------
@@ -4130,6 +4245,32 @@ class Double3(_AbstractAttribute):
         return data.inputValue(self["mobject"]).asDouble3()
 
 
+class Double4(_AbstractAttribute):
+    Fn = om.MFnNumericAttribute()
+    Type = None
+    Default = (0.0,) * 4
+
+    def default(self, cls=None):
+        default = self.get("default") or 0.0
+
+        # Support single-value default
+        if not isinstance(default, (tuple, list)):
+            default = (default, default, default)
+
+        children = list()
+        for index, child in enumerate("XYZW"):
+            attribute = self.Fn.create(self["name"] + child,
+                                       self["shortName"] + child,
+                                       om.MFnNumericData.kDouble,
+                                       default[index])
+            children.append(attribute)
+
+        return children
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asDouble3()
+
+
 class Boolean(_AbstractAttribute):
     Fn = om.MFnNumericAttribute()
     Type = om.MFnNumericData.kBoolean
@@ -4245,6 +4386,10 @@ class Angle3(Compound):
 
 class Distance3(Compound):
     Multi = ("XYZ", Distance)
+
+
+class Distance4(Compound):
+    Multi = ("XYZW", Distance)
 
 
 # --------------------------------------------------------
