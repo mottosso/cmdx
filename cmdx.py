@@ -3978,6 +3978,42 @@ if ENABLE_PEP8:
     look_at = lookAt
 
 
+def first(iterator, default=None):
+    """Return first member of an `iterator`
+
+    Example:
+        >>> def it():
+        ...   yield 1
+        ...   yield 2
+        ...   yield 3
+        ...
+        >>> first(it())
+        1
+
+    """
+
+    return next(iterator, default)
+
+
+def last(iterator, default=None):
+    """Return last member of an `iterator`
+
+    Example:
+        >>> def it():
+        ...   yield 1
+        ...   yield 2
+        ...   yield 3
+        ...
+        >>> last(it())
+        3
+
+    """
+
+    last = default
+    for member in iterator:
+        last = member
+    return last
+
 # --------------------------------------------------------
 #
 # Attribute Types
