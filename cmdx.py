@@ -2691,12 +2691,42 @@ class Quaternion(om.MQuaternion):
             other = Vector(*other)
 
         if isinstance(other, om.MVector):
-            vec = Vector(self.x, self.y, self.z)
-            uv = (vec ^ other) * 2.0
-            return Vector(other + (self.w * uv) + (vec ^ uv))
+            return other.rotateBy(self)
 
         else:
             return super(Quaternion, self).__mul__(other)
+
+
+    def lengthSquared(self):
+        return self.x*self.x + self.y*self.y + self.z*self.z + self.w*self.w
+
+
+    def length(self):
+        return math.sqrt(self.lengthSquared())
+
+
+    def isNormalised(self, tol=0.0001):
+        return abs(self.length()-1.0) < tol
+
+
+def twistSwingToQuaternion(ts):
+    """ Converts twist/swing1/swing2 rotation in a Vector into a quaternion.
+    """
+    t = math.tan(ts.x * 0.25)
+    s1 = math.tan(ts.y * 0.25)
+    s2 = math.tan(ts.z * 0.25)
+
+    b = 2.0 / (1.0 + s1 * s1 + s2 * s2)
+    c = 2.0 / (1.0 + t * t)
+
+    quat = Quaternion()
+    quat.w = (b - 1.0) * (c - 1.0)
+    quat.x = -t * (b - 1.0) * c
+    quat.y = -b * (c * t * s1 + (c - 1.0) * s2)
+    quat.z = -b * (c * t * s2 - (c - 1.0) * s1)
+
+    assert quat.isNormalised()
+    return quat
 
 
 class EulerRotation(om.MEulerRotation):
