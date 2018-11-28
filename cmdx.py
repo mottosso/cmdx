@@ -2691,22 +2691,24 @@ class Quaternion(om.MQuaternion):
             other = Vector(*other)
 
         if isinstance(other, om.MVector):
-            return other.rotateBy(self)
+            return Vector(other.rotateBy(self))
 
         else:
             return super(Quaternion, self).__mul__(other)
 
-
     def lengthSquared(self):
-        return self.x*self.x + self.y*self.y + self.z*self.z + self.w*self.w
-
+        return (
+            self.x * self.x +
+            self.y * self.y +
+            self.z * self.z +
+            self.w * self.w
+        )
 
     def length(self):
         return math.sqrt(self.lengthSquared())
 
-
     def isNormalised(self, tol=0.0001):
-        return abs(self.length()-1.0) < tol
+        return abs(self.length() - 1.0) < tol
 
 
 def twistSwingToQuaternion(ts):
@@ -3976,7 +3978,7 @@ def lookAt(origin, center, up=None):
         ...   (0, 1, 0)   # Z-axis points towards global Y
         ... )
         >>> tm = Transform(mat)
-        >>> tm.rotation().x
+        >>> int(degrees(tm.rotation().x))
         -90
 
     """
