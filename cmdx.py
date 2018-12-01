@@ -1647,6 +1647,38 @@ class ObjectSet(Node):
             except AttributeError:
                 continue
 
+    def flatten(self):
+        """Return members, converting nested object sets into its members
+
+        Example:
+            >>> from maya import cmds
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = cmds.createNode("transform", name="a")
+            >>> b = cmds.createNode("transform", name="b")
+            >>> c = cmds.createNode("transform", name="c")
+            >>> cmds.select(a)
+            >>> gc = cmds.sets([a], name="grandchild")
+            >>> cc = cmds.sets([gc, b], name="child")
+            >>> parent = cmds.sets([cc, c], name="parent")
+            >>> mainset = encode(parent)
+            >>> sorted(mainset.flatten(), key=lambda n: n.name())
+            [|a, |b, |c]
+
+        """
+
+        members = set()
+
+        def recurse(objset):
+            for member in objset:
+                if member.isA(om.MFn.kSet):
+                    recurse(member)
+                else:
+                    members.add(member)
+
+        recurse(self)
+
+        return list(members)
+
     def member(self, type=None):
         """Return the first member"""
 
@@ -2395,13 +2427,47 @@ class Plug(object):
         mod.connect(self._mplug, other._mplug)
         mod.doIt()
 
-    def disconnect(self, other):
-        if not getattr(self._modifier, "isDone", True):
-            return self._modifier.disconnect(self._mplug, other._mplug)
+    def disconnect(self, other=None, source=True, destination=True):
+        """Disconnect self from `other`
 
-        mod = om.MDGModifier()
-        mod.disconnect(self._mplug, other._mplug)
-        mod.doIt()
+        Arguments:
+            other (Plug, optional): If none is provided, disconnect everything
+
+        Example:
+            >>> node1 = createNode("transform")
+            >>> node2 = createNode("transform")
+            >>> node2["tx"].connection() is None
+            True
+            >>> node2["ty"].connection() is None
+            True
+            >>>
+            >>> node2["tx"] << node1["tx"]
+            >>> node2["ty"] << node1["ty"]
+            >>> node2["ty"].connection() is None
+            False
+            >>> node2["tx"].connection() is None
+            False
+            >>>
+            >>> node2["tx"].disconnect(node1["tx"])
+            >>> node2["ty"].disconnect()
+            >>> node2["tx"].connection() is None
+            True
+            >>> node2["ty"].connection() is None
+            True
+
+        """
+
+        other = getattr(other, "_mplug", None)
+
+        if not getattr(self._modifier, "isDone", True):
+            mod = self._modifier
+            mod.disconnect(self._mplug, other, source, destination)
+            # Don't do it, leave that to the parent context
+
+        else:
+            mod = DGModifier()
+            mod.disconnect(self._mplug, other, source, destination)
+            mod.doIt()
 
     def connections(self,
                     type=None,
@@ -3225,6 +3291,18 @@ degrees = math.degrees
 radians = math.radians
 
 
+def meters(cm):
+    """Centimeters (Maya's default unit) to Meters
+
+    Example:
+        >>> meters(100)
+        1.0
+
+    """
+
+    return cm * 0.01
+
+
 def clear():
     """Remove all reused nodes"""
     Singleton._instances.clear()
@@ -3451,14 +3529,54 @@ class _BaseModifier(object):
         self._modifier.connect(src, dst)
 
     @record_history
-    def disconnect(self, src, dst):
-        if isinstance(src, Plug):
-            src = src._mplug
+    def disconnect(self, a, b=None, source=True, destination=True):
+        """Disconnect `a` from `b`
 
-        if isinstance(dst, Plug):
-            dst = dst._mplug
+        Arguments:
+            a (Plug): Starting point of a connection
+            b (Plug, optional): End point of a connection, defaults to all
+            source (bool, optional): Disconnect b, if it is a source
+            source (bool, optional): Disconnect b, if it is a destination
 
-        self._modifier.disconnect(src, dst)
+        Normally, Maya only performs a disconnect if the
+        connection is incoming. Bidirectional
+
+        disconnect(A, B) => OK
+         __________       _________
+        |          |     |         |
+        |  nodeA   o---->o  nodeB  |
+        |__________|     |_________|
+
+        disconnect(B, A) => NO
+         __________       _________
+        |          |     |         |
+        |  nodeA   o---->o  nodeB  |
+        |__________|     |_________|
+
+        """
+
+        if isinstance(a, Plug):
+            a = a._mplug
+
+        if isinstance(b, Plug):
+            b = b._mplug
+
+        if b is None:
+            # Disconnect any plug connected to `other`
+            if source:
+                for plug in a.connectedTo(True, False):
+                    self._modifier.disconnect(plug, a)
+
+            if destination:
+                for plug in a.connectedTo(False, True):
+                    self._modifier.disconnect(a, plug)
+
+        else:
+            if source:
+                self._modifier.disconnect(a, b)
+
+            if destination:
+                self._modifier.disconnect(b, a)
 
     if ENABLE_PEP8:
         do_it = doIt
@@ -4070,6 +4188,8 @@ class _AbstractAttribute(dict):
     Keyable = True
     ChannelBox = False
 
+    Help = ""
+
     def __eq__(self, other):
         try:
             # Support Attribute -> Attribute comparison
@@ -4123,7 +4243,8 @@ class _AbstractAttribute(dict):
                  max=None,
                  channelBox=None,
                  array=False,
-                 connectable=True):
+                 connectable=True,
+                 help=None):
 
         args = locals().copy()
         args.pop("self")
@@ -4677,7 +4798,7 @@ tWtAddMatrix = om.MTypeId(0x4457414d)
 #
 # --------------------------------------------------------
 
-InstalledPlugins = list()
+InstalledPlugins = dict()
 TypeId = om.MTypeId
 
 # Get your unique ID from Autodesk, the below
@@ -4728,6 +4849,8 @@ class MetaNode(type):
         cls.find_plug = findPlug
         cls.find_attribute = findAttribute
 
+        cls.log = logging.getLogger(cls.__name__)
+
         return super(MetaNode, cls).__init__(*args, **kwargs)
 
 
@@ -4753,6 +4876,10 @@ class DgNode(om.MPxNode):
     ranges = dict()
     defaults = {}
 
+    @classmethod
+    def postInitialize(cls):
+        pass
+
 
 class ShapeNode(om.MPxSurfaceShape):
     """Abstract baseclass for a Maya shape
@@ -4775,6 +4902,10 @@ class ShapeNode(om.MPxSurfaceShape):
     affects = list()
     ranges = dict()
     defaults = {}
+
+    @classmethod
+    def postInitialize(cls):
+        pass
 
 
 class LocatorNode(omui.MPxLocatorNode):
@@ -4799,6 +4930,10 @@ class LocatorNode(omui.MPxLocatorNode):
     affects = list()
     ranges = dict()
     defaults = {}
+
+    @classmethod
+    def postInitialize(cls):
+        pass
 
 
 def initialize(Plugin, Manipulator=None):
@@ -4845,7 +4980,9 @@ def initialize(Plugin, Manipulator=None):
 
         else:
             # Maintain reference to original class
-            InstalledPlugins.append(Plugin)
+            InstalledPlugins[Plugin.name] = Plugin
+
+            Plugin.postInitialize()
 
     return initializePlugin
 
@@ -4858,3 +4995,12 @@ def uninitialize(Plugin, Manipulator=None):
             om.MFnPlugin(obj).deregisterNode(Manipulator.typeid)
 
     return uninitializePlugin
+
+
+def findPlugin(name):
+    """Find the original class of a plug-in by `name`"""
+
+    try:
+        return InstalledPlugins[name]
+    except KeyError:
+        raise ExistError("'%s' is not a recognised plug-in" % name)
