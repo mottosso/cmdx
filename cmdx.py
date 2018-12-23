@@ -193,26 +193,11 @@ class _Space(int):
 
 
 # Spaces
-
-# DEPRECATED
-World = _Space(om.MSpace.kWorld)
-Object = _Space(om.MSpace.kObject)
-Transform = _Space(om.MSpace.kTransform)
-PostTransform = _Space(om.MSpace.kPostTransform)
-PreTransform = _Space(om.MSpace.kPreTransform)
-
-# DEPRECATED
-kWorld = World
-kObject = Object
-kTransform = Transform
-kPostTransform = PostTransform
-kPreTransform = PreTransform
-
-sWorld = World
-sObject = Object
-sTransform = Transform
-sPostTransform = PostTransform
-sPreTransform = PreTransform
+sWorld = _Space(om.MSpace.kWorld)
+sObject = _Space(om.MSpace.kObject)
+sTransform = _Space(om.MSpace.kTransform)
+sPostTransform = _Space(om.MSpace.kPostTransform)
+sPreTransform = _Space(om.MSpace.kPreTransform)
 
 kXYZ = om.MEulerRotation.kXYZ
 kYZX = om.MEulerRotation.kYZX
@@ -1219,9 +1204,9 @@ class DagNode(Node):
 
         return self.__class__(root.node()) if root else self
 
-    def transform(self, space=Object, time=None):
+    def transform(self, space=sObject, time=None):
         """Return TransformationMatrix"""
-        plug = self["worldMatrix"][0] if space == World else self["matrix"]
+        plug = self["worldMatrix"][0] if space == sWorld else self["matrix"]
         return TransformationMatrix(plug.asMatrix(time))
 
     def mapFrom(self, other, time=None):
@@ -1647,7 +1632,7 @@ class ObjectSet(Node):
             except AttributeError:
                 continue
 
-    def flatten(self):
+    def flatten(self, type=None):
         """Return members, converting nested object sets into its members
 
         Example:
@@ -1672,6 +1657,9 @@ class ObjectSet(Node):
             for member in objset:
                 if member.isA(om.MFn.kSet):
                     recurse(member)
+                elif type is not None:
+                    if type == member.typeName:
+                        members.add(member)
                 else:
                     members.add(member)
 
@@ -2614,7 +2602,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         return self.quaternion() * Vector(0, 0, 1)
 
     def translateBy(self, vec, space=None):
-        space = space or kTransform
+        space = space or sTransform
         if isinstance(vec, (tuple, list)):
             vec = Vector(vec)
         return super(TransformationMatrix, self).translateBy(vec, space)
@@ -2627,7 +2615,7 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         """
 
-        space = space or kTransform
+        space = space or sTransform
         if isinstance(vec, (tuple, list)):
             vec = Vector(vec)
 
@@ -2642,19 +2630,19 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     def translation(self, space=None):
         """This method does not typically support optional arguments"""
-        space = space or kTransform
+        space = space or sTransform
         return super(TransformationMatrix, self).translation(space)
 
     def setTranslation(self, trans, space=None):
         if isinstance(trans, (tuple, list)):
             trans = Vector(*trans)
 
-        space = space or kTransform
+        space = space or sTransform
         return super(TransformationMatrix, self).setTranslation(trans, space)
 
     def scale(self, space=None):
         """This method does not typically support optional arguments"""
-        space = space or kTransform
+        space = space or sTransform
         return super(TransformationMatrix, self).scale(space)
 
     def setScale(self, seq, space=None):
@@ -2662,7 +2650,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         if isinstance(seq, (tuple, list)):
             seq = Vector(*seq)
 
-        space = space or kTransform
+        space = space or sTransform
         return super(TransformationMatrix, self).setScale(seq, space)
 
     def rotation(self, asQuaternion=False):
