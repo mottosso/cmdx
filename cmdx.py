@@ -407,7 +407,7 @@ class Node(object):
             try:
                 return CachedPlug(self._state["values"][key, unit])
             except KeyError:
-                log.warning("No previous value found")
+                pass
 
         try:
             plug = self.findPlug(key)
@@ -2766,11 +2766,16 @@ class Quaternion(om.MQuaternion):
 
 
 def twistSwingToQuaternion(ts):
-    """ Converts twist/swing1/swing2 rotation in a Vector into a quaternion.
+    """Convert twist/swing1/swing2 rotation in a Vector into a quaternion
+
+    Arguments:
+        ts (Vector): Twist, swing1 and swing2
+
     """
-    t = math.tan(ts.x * 0.25)
-    s1 = math.tan(ts.y * 0.25)
-    s2 = math.tan(ts.z * 0.25)
+
+    t = tan(ts.x * 0.25)
+    s1 = tan(ts.y * 0.25)
+    s2 = tan(ts.z * 0.25)
 
     b = 2.0 / (1.0 + s1 * s1 + s2 * s2)
     c = 2.0 / (1.0 + t * t)
@@ -3277,6 +3282,9 @@ if ENABLE_PEP8:
 # Helpful for euler rotations
 degrees = math.degrees
 radians = math.radians
+sin = math.sin
+cos = math.cos
+tan = math.tan
 
 
 def meters(cm):
