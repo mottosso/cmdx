@@ -12,7 +12,7 @@ from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
-from maya import OpenMaya as om1
+from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
 PY3 = sys.version_info[0] == 3
 
@@ -186,6 +186,7 @@ kDagNode = _Type(om.MFn.kDagNode)
 kShape = _Type(om.MFn.kShape)
 kTransform = _Type(om.MFn.kTransform)
 kJoint = _Type(om.MFn.kJoint)
+kSet = _Type(om.MFn.kSet)
 
 
 class _Space(int):
@@ -354,10 +355,10 @@ class Node(object):
             return str(self) != str(other)
 
     def __str__(self):
-        return self.name()
+        return self.name(namespace=True)
 
     def __repr__(self):
-        return self.name()
+        return self.name(namespace=True)
 
     def __add__(self, other):
         """Support legacy + '.attr' behavior
@@ -817,8 +818,12 @@ class Node(object):
         self._state["values"].clear()
 
     @protected
-    def name(self, namespace=True):
-        """Return the name of this node, without namespace
+    def name(self, namespace=False):
+        """Return the name of this node
+
+        Arguments:
+            namespace (bool, optional): Return with namespace,
+                defaults to False
 
         Example:
             >>> node = createNode("transform", name="myName")
@@ -1554,7 +1559,7 @@ class ObjectSet(Node):
 
     @protected
     def shortestPath(self):
-        return self.name()
+        return self.name(namespace=True)
 
     def __iter__(self):
         for member in self.members():
@@ -1571,7 +1576,7 @@ class ObjectSet(Node):
         return self.update([member])
 
     def remove(self, members):
-        mobj = _encode1(self.name())
+        mobj = _encode1(self.name(namespace=True))
         selectionList = om1.MSelectionList()
 
         if not isinstance(members, (tuple, list)):
@@ -1596,7 +1601,7 @@ class ObjectSet(Node):
 
     def clear(self):
         """Remove all members from set"""
-        mobj = _encode1(self.name())
+        mobj = _encode1(self.name(namespace=True))
         fn = om1.MFnSet(mobj)
         fn.clear()
 
@@ -1682,7 +1687,7 @@ class ObjectSet(Node):
         if isinstance(type, (tuple, list)):
             op = operator.contains
 
-        for node in cmds.sets(self.name(), query=True) or []:
+        for node in cmds.sets(self.name(namespace=True), query=True) or []:
             node = encode(node)
 
             if not type or op(type, getattr(node._fn, other)):
@@ -2213,7 +2218,8 @@ class Plug(object):
         return om.MEulerRotation(value, order)
 
     def asQuaternion(self, time=None):
-        pass
+        value = self.read(time=time)
+        value = Euler(value).asQuaternion()
 
     def asVector(self):
         assert self.isArray or self.isCompound, "'%s' not an array" % self
@@ -2317,6 +2323,10 @@ class Plug(object):
 
         self.keyable = False
         self.channelBox = False
+
+    def lockAndHide(self):
+        self.lock()
+        self.hide()
 
     def show(self):
         """Show attribute in channel box
@@ -2536,6 +2546,7 @@ class Plug(object):
         as_quaternion = asQuaternion
         as_vector = asVector
         channel_box = channelBox
+        lock_and_hide = lockAndHide
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -2562,13 +2573,13 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         super(TransformationMatrix, self).__init__(*args)
 
-        if translate:
+        if translate is not None:
             self.setTranslation(translate)
 
-        if rotate:
+        if rotate is not None:
             self.setRotation(rotate)
 
-        if scale:
+        if scale is not None:
             self.setScale(scale)
 
     def __mul__(self, other):
@@ -2628,12 +2639,20 @@ class TransformationMatrix(om.MTransformationMatrix):
         """Return transformation matrix as a Quaternion"""
         return Quaternion(self.rotation(asQuaternion=True))
 
+    def rotatePivot(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return super(TransformationMatrix, self).rotatePivot(space)
+
     def translation(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return super(TransformationMatrix, self).translation(space)
 
     def setTranslation(self, trans, space=None):
+        if isinstance(trans, Plug):
+            trans = trans.as_vector()
+
         if isinstance(trans, (tuple, list)):
             trans = Vector(*trans)
 
@@ -2647,6 +2666,9 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     def setScale(self, seq, space=None):
         """This method does not typically support optional arguments"""
+        if isinstance(seq, Plug):
+            seq = seq.as_vector()
+
         if isinstance(seq, (tuple, list)):
             seq = Vector(*seq)
 
@@ -2658,6 +2680,8 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     def setRotation(self, rot):
         """Interpret three values as an euler rotation"""
+        if isinstance(rot, Plug):
+            rot = rot.as_vector()
 
         if isinstance(rot, (tuple, list)):
             try:
@@ -3361,7 +3385,7 @@ def decode(node):
     try:
         return node.shortestPath()
     except AttributeError:
-        return node.name()
+        return node.name(namespace=True)
 
 
 def record_history(func):
@@ -3980,7 +4004,7 @@ def editCurve(parent, points, degree=1, form=kOpen):
                                         _encode1(parent.path()))
 
     mod = om1.MDagModifier()
-    mod.renameNode(mobj, parent.name() + "Shape")
+    mod.renameNode(mobj, parent.name(namespace=True) + "Shape")
     mod.doIt()
 
     def undo():
@@ -4052,7 +4076,7 @@ def curve(parent, points, degree=1, form=kOpen):
                           _encode1(parent.path()))
 
     mod = om1.MDagModifier()
-    mod.renameNode(mobj, parent.name() + "Shape")
+    mod.renameNode(mobj, parent.name(namespace=True) + "Shape")
     mod.doIt()
 
     def undo():
@@ -4307,8 +4331,8 @@ class _AbstractAttribute(dict):
         self.Fn.readable = self["readable"]
         self.Fn.writable = self["writable"]
         self.Fn.hidden = self["hidden"]
-        self.Fn.channelBox = self["channelBox"]
         self.Fn.keyable = self["keyable"]
+        self.Fn.channelBox = self["channelBox"]
         self.Fn.array = self["array"]
 
         if self["min"] is not None:
@@ -4932,7 +4956,7 @@ class LocatorNode(omui.MPxLocatorNode):
         pass
 
 
-def initialize(Plugin, Manipulator=None):
+def initialize2(Plugin):
     def _nodeInit():
         nameToAttr = {}
         for attr in Plugin.attributes:
@@ -4943,9 +4967,6 @@ def initialize(Plugin, Manipulator=None):
         for src, dst in Plugin.affects:
             log.debug("'%s' affects '%s'" % (src, dst))
             Plugin.attributeAffects(nameToAttr[src], nameToAttr[dst])
-
-        if Manipulator:
-            om.MPxManipContainer.addToManipConnectTable(Plugin.typeid)
 
     def _nodeCreator():
         return Plugin()
@@ -4983,12 +5004,57 @@ def initialize(Plugin, Manipulator=None):
     return initializePlugin
 
 
-def uninitialize(Plugin, Manipulator=None):
+def uninitialize2(Plugin):
     def uninitializePlugin(obj):
         om.MFnPlugin(obj).deregisterNode(Plugin.typeid)
 
-        if Manipulator:
-            om.MFnPlugin(obj).deregisterNode(Manipulator.typeid)
+    return uninitializePlugin
+
+
+# Plugins written with Maya Python API 1.0
+
+class MPxManipContainer1(ompx1.MPxManipContainer):
+    name = "defaultManip"
+    version = (0, 0)
+    ownerid = om1.MTypeId(StartId)
+    typeid = om1.MTypeId(StartId)
+
+
+def initializeManipulator1(Manipulator):
+    def _manipulatorCreator():
+        return ompx1.asMPxPtr(Manipulator())
+
+    def _manipulatorInit():
+        ompx1.MPxManipContainer.addToManipConnectTable(Manipulator.ownerid)
+        ompx1.MPxManipContainer.initialize()
+
+    def initializePlugin(obj):
+        version = ".".join(map(str, Manipulator.version))
+        plugin = ompx1.MFnPlugin(obj, "WeightShift", version, "Any")
+
+        # NOTE(marcus): The name *must* end with Manip
+        # See https://download.autodesk.com/us/maya/2011help
+        #     /API/class_m_px_manip_container.html
+        #     #e95527ff30ae53c8ae0419a1abde8b0c
+        assert Manipulator.name.endswith("Manip"), (
+            "Manipulator '%s' must have the name of a plug-in, "
+            "and end with 'Manip'"
+        )
+
+        plugin.registerNode(
+            Manipulator.name,
+            Manipulator.typeid,
+            _manipulatorCreator,
+            _manipulatorInit,
+            ompx1.MPxNode.kManipContainer
+        )
+
+    return initializePlugin
+
+
+def uninitializeManipulator1(Manipulator):
+    def uninitializePlugin(obj):
+        ompx1.MFnPlugin(obj).deregisterNode(Manipulator.typeid)
 
     return uninitializePlugin
 
