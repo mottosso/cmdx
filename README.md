@@ -18,7 +18,7 @@ It's usable, but stay tuned for the next day or two, until this notice is taken 
 
 <br>
 
-| Maya | Status | OS
+| Maya | Status
 |:----------|:-----
 | 2015 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2015)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
