@@ -1,6 +1,9 @@
 *.pyc
 cover/**
 .coverage
+dist
+*.egg-info
+build
 
 # Automatically generated
 test_docs.py
