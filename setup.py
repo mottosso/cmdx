@@ -7,7 +7,7 @@ __version__ = None
 with open(os.path.join(os.path.dirname(__file__), "cmdx.py")) as f:
     for line in f:
         if line.startswith("__version__"):
-            eval(line)
+            exec(line)
             break
 
 assert __version__, "Could not determine version"
