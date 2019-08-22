@@ -2,6 +2,20 @@
 
 <p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a></p>
 
+---
+
+# Heads up!
+
+This project was made public just now for finishing touches.
+
+1. Upload to PyPI
+2. Addition of CI
+3. Upload of documentation
+
+It's usable, but stay tuned for the next day or two, until this notice is taken down, for a proper release.
+
+---
+
 <br>
 
 ### About
