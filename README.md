@@ -2,28 +2,7 @@
 
 <p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a></p>
 
----
-
-# Heads up!
-
-This project was made public just now for finishing touches.
-
-1. Upload to PyPI
-2. Addition of CI
-3. Upload of documentation
-
-It's usable, but stay tuned for the next day or two, until this notice is taken down, for a proper release.
-
----
-
 <br>
-
-| Maya | Status
-|:----------|:-----
-| 2015 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2015)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 
 ### About
 
@@ -36,6 +15,7 @@ If you fit in either of these groups, then `cmdx` is for you.
 
 On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictures/pymel), and 2.5x faster than `maya.cmds` at common tasks; at best, it is 1,300x faster than PyMEL.
 
+- See [Command Reference](https://mottosso.com/cmdx) for technical details
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See `help()` for examples on a particular command, e.g. `help(cmdx.Node)`
 
@@ -46,6 +26,18 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 | Aug 2019 | 0.4.0 | Public release
 | Feb 2018 | 0.1.0 | Extracted into its own repository
 | Jun 2017 | 0.0.0 | Starts as an internal module
+
+##### Status
+
+[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://github.com/mottosso/cmdx/)
+[![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
+
+| Maya | Status
+|:----------|:-----
+| 2015 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2015)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 
 ##### Usecases
 
@@ -59,12 +51,24 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 <br>
 
+### Install
+
+cmdx is a single file and can either be [copy/pasted](https://raw.githubusercontent.com/mottosso/cmdx/master/cmdx) into your project, [downloaded](https://github.com/mottosso/cmdx/archive/master.zip) as-is, cloned as-is or installed via `pip`.
+
+```bash
+$ pip install cmdx
+```
+
+- Pro tip: **Never use the latest commit for production**. Instead, use [the latest release](https://github.com/mottosso/cmdx/releases). That way, when you read bug reports or make one for yourself you will be able to match a version with the problem without which you will not know which fixes apply to you nor would we be able to help you. Installing via pip or conda as above ensures you are provided the latest *stable* release. Unstable releases are suffixed with a `.b`, e.g. `0.5.0.b1`.
+
+<br>
+
 ### What is novel?
 
 With [so many options](#comparison) for interacting with Maya, when or why should you choose `cmdx`?
 
 - [Performance](#performance)
-- [Declarative plug-ins](#plugins)
+- [Declarative plug-ins](#plug-ins)
 - [Node and attribute reuse](#query-reduction)
 - [Transactions](#transactions)
 - [Hashable References](#hashable-references)
