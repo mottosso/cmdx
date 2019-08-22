@@ -18,6 +18,14 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 - See [Measurements](#measurements) and [Timings](#timings) for details
 - See `help()` for examples on a particular command, e.g. `help(cmdx.Node)`
 
+##### News
+
+| Date     | Version   | Event
+|:---------|:----------|:----------
+| Aug 2019 | 0.4.0 | Public release
+| Feb 2018 | 0.1.0 | Extracted into its own repository
+| Jun 2017 | 0.0.0 | Starts as an internal module
+
 ##### Usecases
 
 `cmdx` was written for performance critical run-time tasks in Maya, listening to thousands of events, reading from and writing to thousands of attributes each frame, without affecting user interactivity. It doesn't capture all of `cmds`, but rather a small subset related to parts relevant to these types of performance critical tasks.
