@@ -18,6 +18,13 @@ It's usable, but stay tuned for the next day or two, until this notice is taken 
 
 <br>
 
+| Maya | Status | OS
+|:----------|:-----
+| 2015 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2015)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+
 ### About
 
 `cmdx` is a Python wrapper for the [Maya Python API 2.0](http://help.autodesk.com/view/MAYAUL/2016/ENU/?guid=__py_ref_index_html) and a fast subset of the `maya.cmds` module, with persistent references to nodes.
