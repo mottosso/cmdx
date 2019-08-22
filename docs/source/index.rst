@@ -21,6 +21,9 @@
 
 `cmdx` is a Python module for fast scenegraph manipulation in Autodesk Maya.
 
+- `Documentation <https://github.com/mottosso/cmdx#readme>`_
+- Command reference below
+
 |
 
 .. currentmodule:: cmdx
