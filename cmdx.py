@@ -16,6 +16,8 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
+__version__ = "0.4.0"
+
 PY3 = sys.version_info[0] == 3
 
 # Bypass assertion error on unsupported Maya versions
@@ -51,8 +53,6 @@ if PY3:
     string_types = str,
 else:
     string_types = str, basestring, unicode
-
-__version__ = "0.3.0"
 
 try:
     __maya_version__ = int(cmds.about(version=True))
