@@ -1,0 +1,2224 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>cmdx &#8212; cmdx 1.0.0 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/css/cmdx.css" />
+    <link rel="stylesheet" type="text/css" href="_static/css/pygments.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="toctree-wrapper compound">
+</div>
+<a class="reference external image-reference" href="/cmdx/"><img alt="`cmdx`" class="align-center" src="https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png" style="width: 200px;" /></a>
+<p class="centered">
+<strong><em>The fast subset of `maya.cmds`</em></strong></p><div class="line-block">
+<div class="line"><br /></div>
+</div>
+<div class="section" id="cmdx">
+<h1><cite>cmdx</cite><a class="headerlink" href="#cmdx" title="Permalink to this headline">¶</a></h1>
+<p><cite>cmdx</cite> is a Python module for fast scenegraph manipulation in Autodesk Maya.</p>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<div class="section" id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<p>The basics from <cite>maya.cmds</cite> are included.</p>
+<dl class="function">
+<dt id="cmdx.createNode">
+<code class="descclassname">cmdx.</code><code class="descname">createNode</code><span class="sig-paren">(</span><em>type</em>, <em>name=None</em>, <em>parent=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.createNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new node</p>
+<p>This function forms the basic building block
+with which to create new nodes in Maya.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Missing arguments <cite>shared</cite> and <cite>skipSelect</cite></p>
+</div>
+<div class="admonition tip">
+<p class="first admonition-title">Tip</p>
+<p class="last">For additional performance, <cite>type</cite> may be given as an MTypeId</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>type</strong> (<em>str</em>) – Type name of new node, e.g. “transform”</li>
+<li><strong>name</strong> (<em>str</em><em>, </em><em>optional</em>) – Sets the name of the newly-created node</li>
+<li><strong>parent</strong> (<a class="reference internal" href="#cmdx.Node" title="cmdx.Node"><em>Node</em></a><em>, </em><em>optional</em>) – Specifies the parent in the DAG under which
+the new node belongs</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>  <span class="c1"># Type as string</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="n">tTransform</span><span class="p">)</span>  <span class="c1"># Type as ID</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.getAttr">
+<code class="descclassname">cmdx.</code><code class="descname">getAttr</code><span class="sig-paren">(</span><em>attr</em>, <em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.getAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read <cite>attr</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Attribute as a cmdx.Plug</li>
+<li><strong>type</strong> (<em>str</em><em>, </em><em>optional</em>) – Unused</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">getAttr</span><span class="p">(</span><span class="n">node</span> <span class="o">+</span> <span class="s2">&quot;.translateX&quot;</span><span class="p">)</span>
+<span class="go">0.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.setAttr">
+<code class="descclassname">cmdx.</code><code class="descname">setAttr</code><span class="sig-paren">(</span><em>attr</em>, <em>value</em>, <em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.setAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write <cite>value</cite> to <cite>attr</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Existing attribute to edit</li>
+<li><strong>value</strong> (<em>any</em>) – Value to write</li>
+<li><strong>type</strong> (<em>int</em><em>, </em><em>optional</em>) – Unused</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">setAttr</span><span class="p">(</span><span class="n">node</span> <span class="o">+</span> <span class="s2">&quot;.translateX&quot;</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.addAttr">
+<code class="descclassname">cmdx.</code><code class="descname">addAttr</code><span class="sig-paren">(</span><em>node</em>, <em>longName</em>, <em>attributeType</em>, <em>shortName=None</em>, <em>enumName=None</em>, <em>defaultValue=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.addAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add new attribute to <cite>node</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node</strong> (<a class="reference internal" href="#cmdx.Node" title="cmdx.Node"><em>Node</em></a>) – Add attribute to this node</li>
+<li><strong>longName</strong> (<em>str</em>) – Name of resulting attribute</li>
+<li><strong>attributeType</strong> (<em>str</em>) – Type of attribute, e.g. <cite>string</cite></li>
+<li><strong>shortName</strong> (<em>str</em><em>, </em><em>optional</em>) – Alternate name of attribute</li>
+<li><strong>enumName</strong> (<em>str</em><em>, </em><em>optional</em>) – Options for an enum attribute</li>
+<li><strong>defaultValue</strong> (<em>any</em><em>, </em><em>optional</em>) – Default value of attribute</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">addAttr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;myString&quot;</span><span class="p">,</span> <span class="n">attributeType</span><span class="o">=</span><span class="s2">&quot;string&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">addAttr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;myDouble&quot;</span><span class="p">,</span> <span class="n">attributeType</span><span class="o">=</span><span class="n">Double</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.connectAttr">
+<code class="descclassname">cmdx.</code><code class="descname">connectAttr</code><span class="sig-paren">(</span><em>src</em>, <em>dst</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.connectAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Connect <cite>src</cite> to <cite>dst</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>src</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Source plug</li>
+<li><strong>dst</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Destination plug</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">src</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dst</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">connectAttr</span><span class="p">(</span><span class="n">src</span> <span class="o">+</span> <span class="s2">&quot;.rotateX&quot;</span><span class="p">,</span> <span class="n">dst</span> <span class="o">+</span> <span class="s2">&quot;.scaleY&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.listRelatives">
+<code class="descclassname">cmdx.</code><code class="descname">listRelatives</code><span class="sig-paren">(</span><em>node</em>, <em>type=None</em>, <em>children=False</em>, <em>allDescendents=False</em>, <em>parent=False</em>, <em>shapes=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.listRelatives" title="Permalink to this definition">¶</a></dt>
+<dd><p>List relatives of <cite>node</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>node</strong> (<a class="reference internal" href="#cmdx.DagNode" title="cmdx.DagNode"><em>DagNode</em></a>) – Node to enquire about</li>
+<li><strong>type</strong> (<em>int</em><em>, </em><em>optional</em>) – Only return nodes of this type</li>
+<li><strong>children</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return children of <cite>node</cite></li>
+<li><strong>parent</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return parent of <cite>node</cite></li>
+<li><strong>shapes</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return only children that are shapes</li>
+<li><strong>allDescendents</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return descendents of <cite>node</cite></li>
+<li><strong>fullPath</strong> (<em>bool</em><em>, </em><em>optional</em>) – Unused; nodes are always exact</li>
+<li><strong>path</strong> (<em>bool</em><em>, </em><em>optional</em>) – Unused; nodes are always exact</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">listRelatives</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="n">parent</span><span class="p">]</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.listConnections">
+<code class="descclassname">cmdx.</code><code class="descname">listConnections</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.listConnections" title="Permalink to this definition">¶</a></dt>
+<dd><p>List connections of <cite>attr</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a><em> or </em><a class="reference internal" href="#cmdx.Node" title="cmdx.Node"><em>Node</em></a>) – </td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">node1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">node2</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">listConnections</span><span class="p">(</span><span class="n">node1</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="n">node2</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">listConnections</span><span class="p">(</span><span class="n">node1</span> <span class="o">+</span> <span class="s2">&quot;.v&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="n">node2</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">listConnections</span><span class="p">(</span><span class="n">node1</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="p">[</span><span class="n">node2</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">listConnections</span><span class="p">(</span><span class="n">node2</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="n">node1</span><span class="p">]</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="object-oriented-interface">
+<h2>Object Oriented Interface<a class="headerlink" href="#object-oriented-interface" title="Permalink to this headline">¶</a></h2>
+<p>In addition to the familiar interface inherited from <cite>cmds</cite>, <cite>cmdx</cite> offers a faster, object oriented alternative to all of that functionality, and more.</p>
+<dl class="class">
+<dt id="cmdx.Node">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Node</code><span class="sig-paren">(</span><em>mobject</em>, <em>exists=True</em>, <em>modifier=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya dependency node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">decompose</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;decomposeMatrix&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;decompose&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">str</span><span class="p">(</span><span class="n">decompose</span><span class="p">)</span>
+<span class="go">&#39;decompose&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">alias</span> <span class="o">=</span> <span class="n">encode</span><span class="p">(</span><span class="n">decompose</span><span class="o">.</span><span class="n">name</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">decompose</span> <span class="o">==</span> <span class="n">alias</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transform</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transform</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transform</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">decompose</span><span class="p">[</span><span class="s2">&quot;inputMatrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">decompose</span><span class="p">[</span><span class="s2">&quot;outputTranslate&quot;</span><span class="p">]</span>
+<span class="go">(5.0, 0.0, 0.0)</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="cmdx.Node.addAttr">
+<code class="descname">addAttr</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.addAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a new dynamic attribute to node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Add this attribute</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">attr</span> <span class="o">=</span> <span class="n">Double</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">addAttr</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mf">5.0</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.add_attr">
+<code class="descname">add_attr</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.add_attr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a new dynamic attribute to node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Add this attribute</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">attr</span> <span class="o">=</span> <span class="n">Double</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">addAttr</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mf">5.0</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.clear">
+<code class="descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clear transient state</p>
+<p>A node may cache previously queried values for performance
+at the expense of memory. This method erases any cached
+values, freeing up memory at the expense of performance.</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span>
+<span class="go">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Plug was reused</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span>
+<span class="go">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Value was reused</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span>
+<span class="go">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Plug and value was recomputed</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.code">
+<code class="descname">code</code><a class="headerlink" href="#cmdx.Node.code" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return MObjectHandle.hashCode of this node</p>
+<p>This a guaranteed-unique integer (long in Python 2)
+similar to the UUID of Maya 2016</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.connection">
+<code class="descname">connection</code><span class="sig-paren">(</span><em>type=None</em>, <em>unit=None</em>, <em>plug=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.connection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Singular version of <a class="reference internal" href="#cmdx.Node.connections" title="cmdx.Node.connections"><code class="xref py py-func docutils literal notranslate"><span class="pre">connections()</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.connections">
+<code class="descname">connections</code><span class="sig-paren">(</span><em>type=None</em>, <em>unit=None</em>, <em>plugs=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.connections" title="Permalink to this definition">¶</a></dt>
+<dd><p>Yield plugs of node with a connection to any other plug</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>unit</strong> (<em>int</em><em>, </em><em>optional</em>) – Return plug in this unit,
+e.g. Meters or Radians</li>
+<li><strong>type</strong> (<em>str</em><em>, </em><em>optional</em>) – Restrict output to nodes of this type,
+e.g. “transform” or “mesh”</li>
+<li><strong>plugs</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return plugs, rather than nodes</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;A&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;multDoubleLinear&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;B&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">b</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">connections</span><span class="p">())</span> <span class="o">==</span> <span class="p">[</span><span class="n">b</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">connections</span><span class="p">())</span> <span class="o">==</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.data">
+<code class="descname">data</code><a class="headerlink" href="#cmdx.Node.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Special handling for data stored in the instance</p>
+<p>Normally, the initialisation of data could happen in the __init__,
+but for some reason the postConstructor of a custom plug-in calls
+__init__ twice for every unique hex, which causes any data added
+there to be wiped out once the postConstructor is done.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.deleteAttr">
+<code class="descname">deleteAttr</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.deleteAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete <cite>attr</cite> from node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Attribute to remove</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">deleteAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.delete_attr">
+<code class="descname">delete_attr</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.delete_attr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete <cite>attr</cite> from node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a>) – Attribute to remove</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">deleteAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.destroyed">
+<code class="descname">destroyed</code><a class="headerlink" href="#cmdx.Node.destroyed" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.dump">
+<code class="descname">dump</code><span class="sig-paren">(</span><em>ignore_error=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.dump" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dictionary of all attributes</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">json</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;choice&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dump</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">dump</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">dump</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dump</span><span class="p">[</span><span class="s2">&quot;choice1.caching&quot;</span><span class="p">]</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.dumps">
+<code class="descname">dumps</code><span class="sig-paren">(</span><em>indent=4</em>, <em>sortKeys=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.dumps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a JSON compatible dictionary of all attributes</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.exists">
+<code class="descname">exists</code><a class="headerlink" href="#cmdx.Node.exists" title="Permalink to this definition">¶</a></dt>
+<dd><p>The node exists in both memory <em>and</em> scene</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;joint&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">exists</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cmds</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">exists</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">destroyed</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">exists</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">destroyed</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.findPlug">
+<code class="descname">findPlug</code><span class="sig-paren">(</span><em>name</em>, <em>cached=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.findPlug" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cache previously found plugs, for performance</p>
+<p>Cost: 4.9 microseconds/call</p>
+<p>Part of the time taken in querying an attribute is the
+act of finding a plug given its name as a string.</p>
+<p>This causes a 25% reduction in time taken for repeated
+attribute queries. Though keep in mind that state is stored
+in the <cite>cmdx</cite> object which currently does not survive rediscovery.
+That is, if a node is created and later discovered through a call
+to <cite>encode</cite>, then the original and discovered nodes carry one
+state each.</p>
+<p>Additional challenges include storing the same plug for both
+long and short name of said attribute, which is currently not
+the case.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<em>str</em>) – Name of plug to find</li>
+<li><strong>cached</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return cached plug, or
+throw an exception. Default to False, which
+means it will run Maya’s findPlug() and cache
+the result.</li>
+<li><strong>safe</strong> (<em>bool</em><em>, </em><em>optional</em>) – Always find the plug through
+Maya’s API, defaults to False. This will not perform
+any caching and is intended for use during debugging
+to spot whether caching is causing trouble.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">KeyError</span>: <span class="n">&quot;&#39;translateX&#39; not cached&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">plug1</span><span class="p">,</span> <span class="n">om</span><span class="o">.</span><span class="n">MPlug</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.find_plug">
+<code class="descname">find_plug</code><span class="sig-paren">(</span><em>name</em>, <em>cached=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.find_plug" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cache previously found plugs, for performance</p>
+<p>Cost: 4.9 microseconds/call</p>
+<p>Part of the time taken in querying an attribute is the
+act of finding a plug given its name as a string.</p>
+<p>This causes a 25% reduction in time taken for repeated
+attribute queries. Though keep in mind that state is stored
+in the <cite>cmdx</cite> object which currently does not survive rediscovery.
+That is, if a node is created and later discovered through a call
+to <cite>encode</cite>, then the original and discovered nodes carry one
+state each.</p>
+<p>Additional challenges include storing the same plug for both
+long and short name of said attribute, which is currently not
+the case.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<em>str</em>) – Name of plug to find</li>
+<li><strong>cached</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return cached plug, or
+throw an exception. Default to False, which
+means it will run Maya’s findPlug() and cache
+the result.</li>
+<li><strong>safe</strong> (<em>bool</em><em>, </em><em>optional</em>) – Always find the plug through
+Maya’s API, defaults to False. This will not perform
+any caching and is intended for use during debugging
+to spot whether caching is causing trouble.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">KeyError</span>: <span class="n">&quot;&#39;translateX&#39; not cached&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">plug1</span><span class="p">,</span> <span class="n">om</span><span class="o">.</span><span class="n">MPlug</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.hasAttr">
+<code class="descname">hasAttr</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.hasAttr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return whether or not <cite>attr</cite> exists</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<em>str</em>) – Name of attribute to check</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;mysteryAttribute&quot;</span><span class="p">)</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>  <span class="c1"># Dynamic attribute</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.has_attr">
+<code class="descname">has_attr</code><span class="sig-paren">(</span><em>attr</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.has_attr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return whether or not <cite>attr</cite> exists</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attr</strong> (<em>str</em>) – Name of attribute to check</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;mysteryAttribute&quot;</span><span class="p">)</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>  <span class="c1"># Dynamic attribute</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.hashCode">
+<code class="descname">hashCode</code><a class="headerlink" href="#cmdx.Node.hashCode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return MObjectHandle.hashCode of this node</p>
+<p>This a guaranteed-unique integer (long in Python 2)
+similar to the UUID of Maya 2016</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.hash_code">
+<code class="descname">hash_code</code><a class="headerlink" href="#cmdx.Node.hash_code" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return MObjectHandle.hashCode of this node</p>
+<p>This a guaranteed-unique integer (long in Python 2)
+similar to the UUID of Maya 2016</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.hex">
+<code class="descname">hex</code><a class="headerlink" href="#cmdx.Node.hex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return unique hashCode as hexadecimal string</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hexStr</span> <span class="o">==</span> <span class="nb">format</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">hashCode</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.hexStr">
+<code class="descname">hexStr</code><a class="headerlink" href="#cmdx.Node.hexStr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return unique hashCode as hexadecimal string</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hexStr</span> <span class="o">==</span> <span class="nb">format</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">hashCode</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.hex_str">
+<code class="descname">hex_str</code><a class="headerlink" href="#cmdx.Node.hex_str" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return unique hashCode as hexadecimal string</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hexStr</span> <span class="o">==</span> <span class="nb">format</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">hashCode</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.instance">
+<code class="descname">instance</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.instance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the current plug-in instance of this node</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.isA">
+<code class="descname">isA</code><span class="sig-paren">(</span><em>type</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.isA" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate whether self is of <cite>type</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>type</strong> (<em>int</em>) – MFn function set constant</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">(</span><span class="n">kTransform</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">(</span><span class="n">kShape</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.isAlive">
+<code class="descname">isAlive</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.isAlive" title="Permalink to this definition">¶</a></dt>
+<dd><p>The node exists somewhere in memory</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.isLocked">
+<code class="descname">isLocked</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.isLocked" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.is_a">
+<code class="descname">is_a</code><span class="sig-paren">(</span><em>type</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.is_a" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate whether self is of <cite>type</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>type</strong> (<em>int</em>) – MFn function set constant</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">(</span><span class="n">kTransform</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">(</span><span class="n">kShape</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.is_alive">
+<code class="descname">is_alive</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.is_alive" title="Permalink to this definition">¶</a></dt>
+<dd><p>The node exists somewhere in memory</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.is_locked">
+<code class="descname">is_locked</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.is_locked" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.lock">
+<code class="descname">lock</code><span class="sig-paren">(</span><em>value=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.lock" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.name">
+<code class="descname">name</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the name of this node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>namespace</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return with namespace,
+defaults to False</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myName&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+<span class="go">u&#39;myName&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.namespace">
+<code class="descname">namespace</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.namespace" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get namespace of node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myNode&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span>
+<span class="go">u&#39;&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">namespace</span><span class="p">(</span><span class="n">add</span><span class="o">=</span><span class="s2">&quot;:A&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">namespace</span><span class="p">(</span><span class="n">add</span><span class="o">=</span><span class="s2">&quot;:A:B&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;:A:B:myNode&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span>
+<span class="go">u&#39;A:B&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.object">
+<code class="descname">object</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.object" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return MObject of this node</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.path">
+<code class="descname">path</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.path" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.plugin">
+<code class="descname">plugin</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.plugin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the user-defined class of the plug-in behind this node</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.pop">
+<code class="descname">pop</code><span class="sig-paren">(</span><em>key</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.pop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete an attribute</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>key</strong> (<em>str</em>) – Name of attribute to delete</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">hasAttr</span><span class="p">(</span><span class="s2">&quot;myAttr&quot;</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.removed">
+<code class="descname">removed</code><a class="headerlink" href="#cmdx.Node.removed" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.rename">
+<code class="descname">rename</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.rename" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.shortestPath">
+<code class="descname">shortestPath</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.shortestPath" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.shortest_path">
+<code class="descname">shortest_path</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.shortest_path" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.storable">
+<code class="descname">storable</code><a class="headerlink" href="#cmdx.Node.storable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether or not to save this node with the file</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.type">
+<code class="descname">type</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.type" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return type name</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;choice&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">type</span><span class="p">()</span>
+<span class="go">u&#39;choice&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.typeId">
+<code class="descname">typeId</code><a class="headerlink" href="#cmdx.Node.typeId" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the native maya.api.MTypeId of this node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">typeId</span> <span class="o">==</span> <span class="n">tTransform</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.typeName">
+<code class="descname">typeName</code><a class="headerlink" href="#cmdx.Node.typeName" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.type_id">
+<code class="descname">type_id</code><a class="headerlink" href="#cmdx.Node.type_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the native maya.api.MTypeId of this node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">typeId</span> <span class="o">==</span> <span class="n">tTransform</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Node.type_name">
+<code class="descname">type_name</code><a class="headerlink" href="#cmdx.Node.type_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Node.update">
+<code class="descname">update</code><span class="sig-paren">(</span><em>attrs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply a series of attributes all at once</p>
+<p>This operates similar to a Python dictionary.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>attrs</strong> (<em>dict</em>) – Key/value pairs of name and attribute</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;tx&quot;</span><span class="p">:</span> <span class="mf">5.0</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;ry&quot;</span><span class="p">,</span> <span class="n">Degrees</span><span class="p">):</span> <span class="mf">30.0</span><span class="p">})</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span>
+<span class="go">5.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<dl class="class">
+<dt id="cmdx.DagNode">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">DagNode</code><span class="sig-paren">(</span><em>mobject</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya DAG node</p>
+<p>The difference between this and Node is that a DagNode
+can have one or more children and one parent (multiple
+parents not supported).</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">parent</span><span class="o">.</span><span class="n">children</span><span class="p">())</span> <span class="o">==</span> <span class="n">child</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span><span class="o">.</span><span class="n">child</span><span class="p">()</span> <span class="o">==</span> <span class="n">child</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sibling</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">sibling</span><span class="p">()</span> <span class="o">==</span> <span class="n">sibling</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">shape</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">child</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shape</span><span class="p">()</span> <span class="o">==</span> <span class="n">shape</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">shape</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span> <span class="o">==</span> <span class="n">child</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="cmdx.DagNode.addChild">
+<code class="descname">addChild</code><span class="sig-paren">(</span><em>child</em>, <em>index=-1</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.addChild" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add <cite>child</cite> to self</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>child</strong> (<a class="reference internal" href="#cmdx.Node" title="cmdx.Node"><em>Node</em></a>) – Child to add</li>
+<li><strong>index</strong> (<em>int</em><em>, </em><em>optional</em>) – Physical location in hierarchy,
+defaults to cmdx.Last</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span><span class="o">.</span><span class="n">addChild</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.add_child">
+<code class="descname">add_child</code><span class="sig-paren">(</span><em>child</em>, <em>index=-1</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.add_child" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add <cite>child</cite> to self</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>child</strong> (<a class="reference internal" href="#cmdx.Node" title="cmdx.Node"><em>Node</em></a>) – Child to add</li>
+<li><strong>index</strong> (<em>int</em><em>, </em><em>optional</em>) – Physical location in hierarchy,
+defaults to cmdx.Last</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span><span class="o">.</span><span class="n">addChild</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.assembly">
+<code class="descname">assembly</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.assembly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the top-level parent of node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent1</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent2</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">grandchild</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">child</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">assembly</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent1</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent2</span><span class="o">.</span><span class="n">assembly</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent2</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.child">
+<code class="descname">child</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=110</em>, <em>query=None</em>, <em>contains=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.child" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.children">
+<code class="descname">children</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=110</em>, <em>query=None</em>, <em>contains=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.children" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return children of node</p>
+<p>All returned children are transform nodes, as specified by the
+<cite>filter</cite> argument. For shapes, use the <a class="reference internal" href="#cmdx.DagNode.shapes" title="cmdx.DagNode.shapes"><code class="xref py py-func docutils literal notranslate"><span class="pre">shapes()</span></code></a> method.
+The <cite>contains</cite> argument only returns transform nodes containing
+a shape of the type provided.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>type</strong> (<em>str</em><em>, </em><em>optional</em>) – Return only children that match this type</li>
+<li><strong>filter</strong> (<em>int</em><em>, </em><em>optional</em>) – Return only children with this function set</li>
+<li><strong>contains</strong> (<em>str</em><em>, </em><em>optional</em>) – Child must have a shape of this type</li>
+<li><strong>query</strong> (<em>dict</em><em>, </em><em>optional</em>) – Limit output to nodes with these attributes</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;c&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="s2">&quot;d&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">children</span><span class="p">())</span> <span class="o">==</span> <span class="p">[</span><span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">()</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s2">&quot;mesh&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="nb">filter</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="n">d</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="s2">&quot;transform&quot;</span><span class="p">),</span> <span class="nb">filter</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="n">d</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">()</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">&quot;mesh&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">c</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">&quot;nurbsCurve&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;myAttr&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;noExist&quot;</span><span class="p">])</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;myAttr&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">})</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;myAttr&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">})</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.clone">
+<code class="descname">clone</code><span class="sig-paren">(</span><em>name=None</em>, <em>parent=None</em>, <em>worldspace=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a clone of self</p>
+<p>A “clone” assignes the .outMesh attribute of a mesh node
+to the <cite>.inMesh</cite> of the resulting clone.</p>
+<dl class="docutils">
+<dt>Supports:</dt>
+<dd><ul class="first last simple">
+<li>mesh</li>
+</ul>
+</dd>
+</dl>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<em>str</em><em>, </em><em>optional</em>) – Name of newly created clone</li>
+<li><strong>parent</strong> (<a class="reference internal" href="#cmdx.DagNode" title="cmdx.DagNode"><em>DagNode</em></a><em>, </em><em>optional</em>) – Parent to newly cloned node</li>
+<li><strong>worldspace</strong> (<em>bool</em><em>, </em><em>optional</em>) – Translate output to worldspace</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.dagPath">
+<code class="descname">dagPath</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.dagPath" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a om.MDagPath for this node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Parent&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Child&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">path</span> <span class="o">=</span> <span class="n">child</span><span class="o">.</span><span class="n">dagPath</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="go">&#39;Child&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">pop</span><span class="p">())</span>
+<span class="go">&#39;Parent&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.dag_path">
+<code class="descname">dag_path</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.dag_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a om.MDagPath for this node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Parent&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Child&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">path</span> <span class="o">=</span> <span class="n">child</span><span class="o">.</span><span class="n">dagPath</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="go">&#39;Child&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">pop</span><span class="p">())</span>
+<span class="go">&#39;Parent&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.descendent">
+<code class="descname">descendent</code><span class="sig-paren">(</span><em>type=0</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.descendent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Singular version of <a class="reference internal" href="#cmdx.DagNode.descendents" title="cmdx.DagNode.descendents"><code class="xref py py-func docutils literal notranslate"><span class="pre">descendents()</span></code></a></p>
+<p>A recursive, depth-first search.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span>
+<span class="o">|</span>
+<span class="n">b</span><span class="o">---</span><span class="n">d</span>
+<span class="o">|</span>   <span class="o">|</span>
+<span class="n">c</span>   <span class="n">e</span>
+</pre></div>
+</div>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;c&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;d&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">e</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;e&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">d</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">descendent</span><span class="p">()</span> <span class="o">==</span> <span class="n">a</span><span class="o">.</span><span class="n">child</span><span class="p">()</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">descendents</span><span class="p">())</span> <span class="o">==</span> <span class="p">[</span><span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="s2">&quot;f&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">e</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">descendents</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s2">&quot;mesh&quot;</span><span class="p">))</span> <span class="o">==</span> <span class="p">[</span><span class="n">f</span><span class="p">]</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.descendents">
+<code class="descname">descendents</code><span class="sig-paren">(</span><em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.descendents" title="Permalink to this definition">¶</a></dt>
+<dd><p>Faster and more efficient dependency graph traversal</p>
+<p>Requires Maya 2017+</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">grandparent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">grandparent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mesh</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">child</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">it</span> <span class="o">=</span> <span class="n">grandparent</span><span class="o">.</span><span class="n">descendents</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="n">tMesh</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">it</span><span class="p">)</span> <span class="o">==</span> <span class="n">mesh</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">it</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">StopIteration</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.duplicate">
+<code class="descname">duplicate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.duplicate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a duplicate of self</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.enableLimit">
+<code class="descname">enableLimit</code><span class="sig-paren">(</span><em>typ</em>, <em>state</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.enableLimit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.enable_limit">
+<code class="descname">enable_limit</code><span class="sig-paren">(</span><em>typ</em>, <em>state</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.enable_limit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.hide">
+<code class="descname">hide</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.hide" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set visibility to False</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.isLimited">
+<code class="descname">isLimited</code><span class="sig-paren">(</span><em>typ</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.isLimited" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.is_limited">
+<code class="descname">is_limited</code><span class="sig-paren">(</span><em>typ</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.is_limited" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.DagNode.level">
+<code class="descname">level</code><a class="headerlink" href="#cmdx.DagNode.level" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the number of parents this DAG node has</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">level</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span><span class="o">.</span><span class="n">level</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.limitValue">
+<code class="descname">limitValue</code><span class="sig-paren">(</span><em>typ</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.limitValue" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.limit_value">
+<code class="descname">limit_value</code><span class="sig-paren">(</span><em>typ</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.limit_value" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.mapFrom">
+<code class="descname">mapFrom</code><span class="sig-paren">(</span><em>other</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.mapFrom" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return TransformationMatrix of <cite>other</cite> relative self</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">mapFrom</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span><span class="o">.</span><span class="n">translation</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+<span class="go">10.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">15</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">mapFrom</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span><span class="o">.</span><span class="n">translation</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+<span class="go">20.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.mapTo">
+<code class="descname">mapTo</code><span class="sig-paren">(</span><em>other</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.mapTo" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return TransformationMatrix of self relative <cite>other</cite></p>
+<p>See <a class="reference internal" href="#cmdx.DagNode.mapFrom" title="cmdx.DagNode.mapFrom"><code class="xref py py-func docutils literal notranslate"><span class="pre">mapFrom()</span></code></a> for examples.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.map_from">
+<code class="descname">map_from</code><span class="sig-paren">(</span><em>other</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.map_from" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return TransformationMatrix of <cite>other</cite> relative self</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">mapFrom</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span><span class="o">.</span><span class="n">translation</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+<span class="go">10.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">15</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">mapFrom</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">delta</span><span class="o">.</span><span class="n">translation</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+<span class="go">20.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.map_to">
+<code class="descname">map_to</code><span class="sig-paren">(</span><em>other</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.map_to" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return TransformationMatrix of self relative <cite>other</cite></p>
+<p>See <a class="reference internal" href="#cmdx.DagNode.mapFrom" title="cmdx.DagNode.mapFrom"><code class="xref py py-func docutils literal notranslate"><span class="pre">mapFrom()</span></code></a> for examples.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.parent">
+<code class="descname">parent</code><span class="sig-paren">(</span><em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.parent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return parent of node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>type</strong> (<em>str</em><em>, </em><em>optional</em>) – Return parent, only if it matches this type</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="ow">not</span> <span class="n">child</span><span class="o">.</span><span class="n">parent</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s2">&quot;camera&quot;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.path">
+<code class="descname">path</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return full path to node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;myParent&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;myChild&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+<span class="go">u&#39;myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">path</span><span class="p">()</span>
+<span class="go">u&#39;|myParent|myChild&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.root">
+<code class="descname">root</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.root" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the top-level parent of node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent1</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent2</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">grandchild</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">child</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">assembly</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent1</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent2</span><span class="o">.</span><span class="n">assembly</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent2</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.setLimit">
+<code class="descname">setLimit</code><span class="sig-paren">(</span><em>typ</em>, <em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.setLimit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.set_limit">
+<code class="descname">set_limit</code><span class="sig-paren">(</span><em>typ</em>, <em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.set_limit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.shape">
+<code class="descname">shape</code><span class="sig-paren">(</span><em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shape" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.shapes">
+<code class="descname">shapes</code><span class="sig-paren">(</span><em>type=None</em>, <em>query=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shapes" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.shortestPath">
+<code class="descname">shortestPath</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shortestPath" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return shortest unique path to node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myParent&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
+<span class="go">u&#39;myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Now `myChild` could refer to more than a single node</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
+<span class="go">u&#39;|myChild&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.shortest_path">
+<code class="descname">shortest_path</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shortest_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return shortest unique path to node</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myParent&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
+<span class="go">u&#39;myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Now `myChild` could refer to more than a single node</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
+<span class="go">u&#39;|myChild&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.show">
+<code class="descname">show</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.show" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set visibility to True</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.sibling">
+<code class="descname">sibling</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.sibling" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.siblings">
+<code class="descname">siblings</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=110</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.siblings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.transform">
+<code class="descname">transform</code><span class="sig-paren">(</span><em>space=2</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return TransformationMatrix</p>
+</dd></dl>
+
+</dd></dl>
+
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<dl class="class">
+<dt id="cmdx.Plug">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Plug</code><span class="sig-paren">(</span><em>node</em>, <em>mplug</em>, <em>unit=None</em>, <em>key=None</em>, <em>modifier=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="cmdx.Plug.append">
+<code class="descname">append</code><span class="sig-paren">(</span><em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add <cite>value</cite> to end of self, which is an array</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>value</strong> (<em>object</em>) – If value, create a new entry and append it.
+If cmdx.Plug, create a new entry and connect it.</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;appendTest&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myArray&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">(</span><span class="n">array</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myArray&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;notArray&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;notArray&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">2.0</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">&quot;|appendTest.notArray&quot; was not an array attribute</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asDouble">
+<code class="descname">asDouble</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asDouble" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as double (Python float)</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asDouble</span><span class="p">()</span>
+<span class="go">5.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asEulerRotation">
+<code class="descname">asEulerRotation</code><span class="sig-paren">(</span><em>order=0</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asEulerRotation" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asMatrix">
+<code class="descname">asMatrix</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asMatrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as MMatrix</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">node1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">=</span> <span class="n">node1</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug2</span> <span class="o">=</span> <span class="n">node2</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mat1</span> <span class="o">=</span> <span class="n">plug1</span><span class="o">.</span><span class="n">asMatrix</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mat2</span> <span class="o">=</span> <span class="n">plug2</span><span class="o">.</span><span class="n">asMatrix</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mat</span> <span class="o">=</span> <span class="n">mat1</span> <span class="o">*</span> <span class="n">mat2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">TransformationMatrix</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
+<span class="go">[0.0, 15.0, 0.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asQuaternion">
+<code class="descname">asQuaternion</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asQuaternion" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asTm">
+<code class="descname">asTm</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asTm" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as TransformationMatrix</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTm</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="go">[1.0, 1.0, 1.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
+<span class="go">[0.0, 12.0, 0.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asTransformationMatrix">
+<code class="descname">asTransformationMatrix</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asTransformationMatrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as TransformationMatrix</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTm</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="go">[1.0, 1.0, 1.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
+<span class="go">[0.0, 12.0, 0.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asVector">
+<code class="descname">asVector</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asVector" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_double">
+<code class="descname">as_double</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_double" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as double (Python float)</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asDouble</span><span class="p">()</span>
+<span class="go">5.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_euler_rotation">
+<code class="descname">as_euler_rotation</code><span class="sig-paren">(</span><em>order=0</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_euler_rotation" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_matrix">
+<code class="descname">as_matrix</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_matrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as MMatrix</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">node1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">=</span> <span class="n">node1</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug2</span> <span class="o">=</span> <span class="n">node2</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mat1</span> <span class="o">=</span> <span class="n">plug1</span><span class="o">.</span><span class="n">asMatrix</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mat2</span> <span class="o">=</span> <span class="n">plug2</span><span class="o">.</span><span class="n">asMatrix</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mat</span> <span class="o">=</span> <span class="n">mat1</span> <span class="o">*</span> <span class="n">mat2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">TransformationMatrix</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
+<span class="go">[0.0, 15.0, 0.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_quaternion">
+<code class="descname">as_quaternion</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_quaternion" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_transformation_matrix">
+<code class="descname">as_transformation_matrix</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_transformation_matrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return plug as TransformationMatrix</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTm</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="go">[1.0, 1.0, 1.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
+<span class="go">[0.0, 12.0, 0.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_vector">
+<code class="descname">as_vector</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_vector" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.channelBox">
+<code class="descname">channelBox</code><a class="headerlink" href="#cmdx.Plug.channelBox" title="Permalink to this definition">¶</a></dt>
+<dd><p>Is the attribute visible in the Channel Box?</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.channel_box">
+<code class="descname">channel_box</code><a class="headerlink" href="#cmdx.Plug.channel_box" title="Permalink to this definition">¶</a></dt>
+<dd><p>Is the attribute visible in the Channel Box?</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.connect">
+<code class="descname">connect</code><span class="sig-paren">(</span><em>other</em>, <em>force=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.connect" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.connected">
+<code class="descname">connected</code><a class="headerlink" href="#cmdx.Plug.connected" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return whether or not this attribute is connected (to anything)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.connection">
+<code class="descname">connection</code><span class="sig-paren">(</span><em>type=None</em>, <em>source=True</em>, <em>destination=True</em>, <em>plug=False</em>, <em>unit=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.connection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return first connection from <a class="reference internal" href="#cmdx.Plug.connections" title="cmdx.Plug.connections"><code class="xref py py-func docutils literal notranslate"><span class="pre">connections()</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.connections">
+<code class="descname">connections</code><span class="sig-paren">(</span><em>type=None</em>, <em>source=True</em>, <em>destination=True</em>, <em>plugs=False</em>, <em>unit=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.connections" title="Permalink to this definition">¶</a></dt>
+<dd><p>Yield plugs connected to self</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>type</strong> (<em>int</em><em>, </em><em>optional</em>) – Only return nodes of this type</li>
+<li><strong>source</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return source plugs,
+default is True</li>
+<li><strong>destination</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return destination plugs,
+default is True</li>
+<li><strong>plugs</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return connected plugs instead of nodes</li>
+<li><strong>unit</strong> (<em>int</em><em>, </em><em>optional</em>) – Return plug in this unit, e.g. Meters</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;A&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;multDoubleLinear&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;B&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">b</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="o">==</span> <span class="n">a</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span>
+<span class="go">2</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.count">
+<code class="descname">count</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.count" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.disconnect">
+<code class="descname">disconnect</code><span class="sig-paren">(</span><em>other=None</em>, <em>source=True</em>, <em>destination=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.disconnect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Disconnect self from <cite>other</cite></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>other</strong> (<a class="reference internal" href="#cmdx.Plug" title="cmdx.Plug"><em>Plug</em></a><em>, </em><em>optional</em>) – If none is provided, disconnect everything</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node1</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">node1</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">node1</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">False</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="n">node1</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node2</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.extend">
+<code class="descname">extend</code><span class="sig-paren">(</span><em>values</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.extend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Append multiple values to the end of an array</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>values</strong> (<em>tuple</em>) – If values, create a new entry and append it.
+If cmdx.Plug’s, create a new entry and connect it.</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myArray&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">(</span><span class="n">array</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myArray&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myArray&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">1.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;myArray&quot;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="go">3.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.hidden">
+<code class="descname">hidden</code><a class="headerlink" href="#cmdx.Plug.hidden" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.hide">
+<code class="descname">hide</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.hide" title="Permalink to this definition">¶</a></dt>
+<dd><p>Hide attribute from channel box</p>
+<p>Note: An attribute cannot be hidden from the channel box
+and keyable at the same time. Therefore, this method
+also makes the attribute non-keyable.</p>
+<p>Supports array and compound attributes too.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.isArray">
+<code class="descname">isArray</code><a class="headerlink" href="#cmdx.Plug.isArray" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.isCompound">
+<code class="descname">isCompound</code><a class="headerlink" href="#cmdx.Plug.isCompound" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.keyable">
+<code class="descname">keyable</code><a class="headerlink" href="#cmdx.Plug.keyable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Is the attribute keyable?</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.lock">
+<code class="descname">lock</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.lock" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.lockAndHide">
+<code class="descname">lockAndHide</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.lockAndHide" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.lock_and_hide">
+<code class="descname">lock_and_hide</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.lock_and_hide" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.locked">
+<code class="descname">locked</code><a class="headerlink" href="#cmdx.Plug.locked" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.name">
+<code class="descname">name</code><span class="sig-paren">(</span><em>long=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.node">
+<code class="descname">node</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.node" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.path">
+<code class="descname">path</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.path" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.plug">
+<code class="descname">plug</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.plug" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.read">
+<code class="descname">read</code><span class="sig-paren">(</span><em>unit=None</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.read" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.show">
+<code class="descname">show</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.show" title="Permalink to this definition">¶</a></dt>
+<dd><p>Show attribute in channel box</p>
+<p>Note: An attribute can be both visible in the channel box
+and non-keyable, therefore, unlike <a class="reference internal" href="#cmdx.Plug.hide" title="cmdx.Plug.hide"><code class="xref py py-func docutils literal notranslate"><span class="pre">hide()</span></code></a>, this
+method does not alter the keyable state of the attribute.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.source">
+<code class="descname">source</code><span class="sig-paren">(</span><em>unit=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.source" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.type">
+<code class="descname">type</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.type" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve API type of plug as string</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translate&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">type</span><span class="p">()</span>
+<span class="go">&#39;kAttribute3Double&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">type</span><span class="p">()</span>
+<span class="go">&#39;kDoubleLinearAttribute&#39;</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.unlock">
+<code class="descname">unlock</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.unlock" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.write">
+<code class="descname">write</code><span class="sig-paren">(</span><em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.write" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="cmdx.Enum">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Enum</code><span class="sig-paren">(</span><em>name</em>, <em>fields=None</em>, <em>default=0</em>, <em>label=None</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Enum" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Divider">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Divider</code><span class="sig-paren">(</span><em>label</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Divider" title="Permalink to this definition">¶</a></dt>
+<dd><p>Visual divider in channel box</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="cmdx.String">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">String</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.String" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Message">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Message</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Message" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Matrix">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Matrix</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Long">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Long</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Long" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Double">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Double3">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double3</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double3" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Boolean">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Boolean</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Boolean" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.AbstractUnit">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">AbstractUnit</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.AbstractUnit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Angle">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Angle</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Angle" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Time">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Time</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Time" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="cmdx.Distance">
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Distance</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Distance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="units">
+<h2>Units<a class="headerlink" href="#units" title="Permalink to this headline">¶</a></h2>
+<dl class="data">
+<dt id="cmdx.Degrees">
+<code class="descclassname">cmdx.</code><code class="descname">Degrees</code><em class="property"> = 2</em><a class="headerlink" href="#cmdx.Degrees" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Radians">
+<code class="descclassname">cmdx.</code><code class="descname">Radians</code><em class="property"> = 1</em><a class="headerlink" href="#cmdx.Radians" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.AngularMinutes">
+<code class="descclassname">cmdx.</code><code class="descname">AngularMinutes</code><em class="property"> = 3</em><a class="headerlink" href="#cmdx.AngularMinutes" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.AngularSeconds">
+<code class="descclassname">cmdx.</code><code class="descname">AngularSeconds</code><em class="property"> = 4</em><a class="headerlink" href="#cmdx.AngularSeconds" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Millimeters">
+<code class="descclassname">cmdx.</code><code class="descname">Millimeters</code><em class="property"> = 5</em><a class="headerlink" href="#cmdx.Millimeters" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Centimeters">
+<code class="descclassname">cmdx.</code><code class="descname">Centimeters</code><em class="property"> = 6</em><a class="headerlink" href="#cmdx.Centimeters" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Meters">
+<code class="descclassname">cmdx.</code><code class="descname">Meters</code><em class="property"> = 8</em><a class="headerlink" href="#cmdx.Meters" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Kilometers">
+<code class="descclassname">cmdx.</code><code class="descname">Kilometers</code><em class="property"> = 7</em><a class="headerlink" href="#cmdx.Kilometers" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Inches">
+<code class="descclassname">cmdx.</code><code class="descname">Inches</code><em class="property"> = 1</em><a class="headerlink" href="#cmdx.Inches" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Feet">
+<code class="descclassname">cmdx.</code><code class="descname">Feet</code><em class="property"> = 2</em><a class="headerlink" href="#cmdx.Feet" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Miles">
+<code class="descclassname">cmdx.</code><code class="descname">Miles</code><em class="property"> = 4</em><a class="headerlink" href="#cmdx.Miles" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="cmdx.Yards">
+<code class="descclassname">cmdx.</code><code class="descname">Yards</code><em class="property"> = 3</em><a class="headerlink" href="#cmdx.Yards" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Maya unit, for unit-attributes such as Angle and Distance</p>
+<p>Because the resulting classes are subclasses of <cite>int</cite>, there
+is virtually no run-time performance penalty to using it as
+an integer. No additional Python is called, most notably when
+passing the integer class to the Maya C++ binding (which wouldn’t
+call our overridden methods anyway).</p>
+<p>The added overhead to import time is neglible.</p>
+</dd></dl>
+
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="interoperability">
+<h2>Interoperability<a class="headerlink" href="#interoperability" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="cmdx.encode">
+<code class="descclassname">cmdx.</code><code class="descname">encode</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.encode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert relative or absolute <cite>path</cite> to cmdx Node</p>
+<p>Fastest conversion from absolute path to Node</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>path</strong> (<em>str</em>) – Absolute or relative path to DAG or DG node</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="cmdx.decode">
+<code class="descclassname">cmdx.</code><code class="descname">decode</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.decode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert cmdx Node to shortest unique path</p>
+<p>This is the same as <cite>node.shortestPath()</cite>
+To get an absolute path, use <cite>node.path()</cite></p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">cmdx</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Marcus Ottosson.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

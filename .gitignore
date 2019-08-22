@@ -1,5 +1,4 @@
 *.pyc
-docs/build/**
 cover/**
 .coverage
 
