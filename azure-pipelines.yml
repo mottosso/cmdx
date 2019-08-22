@@ -1,0 +1,65 @@
+---
+trigger:
+
+  # Already default, but made explicit here
+  branches:
+    include: ["*"]
+
+  # Ensure Azure triggers a build on a new tag
+  # We use these for GitHub releases
+  tags:
+    include: ["*"]
+
+  paths:
+    # Do not trigger a build on changes at these paths
+    exclude:
+      - docs/*
+      - .gitignore
+      - LICENSE.txt
+      - README.md
+
+
+jobs:
+
+  # -----------------------------------------------------------------------
+  #
+  # Test
+  #
+  # -----------------------------------------------------------------------
+
+  - job: Maya
+    pool:
+      vmImage: "ubuntu-16.04"  # Xenial
+    strategy:
+      matrix:
+        maya2015:
+          containerImage: mottosso/maya:2015sp6
+        maya2016:
+          containerImage: mottosso/maya:2016sp1
+        maya2017:
+          containerImage: mottosso/maya:2017
+        maya2018:
+          containerImage: mottosso/maya:2018
+    container: $[ variables['containerImage'] ]
+    steps:
+      - script: |
+          wget https://bootstrap.pypa.io/get-pip.py &&
+          mayapy get-pip.py --user &&
+          mayapy -m pip install --user \
+            nose \
+            nose-exclude \
+            coverage \
+            flaky \
+            sphinx \
+            sphinxcontrib-napoleon
+        displayName: "pip install"
+      - script: |
+          mayapy --version
+          mayapy run_tests.py
+        displayName: "Unittests"
+      - script: |
+          mayapy build_livedocs.py && mayapy -m nose --with-doctest test_docs.py
+        displayName: "Test docs"
+      - script: |
+          mayapy build_docs.py
+        displayName: "Build docs"
