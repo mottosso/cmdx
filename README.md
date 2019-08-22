@@ -1,11 +1,3 @@
----
-title: cmdx
-sitename: cmdx
----
-
-<br>
-<br>
-
 <a href=/cmdx/><p align=center><img height=140 src=https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png></p></a>
 
 <p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a></p>
@@ -24,8 +16,19 @@ If you fit in either of these groups, then `cmdx` is for you.
 On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictures/pymel), and 2.5x faster than `maya.cmds` at common tasks; at best, it is 1,300x faster than PyMEL.
 
 - See [Measurements](#measurements) and [Timings](#timings) for details
-- See [API Documentation](https://weightshift.io/cmdx/api/) for usage 
 - See `help()` for examples on a particular command, e.g. `help(cmdx.Node)`
+
+##### Usecases
+
+`cmdx` was written for performance critical run-time tasks in Maya, listening to thousands of events, reading from and writing to thousands of attributes each frame, without affecting user interactivity. It doesn't capture all of `cmds`, but rather a small subset related to parts relevant to these types of performance critical tasks.
+
+| Usecase | Description
+|:--------|:------------
+| Real-time processing | Such as responding to user input without interruption
+| Data intensive processing | Such as processing thousands of attributes on thousands of nodes at once
+| Plug-in creation | Provides both superclasses and compatible API for performing most if not all calls in `compute()` or `draw()` using `cmdx`.
+
+<br>
 
 ### What is novel?
 
@@ -116,7 +119,7 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
 
 ### System Requirements
 
-`cmdx` runs on Maya 2015 SP3 and above.
+`cmdx` runs on Maya 2015 SP3 and above (SP2 does *not* work).
 
 It *may* run on older versions too, but those are not being tested. To bypass the version check, see [`CMDX_IGNORE_VERSION`](#cmdx_ignore_version).
 
@@ -446,7 +449,6 @@ TypeError: listConnections() got an unexpected keyword argument 'source'
 
 The reason for this limitation is because the functions `cmds` 
 
-- See [API Documentation](https://weightshift.io/cmdx/api/) for which members are available in `cmdx`
 - Submit an [issue](issues) or [pull-request](#fork) with commands you miss
 
 <br>
@@ -581,8 +583,6 @@ Only the most commonly used and performance sensitive types are available as exp
 - `tTransform` 
 - `tTransformGeometry` 
 - `tWtAddMatrix` 
-
-See [API Documentation](https://weightshift.io/cmdx/api/) for more.
 
 <br>
 
@@ -1165,7 +1165,7 @@ This can be used with libraries such as [`jsonschema`](https://json-schema.org/)
 `cmdx` exposes the native math libraries of Maya, and extends these with additional functionality useful for drawing to the viewport.
 
 ```python
-from weightshift.vendor import cmdx
+import cmdx
 from maya.api import OpenMaya as om
 from maya import OpenMayaRender as omr1
 

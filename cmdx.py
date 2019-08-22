@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 import os
 import sys
 import json
@@ -8,6 +9,7 @@ import types
 import logging
 import traceback
 import operator
+import collections
 from functools import wraps
 
 from maya import cmds
@@ -64,6 +66,15 @@ self = sys.modules[__name__]
 self.installed = False
 log = logging.getLogger("cmdx")
 
+# Aliases - API 1.0
+om1 = om1
+omui1 = omui1
+
+# Aliases - API 2.0
+om = om
+oma = oma
+omui = omui
+
 # Accessible via `cmdx.NodeReuseCount` etc.
 Stats = self
 Stats.NodeInitCount = 0
@@ -77,8 +88,6 @@ if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
     ENABLE_NODE_REUSE = False
 
 TimeUnit = om.MTime.uiUnit()
-DistanceUnit = om.MDistance.uiUnit()
-AngleUnit = om.MAngle.uiUnit()
 
 # DEPRECATED
 MTime = om.MTime
@@ -249,6 +258,8 @@ Yards = _Unit(om.MDistance, om.MDistance.kYards)
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
+_data = collections.defaultdict(dict)
+
 
 class Singleton(type):
     """Re-use previous instances of Node
@@ -286,9 +297,7 @@ class Singleton(type):
             try:
                 node = cls._instances[hx]
                 assert not node._destroyed
-            except KeyError:
-                pass
-            except AssertionError:
+            except (KeyError, AssertionError):
                 pass
             else:
                 Stats.NodeReuseCount += 1
@@ -515,6 +524,8 @@ class Node(object):
             except Exception:
                 traceback.print_exc()
 
+        _data.pop(self.hex, None)
+
     def _onRemoved(self, mobject, modifier, _=None):
         self._removed = True
 
@@ -553,9 +564,6 @@ class Node(object):
             "callbacks": list()
         }
 
-        # End-user, transient metadata
-        self.data = {}
-
         # Callbacks
         self.onDestroyed = list()
         self.onRemoved = list()
@@ -579,6 +587,14 @@ class Node(object):
             ),
         ]
 
+    def plugin(self):
+        """Return the user-defined class of the plug-in behind this node"""
+        return type(self._fn.userNode())
+
+    def instance(self):
+        """Return the current plug-in instance of this node"""
+        return self._fn.userNode()
+
     def object(self):
         """Return MObject of this node"""
         return self._mobject
@@ -586,6 +602,19 @@ class Node(object):
     def isAlive(self):
         """The node exists somewhere in memory"""
         return not self._destroyed
+
+    @property
+    def data(self):
+        """Special handling for data stored in the instance
+
+        Normally, the initialisation of data could happen in the __init__,
+        but for some reason the postConstructor of a custom plug-in calls
+        __init__ twice for every unique hex, which causes any data added
+        there to be wiped out once the postConstructor is done.
+
+        """
+
+        return _data[self.hex]
 
     @property
     def destroyed(self):
@@ -863,8 +892,10 @@ class Node(object):
         return type(name)()
 
     # Alias
-    path = name
-    shortestPath = name
+    def path(self):
+        return self.name(namespace=True)
+
+    shortestPath = path
 
     def pop(self, key):
         """Delete an attribute
@@ -1090,6 +1121,11 @@ class DagNode(Node):
 
     def __repr__(self):
         return self.path()
+
+    def __init__(self, mobject, *args, **kwargs):
+        super(DagNode, self).__init__(mobject, *args, **kwargs)
+
+        self._tfn = om.MFnTransform(mobject)
 
     @protected
     def path(self):
@@ -1529,7 +1565,49 @@ class DagNode(Node):
         return next(self.descendents(type), None)
 
     def duplicate(self):
+        """Return a duplicate of self"""
         return self.__class__(self._fn.duplicate())
+
+    def clone(self, name=None, parent=None, worldspace=False):
+        """Return a clone of self
+
+        A "clone" assignes the .outMesh attribute of a mesh node
+        to the `.inMesh` of the resulting clone.
+
+        Supports:
+            - mesh
+
+        Arguments:
+            name (str, optional): Name of newly created clone
+            parent (DagNode, optional): Parent to newly cloned node
+            worldspace (bool, optional): Translate output to worldspace
+
+        """
+
+        if self.isA(kShape) and self.typeName == "mesh":
+            assert parent is not None, "mesh cloning requires parent argument"
+            name or parent.name() + "Clone"
+
+            with DagModifier() as mod:
+                mesh = mod.createNode("mesh", name, parent)
+                mesh["inMesh"] << self["outMesh"]
+
+            return mesh
+
+        else:
+            raise TypeError("Unsupported clone target: %s" % self)
+
+    def isLimited(self, typ):
+        return self._tfn.isLimited(typ)
+
+    def limitValue(self, typ):
+        return self._tfn.limitValue(typ)
+
+    def enableLimit(self, typ, state):
+        return self._tfn.enableLimit(typ, state)
+
+    def setLimit(self, typ, value):
+        return self._tfn.setLimit(typ, value)
 
     if ENABLE_PEP8:
         shortest_path = shortestPath
@@ -1537,6 +1615,37 @@ class DagNode(Node):
         dag_path = dagPath
         map_from = mapFrom
         map_to = mapTo
+        is_limited = isLimited
+        limit_value = limitValue
+        set_limit = setLimit
+        enable_limit = enableLimit
+
+
+# MFnTransform Limit Types
+kRotateMaxX = 13
+kRotateMaxY = 15
+kRotateMaxZ = 17
+kRotateMinX = 12
+kRotateMinY = 14
+kRotateMinZ = 16
+kScaleMaxX = 1
+kScaleMaxY = 3
+kScaleMaxZ = 5
+kScaleMinX = 0
+kScaleMinY = 2
+kScaleMinZ = 4
+kShearMaxXY = 7
+kShearMaxXZ = 9
+kShearMaxYZ = 11
+kShearMinXY = 6
+kShearMinXZ = 8
+kShearMinYZ = 10
+kTranslateMaxX = 19
+kTranslateMaxY = 21
+kTranslateMaxZ = 23
+kTranslateMinX = 18
+kTranslateMinY = 20
+kTranslateMinZ = 22
 
 
 class ObjectSet(Node):
@@ -1985,7 +2094,13 @@ class Plug(object):
         """
 
         if self._mplug.isArray:
-            for index in range(self._mplug.evaluateNumElements()):
+            # getExisting... returns indices currently in use, which is
+            # important if the given array is *sparse*. That is, if
+            # indexes 5, 7 and 8 are used. If we simply call
+            # `evaluateNumElements` then it'll return a single number
+            # we could use to `range()` from, but that would only work
+            # if the indices were contiguous.
+            for index in self._mplug.getExistingArrayAttributeIndices():
                 yield self[index]
 
         elif self._mplug.isCompound:
@@ -2003,6 +2118,9 @@ class Plug(object):
 
     def __getitem__(self, index):
         """Read from child of array or compound plug
+
+        Arguments:
+            index (int): Logical index of plug (NOT physical, make note)
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -2152,7 +2270,7 @@ class Plug(object):
             self.append(value)
 
     def count(self):
-        return self._mplug.numElements()
+        return self._mplug.evaluateNumElements()
 
     def asDouble(self):
         """Return plug as double (Python float)
@@ -2594,6 +2712,9 @@ class TransformationMatrix(om.MTransformationMatrix):
         elif isinstance(other, om.MMatrix):
             return type(self)(self.asMatrix() * other)
 
+        elif isinstance(other, om.MTransformationMatrix):
+            return type(self)(self.asMatrix() * other.asMatrix())
+
         else:
             raise TypeError(
                 "unsupported operand type(s) for *: '%s' and '%s'"
@@ -2662,7 +2783,7 @@ class TransformationMatrix(om.MTransformationMatrix):
     def scale(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
-        return super(TransformationMatrix, self).scale(space)
+        return Vector(super(TransformationMatrix, self).scale(space))
 
     def setScale(self, seq, space=None):
         """This method does not typically support optional arguments"""
@@ -2722,7 +2843,7 @@ class MatrixType(om.MMatrix):
 
 
 # Alias
-Transform = TransformationMatrix
+Transformation = TransformationMatrix
 Tm = TransformationMatrix
 Mat = MatrixType
 
@@ -2738,6 +2859,26 @@ class Vector(om.MVector):
         maya.api.OpenMaya.MVector(0, 0, 1)
 
     """
+
+    def __add__(self, value):
+        if isinstance(value, (int, float)):
+            return type(self)(
+                self.x + value,
+                self.y + value,
+                self.z + value,
+            )
+
+        return super(Vector, self).__add__(value)
+
+    def __iadd__(self, value):
+        if isinstance(value, (int, float)):
+            return type(self)(
+                self.x + value,
+                self.y + value,
+                self.z + value,
+            )
+
+        return super(Vector, self).__iadd__(value)
 
 
 # Alias, it can't take anything other than values
@@ -2787,6 +2928,10 @@ class Quaternion(om.MQuaternion):
 
     def isNormalised(self, tol=0.0001):
         return abs(self.length() - 1.0) < tol
+
+
+# Alias
+Quat = Quaternion
 
 
 def twistSwingToQuaternion(ts):
@@ -2983,7 +3128,7 @@ def _plug_to_python(plug, unit=None, context=None):
                   om.MFn.kFloatLinearAttribute):
 
         if unit is None:
-            return plug.asMDistance(context).asUnits(DistanceUnit)
+            return plug.asMDistance(context).asUnits(Centimeters)
         elif unit == Millimeters:
             return plug.asMDistance(context).asMillimeters()
         elif unit == Centimeters:
@@ -3006,7 +3151,7 @@ def _plug_to_python(plug, unit=None, context=None):
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
         if unit is None:
-            return plug.asMAngle(context).asUnits(om.MAngle.uiUnit())
+            return plug.asMAngle(context).asUnits(Radians)
         elif unit == Degrees:
             return plug.asMAngle(context).asDegrees()
         elif unit == Radians:
@@ -3309,6 +3454,7 @@ radians = math.radians
 sin = math.sin
 cos = math.cos
 tan = math.tan
+pi = math.pi
 
 
 def meters(cm):
@@ -3731,10 +3877,6 @@ def selection(*args, **kwargs):
     return map(encode, cmds.ls(*args, selection=True, **kwargs))
 
 
-# Alias
-sl = selection
-
-
 def createNode(type, name=None, parent=None):
     """Create a new node
 
@@ -3756,23 +3898,15 @@ def createNode(type, name=None, parent=None):
 
     """
 
-    kwargs = {}
-    fn = GlobalDependencyNode
-
-    if name:
-        kwargs["name"] = name
-
-    if parent:
-        kwargs["parent"] = parent._mobject
-        fn = GlobalDagNode
-
     try:
-        mobj = fn.create(type, **kwargs)
-    except RuntimeError as e:
-        log.debug(str(e))
-        raise TypeError("Unrecognized node type '%s'" % type)
+        with DagModifier() as mod:
+            node = mod.createNode(type, name=name, parent=parent)
 
-    return Node(mobj, exists=False)
+    except TypeError:
+        with DGModifier() as mod:
+            node = mod.createNode(type, name=name)
+
+    return node
 
 
 def getAttr(attr, type=None):
@@ -3975,6 +4109,17 @@ def objExists(obj):
         return True
 
 
+# PEP08
+sl = selection
+create_node = createNode
+get_attr = getAttr
+set_attr = setAttr
+add_attr = addAttr
+list_relatives = listRelatives
+list_connections = listConnections
+connect_attr = connectAttr
+obj_exists = objExists
+
 # Speciality functions
 
 kOpen = om1.MFnNurbsCurve.kOpen
@@ -4115,7 +4260,7 @@ def lookAt(origin, center, up=None):
         ...   (1, 0, 0),  # X-axis points towards global X
         ...   (0, 1, 0)   # Z-axis points towards global Y
         ... )
-        >>> tm = Transform(mat)
+        >>> tm = Tm(mat)
         >>> int(degrees(tm.rotation().x))
         -90
 
@@ -4198,7 +4343,7 @@ class _AbstractAttribute(dict):
 
     Readable = True
     Writable = True
-    Cached = False  # Cache in datablock?
+    Cached = True  # Cache in datablock?
     Storable = True  # Write value to file?
     Hidden = False  # Display in Attribute Editor?
 
@@ -4207,6 +4352,8 @@ class _AbstractAttribute(dict):
 
     Keyable = True
     ChannelBox = False
+    AffectsAppearance = False
+    AffectsWorldSpace = False
 
     Help = ""
 
@@ -4262,6 +4409,8 @@ class _AbstractAttribute(dict):
                  min=None,
                  max=None,
                  channelBox=None,
+                 affectsAppearance=None,
+                 affectsWorldSpace=None,
                  array=False,
                  connectable=True,
                  help=None):
@@ -4330,9 +4479,13 @@ class _AbstractAttribute(dict):
         self.Fn.storable = self["storable"]
         self.Fn.readable = self["readable"]
         self.Fn.writable = self["writable"]
+        self.Fn.connectable = self["connectable"]
         self.Fn.hidden = self["hidden"]
+        self.Fn.cached = self["cached"]
         self.Fn.keyable = self["keyable"]
         self.Fn.channelBox = self["channelBox"]
+        self.Fn.affectsAppearance = self["affectsAppearance"]
+        self.Fn.affectsWorldSpace = self["affectsWorldSpace"]
         self.Fn.array = self["array"]
 
         if self["min"] is not None:
@@ -4389,7 +4542,7 @@ class String(_AbstractAttribute):
     Default = ""
 
     def default(self, cls=None):
-        default = super(String, self).default(cls)
+        default = str(super(String, self).default(cls))
         return om.MFnStringData().create(default)
 
     def read(self, data):
@@ -4444,40 +4597,21 @@ class Double3(_AbstractAttribute):
     Default = (0.0,) * 3
 
     def default(self, cls=None):
-        default = self.get("default") or 0.0
+        if self["default"] is not None:
+            default = self["default"]
 
-        # Support single-value default
-        if not isinstance(default, (tuple, list)):
-            default = (default, default, default)
+            # Support single-value default
+            if not isinstance(default, (tuple, list)):
+                default = (default,) * 3
+
+        elif cls is not None:
+            default = cls.defaults.get(self["name"], self.Default)
+
+        else:
+            default = self.Default
 
         children = list()
         for index, child in enumerate("XYZ"):
-            attribute = self.Fn.create(self["name"] + child,
-                                       self["shortName"] + child,
-                                       om.MFnNumericData.kDouble,
-                                       default[index])
-            children.append(attribute)
-
-        return children
-
-    def read(self, data):
-        return data.inputValue(self["mobject"]).asDouble3()
-
-
-class Double4(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
-    Type = None
-    Default = (0.0,) * 4
-
-    def default(self, cls=None):
-        default = self.get("default") or 0.0
-
-        # Support single-value default
-        if not isinstance(default, (tuple, list)):
-            default = (default, default, default)
-
-        children = list()
-        for index, child in enumerate("XYZW"):
             attribute = self.Fn.create(self["name"] + child,
                                        self["shortName"] + child,
                                        om.MFnNumericData.kDouble,
@@ -4599,8 +4733,24 @@ class Compound(_AbstractAttribute):
         return tuple(output)
 
 
+class Double2(Compound):
+    Multi = ("XY", Double)
+
+
+class Double4(Compound):
+    Multi = ("XYZW", Double)
+
+
+class Angle2(Compound):
+    Multi = ("XY", Angle)
+
+
 class Angle3(Compound):
     Multi = ("XYZ", Angle)
+
+
+class Distance2(Compound):
+    Multi = ("XY", Distance)
 
 
 class Distance3(Compound):
@@ -4659,7 +4809,7 @@ class Distance4(Compound):
 # could register e.g. cmds.apiUndo() first, causing a newer version
 # to inadvertently use this older command (or worse yet, throwing an
 # error when trying to register it again).
-command = "_apiUndo_%s" % __version__.replace(".", "_")
+command = "_cmdxApiUndo_%s" % __version__.replace(".", "_")
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
@@ -4856,18 +5006,23 @@ class MetaNode(type):
         def findAttribute(self, name):
             return attributes.get(name)
 
+        def findMObject(self, name):
+            return attributes.get(name)["mobject"]
+
         def findPlug(self, node, name):
             try:
-                mobj = self.findAttribute(name)["mobject"]
+                mobj = attributes.get(name)["mobject"]
                 return om.MPlug(node, mobj)
             except KeyError:
                 return None
 
         cls.findAttribute = findAttribute
+        cls.findMObject = findMObject
         cls.findPlug = findPlug
 
-        cls.find_plug = findPlug
         cls.find_attribute = findAttribute
+        cls.find_mobject = findMObject
+        cls.find_plug = findPlug
 
         cls.log = logging.getLogger(cls.__name__)
 
@@ -4901,7 +5056,7 @@ class DgNode(om.MPxNode):
         pass
 
 
-class ShapeNode(om.MPxSurfaceShape):
+class SurfaceShape(om.MPxSurfaceShape):
     """Abstract baseclass for a Maya shape
 
     Attributes:
@@ -4916,6 +5071,39 @@ class ShapeNode(om.MPxSurfaceShape):
     __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
+    classification = "drawdb/geometry/custom"
+    name = "defaultNode"
+    version = (0, 0)
+    attributes = list()
+    affects = list()
+    ranges = dict()
+    defaults = {}
+
+    @classmethod
+    def postInitialize(cls):
+        pass
+
+    @classmethod
+    def uiCreator(cls):
+        pass
+
+
+class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
+    """Abstract baseclass for a Maya shape
+
+    Attributes:
+        name (str): Name used in e.g. cmds.createNode
+        id (int): Unique ID from Autodesk (see Ids above)
+        version (tuple, optional): Optional version number for plug-in node
+        attributes (tuple, optional): Attributes of node
+        defaults (dict, optional): Dictionary of default values
+
+    """
+
+    __metaclass__ = MetaNode
+
+    typeid = TypeId(StartId)
+    classification = "drawdb/geometry/custom"
     name = "defaultNode"
     version = (0, 0)
     attributes = list()
@@ -4973,21 +5161,30 @@ def initialize2(Plugin):
 
     def initializePlugin(obj):
         version = ".".join(map(str, Plugin.version))
-        plugin = om.MFnPlugin(obj, "WeightShift", version, "Any")
+        plugin = om.MFnPlugin(obj, "Cmdx", version, "Any")
 
         try:
-            if issubclass(Plugin, DgNode):
-                plugin.registerNode(Plugin.name,
-                                    Plugin.typeid,
-                                    _nodeCreator,
-                                    _nodeInit)
-            elif issubclass(Plugin, LocatorNode):
+            if issubclass(Plugin, LocatorNode):
                 plugin.registerNode(Plugin.name,
                                     Plugin.typeid,
                                     _nodeCreator,
                                     _nodeInit,
                                     om.MPxNode.kLocatorNode,
                                     Plugin.classification)
+
+            elif issubclass(Plugin, DgNode):
+                plugin.registerNode(Plugin.name,
+                                    Plugin.typeid,
+                                    _nodeCreator,
+                                    _nodeInit)
+
+            elif issubclass(Plugin, SurfaceShape):
+                plugin.registerShape(Plugin.name,
+                                     Plugin.typeid,
+                                     _nodeCreator,
+                                     _nodeInit,
+                                     Plugin.uiCreator,
+                                     Plugin.classification)
 
             else:
                 raise TypeError("Unsupported subclass: '%s'" % Plugin)
@@ -5030,7 +5227,7 @@ def initializeManipulator1(Manipulator):
 
     def initializePlugin(obj):
         version = ".".join(map(str, Manipulator.version))
-        plugin = ompx1.MFnPlugin(obj, "WeightShift", version, "Any")
+        plugin = ompx1.MFnPlugin(obj, "Cmdx", version, "Any")
 
         # NOTE(marcus): The name *must* end with Manip
         # See https://download.autodesk.com/us/maya/2011help
@@ -5066,3 +5263,115 @@ def findPlugin(name):
         return InstalledPlugins[name]
     except KeyError:
         raise ExistError("'%s' is not a recognised plug-in" % name)
+
+
+# --------------------------
+#
+# Callback Manager
+#
+# --------------------------
+
+
+class Callback(object):
+    """A Maya callback"""
+
+    log = logging.getLogger("cmdx.Callback")
+
+    def __init__(self, name, installer, args, api=2, help="", parent=None):
+        self._id = None
+        self._args = args
+        self._name = name
+        self._installer = installer
+        self._help = help
+
+        # Callbacks are all uninstalled using the same function
+        # relative either API 1.0 or 2.0
+        self._uninstaller = {
+            1: om1.MMessage.removeCallback,
+            2: om.MMessage.removeCallback
+        }[api]
+
+    def __del__(self):
+        self.deactivate()
+
+    def name(self):
+        return self._name
+
+    def help(self):
+        return self._help
+
+    def is_active(self):
+        return self._id is not None
+
+    def activate(self):
+        self.log.debug("Activating callback '%s'.." % self._name)
+
+        if self.is_active():
+            self.log.debug("%s already active, ignoring" % self._name)
+            return
+
+        self._id = self._installer(*self._args)
+
+    def deactivate(self):
+        self.log.debug("Deactivating callback '%s'.." % self._name)
+
+        if self.is_active():
+            self._uninstaller(self._id)
+
+        self._id = None
+
+
+class CallbackGroup(list):
+    """Multiple callbacks rolled into one"""
+
+    def __init__(self, name, callbacks, parent=None):
+        self._name = name
+        self[:] = callbacks
+
+    def name(self):
+        return self._name
+
+    def add(self, name, installer, args, api=2):
+        """Convenience method for .append(Callback())"""
+        callback = Callback(name, installer, args, api)
+        self.append(callback)
+
+    def activate(self):
+        for callback in self._callbacks:
+            callback.activate()
+
+    def deactivate(self):
+        for callback in self._callbacks:
+            callback.deactivate()
+
+
+# ----------------------
+#
+# Cache Manager
+#
+# ----------------------
+
+class Cache(object):
+    def __init__(self):
+        self._values = {}
+
+    def clear(self, node=None):
+        pass
+
+    def read(self, node, attr, time):
+        pass
+
+    def transform(self, node):
+        pass
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#    http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
