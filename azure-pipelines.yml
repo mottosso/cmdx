@@ -43,8 +43,8 @@ jobs:
     container: $[ variables['containerImage'] ]
     steps:
       - script: |
-          wget https://bootstrap.pypa.io/get-pip.py &&
-          mayapy get-pip.py --user &&
+          wget https://bootstrap.pypa.io/get-pip.py
+          mayapy get-pip.py --user
           mayapy -m pip install --user \
             nose \
             nose-exclude \
@@ -63,3 +63,40 @@ jobs:
       - script: |
           mayapy build_docs.py
         displayName: "Build docs"
+
+  # -----------------------------------------------------------------------
+  #
+  # Deploy to PyPI
+  #
+  # -----------------------------------------------------------------------
+
+  - job: Deploy
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/tags')
+    pool:
+      vmImage: "ubuntu-latest"
+    strategy:
+      matrix:
+        Python37:
+          python.version: "3.7"
+
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: "$(python.version)"
+        displayName: "Use Python $(python.version)"
+
+      - script: |
+          pip install wheel twine
+          python setup.py sdist bdist_wheel
+          echo [distutils] > ~/.pypirc
+          echo index-servers=pypi >> ~/.pypirc
+          echo [pypi] >> ~/.pypirc
+          echo username=$_LOGIN >> ~/.pypirc
+          echo password=$_PASSWORD >> ~/.pypirc
+          twine upload dist/*
+        displayName: "Deploy to PyPI"
+
+        # Decrypt secret variables provided by Azure web console
+        env:
+          _LOGIN: $(PYPI_LOGIN)
+          _PASSWORD: $(PYPI_PASSWORD)
