@@ -103,6 +103,7 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
     - [Contains](#contains)
 - [Connections](#connections)
 - [Plug-ins](#plug-ins)
+    - [Defaults](#defaults)
     - [Draw](#draw)
     - [Compute](#compute)
     - [Manipulators](#manipulators)
