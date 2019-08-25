@@ -53,7 +53,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 ### Install
 
-cmdx is a single file and can either be [copy/pasted](https://raw.githubusercontent.com/mottosso/cmdx/master/cmdx) into your project, [downloaded](https://github.com/mottosso/cmdx/archive/master.zip) as-is, cloned as-is or installed via `pip`.
+cmdx is a single file and can either be [copy/pasted](https://raw.githubusercontent.com/mottosso/cmdx/master/cmdx.py) into your project, [downloaded](https://github.com/mottosso/cmdx/archive/master.zip) as-is, cloned as-is or installed via `pip`.
 
 ```bash
 $ pip install cmdx
@@ -102,7 +102,7 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
     - [Native Types](#native-types)
     - [Contains](#contains)
 - [Connections](#connections)
-- [Plug-ins](#plugins)
+- [Plug-ins](#plug-ins)
     - [Draw](#draw)
     - [Compute](#compute)
     - [Manipulators](#manipulators)
@@ -597,7 +597,7 @@ cmdx.createNode("transform")
 For a 5-10% performance increase, you may pass type as an object rather than string.
 
 ```python
-cmdx.createNode(cmdx.Transform)
+cmdx.createNode(cmdx.tTransform)
 ```
 
 Only the most commonly used and performance sensitive types are available as explicit types.
@@ -621,7 +621,7 @@ Only the most commonly used and performance sensitive types are available as exp
 
 ### Node Types
 
-Unlike PyMEL and for best performance, `cmdx` does not wrap each node type in an individual class. However it does wrap the those with a corresponding API function set.
+Unlike PyMEL and for best performance, `cmdx` does not wrap each node type in an individual class. However it does wrap those with a corresponding API function set.
 
 | Node Type        | Features
 |:-----------------|:-------------
