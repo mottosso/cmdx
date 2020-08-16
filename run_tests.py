@@ -28,10 +28,21 @@ if __name__ == "__main__":
         "cmdx.py",
     ])
 
-    nose.main(argv=argv, addplugins=[flaky.FlakyPlugin()])
+    nose.main(
+        argv=argv,
+        addplugins=[flaky.FlakyPlugin()],
+        
+        # We'll exit in our own way,
+        # since Maya typically enjoys throwing
+        # segfaults during cleanup of normal exits
+        exit=False
+    )
 
     if os.getenv("TRAVIS_JOB_ID"):
         import coveralls
         coveralls.wear()
     else:
-        sys.stdout.write("Skipping coveralls")
+        sys.stdout.write("Skipping coveralls\n")
+
+    # Good night Maya, you aweful segfaulter
+    os._exit(0)
