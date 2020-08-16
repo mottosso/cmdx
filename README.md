@@ -38,6 +38,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 | 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2019 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2019)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2020 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2020)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 
 ##### Usecases
 
