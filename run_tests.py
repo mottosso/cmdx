@@ -28,7 +28,7 @@ if __name__ == "__main__":
         "cmdx.py",
     ])
 
-    nose.main(
+    result = nose.main(
         argv=argv,
         addplugins=[flaky.FlakyPlugin()],
         
@@ -45,4 +45,4 @@ if __name__ == "__main__":
         sys.stdout.write("Skipping coveralls\n")
 
     # Good night Maya, you aweful segfaulter
-    os._exit(0)
+    os._exit(0 if result.success else 1)

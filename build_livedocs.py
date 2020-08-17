@@ -105,12 +105,28 @@ if __name__ == '__main__':
     with io.open("test_docs.py", "w", encoding="utf-8") as f:
         f.write(u"""\
 # -*- coding: utf-8 -*-
+import os
+import sys
+import nose
 from nose.tools import assert_raises
-from maya import standalone
-standalone.initialize()
 
-from maya import cmds
-import cmdx
+if __name__ == "__main__":
+    print("Initialising Maya..")
+    from maya import standalone
+    standalone.initialize()
 
+    from maya import cmds
+    import cmdx
+
+    argv = sys.argv[:]
+    argv.extend([
+        "--verbose",
+        "--with-doctest",
+
+        "test_docs.py",
+    ])
+
+    result = nose.main(argv=argv, exit=False)
+    os._exit(0 if result.success else 1)
 """)
         f.write("".join(tests))
