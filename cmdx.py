@@ -3378,7 +3378,7 @@ def fromHash(code, default=None):
     """Get existing node from MObjectHandle.hashCode()"""
     try:
         return Singleton._instances["%x" % code]
-    except IndexError:
+    except KeyError:
         return default
 
 

@@ -405,7 +405,8 @@ However keep in mind that you can only retrieve nodes that have previously been 
 >>> fn = om.MFnDagNode()
 >>> mobj = fn.create("transform")
 >>> handle = om.MObjectHandle(mobj)
->>> assert_raises(KeyError, cmdx.fromHash, handle.hashCode())
+>>> node = cmdx.fromHash(handle.hashCode())
+>>> assert node is None
 >>> node = cmdx.Node(mobj)
 >>> node = cmdx.fromHash(handle.hashCode())
 ```
