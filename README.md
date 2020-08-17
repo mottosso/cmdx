@@ -319,6 +319,7 @@ Any node created or queried via `cmdx` is kept around until the next time the sa
 For example, when `encode`d or returned as children of another node.
 
 ```python
+>>> import cmdx
 >>> node = cmdx.createNode("transform", name="parent")
 >>> cmdx.encode("|parent") is node
 True
@@ -327,6 +328,8 @@ True
 This property survives function calls too.
 
 ```python
+>>> import cmdx
+>>> from maya import cmds
 >>> def function1():
 ...   return cmdx.createNode("transform", name="parent")
 ...
@@ -366,6 +369,8 @@ With module level caching, a repeated query to either an `MObject` or `MPlug` is
 In addition to reusing things internally, you are able to re-use things yourself by using nodes as e.g. keys to dictionaries.
 
 ```python
+>>> import cmdx
+>>> from maya import cmds
 >>> _ = cmds.file(new=True, force=True)
 >>> node = cmdx.createNode("animCurveTA")
 >>> nodes = {node: {"key": "value"}}
@@ -396,6 +401,7 @@ However keep in mind that you can only retrieve nodes that have previously been 
 
 ```python
 >>> from maya.api import OpenMaya as om
+>>> import cmdx
 >>> fn = om.MFnDagNode()
 >>> mobj = fn.create("transform")
 >>> handle = om.MObjectHandle(mobj)
