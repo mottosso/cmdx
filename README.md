@@ -400,15 +400,15 @@ These tap directly into the dictionary used to maintain references to each `cmdx
 However keep in mind that you can only retrieve nodes that have previously been access by `cmdx`.
 
 ```python
->>> from maya.api import OpenMaya as om
->>> import cmdx
->>> fn = om.MFnDagNode()
->>> mobj = fn.create("transform")
->>> handle = om.MObjectHandle(mobj)
->>> node = cmdx.fromHash(handle.hashCode())
->>> assert node is None
->>> node = cmdx.Node(mobj)
->>> node = cmdx.fromHash(handle.hashCode())
+from maya.api import OpenMaya as om
+import cmdx
+fn = om.MFnDagNode()
+mobj = fn.create("transform")
+handle = om.MObjectHandle(mobj)
+node = cmdx.fromHash(handle.hashCode())
+assert node is None, "%s should have been None" % node
+node = cmdx.Node(mobj)
+node = cmdx.fromHash(handle.hashCode())
 ```
 
 A more robust alternative is to instead pass the `MObject` directly.
