@@ -2506,14 +2506,12 @@ class Plug(object):
             ...   animcurve.keys(times=[1.0, 2.0], values=[0.0, 5.0])
             ...   node["tx"].read()
             ...   context = om.MDGContext(om.MTime(2.0, om.MTime.uiUnit()))
-            ...   context.makeCurrent()
+            ...   _ = context.makeCurrent()
             ...   node["tx"].read()
-            ...   om.MDGContext.kNormal.makeCurrent()
+            ...   _ = om.MDGContext.kNormal.makeCurrent()
             ...
             0.0
-             ...
             5.0
-             ...
 
         """
         unit = unit if unit is not None else self._unit
