@@ -2487,6 +2487,35 @@ class Plug(object):
         )
 
     def read(self, unit=None, time=None):
+        """Read attribute value
+
+        Arguments:
+            unit (int, optional): Unit with which to read plug
+            time (float, optional): Time at which to read plug
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["ty"] = 100.0
+            >>> node["ty"].read()
+            100.0
+            >>> node["ty"].read(unit=Meters)
+            1.0
+            >>> if hasattr(om.MDGContext, "makeCurrent"):
+            ...   animcurve = createNode("animCurveTL")
+            ...   animcurve["output"] >> node["tx"]
+            ...   animcurve.keys(times=[1.0, 2.0], values=[0.0, 5.0])
+            ...   node["tx"].read()
+            ...   context = om.MDGContext(om.MTime(2.0, om.MTime.uiUnit()))
+            ...   context.makeCurrent()
+            ...   node["tx"].read()
+            ...   om.MDGContext.kNormal.makeCurrent()
+            ...
+            0.0
+             ...
+            5.0
+             ...
+
+        """
         unit = unit if unit is not None else self._unit
         context = None
 

@@ -412,7 +412,7 @@ mobj = fn.create("transform")
 node = cmdx.Node(mobj)
 ```
 
-This will use the hash if a `cmdx` instance of this `MObject` already exist, else it will instantiate a new. The performance difference is slim and as such this is the recommended approach. The exception is if you happen to already has either an `MObjectHandle` or a corresponding `hashCode` at hand, in which case you can save a handful of cycles per call by using `fromHash` or `fromHex`. 
+This will use the hash if a `cmdx` instance of this `MObject` already exist, else it will instantiate a new. The performance difference is slim and as such this is the recommended approach. The exception is if you happen to already has either an `MObjectHandle` or a corresponding `hashCode` at hand, in which case you can save a handful of cycles per call by using `fromHash` or `fromHex`.
 
 <br>
 
@@ -481,7 +481,7 @@ TypeError: listConnections() got an unexpected keyword argument 'source'
 ```
 
 
-The reason for this limitation is because the functions `cmds` 
+The reason for this limitation is because the functions `cmds`
 
 - Submit an [issue](issues) or [pull-request](#fork) with commands you miss
 
@@ -603,20 +603,20 @@ cmdx.createNode(cmdx.tTransform)
 
 Only the most commonly used and performance sensitive types are available as explicit types.
 
-- `tAddDoubleLinear` 
-- `tAddMatrix` 
-- `tAngleBetween` 
-- `tMultMatrix` 
-- `tAngleDimension` 
-- `tBezierCurve` 
-- `tBlendShape` 
-- `tCamera` 
-- `tChoice` 
-- `tChooser` 
-- `tCondition` 
-- `tTransform` 
-- `tTransformGeometry` 
-- `tWtAddMatrix` 
+- `tAddDoubleLinear`
+- `tAddMatrix`
+- `tAngleBetween`
+- `tMultMatrix`
+- `tAngleDimension`
+- `tBezierCurve`
+- `tBlendShape`
+- `tCamera`
+- `tChoice`
+- `tChooser`
+- `tCondition`
+- `tTransform`
+- `tTransformGeometry`
+- `tWtAddMatrix`
 
 <br>
 
@@ -780,6 +780,20 @@ node = cmdx.createNode("transform")
 cmds.setKeyframe(str(node), attribute="tx", time=[1, 100], value=0.0)
 cmds.setKeyframe(str(node), attribute="tx", time=[50], value=10.0)
 cmds.keyTangent(str(node), attribute="tx", time=(1, 100), outTangentType="linear")
+node["tx"].read(time=50)
+# 10.0
+```
+
+In Maya 2018 and above, `Plug.read` will yield the result based on the current evaluation context. Following on from the above example.
+
+```python
+from maya.api import OpenMaya as om
+
+context = om.MDGContext(om.MTime(50, unit=om.MTime.uiUnit()))
+context.makeCurrent()
+node["tx"].read() # Evaluates the context at frame 50
+# 10.0
+om.MDGContext.kNormal.makeCurrent()
 ```
 
 <br>
@@ -1290,7 +1304,7 @@ a.children() == [b, c]
 False  # The iterator does not equal the list, no matter the content
 ```
 
-From a performance perspective, returning all values from an iterator is equally fast as returning them all at once, as `cmds` does, so you may wonder why do it this way? 
+From a performance perspective, returning all values from an iterator is equally fast as returning them all at once, as `cmds` does, so you may wonder why do it this way?
 
 It's because an iterator only spends time computing the values requested, so returning any number *less than* the total number yields performance benefits.
 
@@ -1462,7 +1476,7 @@ On creation, a node is "selected" which is leveraged by subsequent commands, com
 
 A scene description never faces naming or parenting problems the way programmers do. In a scene description, there is no need to rename nor reparent; a node is created either as a child of another, or not. It is given a name, which is unique. No ambiguity.
 
-From there, it was given expressions, functions, branching logic and was made into a scripting language where the standard library is a scene description kit. 
+From there, it was given expressions, functions, branching logic and was made into a scripting language where the standard library is a scene description kit.
 
 `cmds` is tedious and `pymel` is slow. `cmds` is also a victim of its own success. Like MEL, it works with relative paths and the current selection; this facilitates the compact file format, whereby a node is created, and then any references to this node is implicit in each subsequent line. Long attribute names have a short equivalent and paths need only be given at enough specificity to not be ambiguous given everything else that was previously created. Great for scene a file format, not so great for code that operates on-top of this scene file.
 
@@ -1811,7 +1825,7 @@ Additional thoughts.
 
 #### MDagModifier
 
-`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`. 
+`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`.
 
 ```python
 from maya.api import OpenMaya as om
