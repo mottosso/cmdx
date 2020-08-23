@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 PY3 = sys.version_info[0] == 3
 
@@ -186,6 +186,29 @@ def protected(func):
     return func_wrapper
 
 
+def add_metaclass(metaclass):
+    """Add metaclass to Python 2 and 3 class
+
+    Helper decorator, from six.py
+
+    """
+
+    def wrapper(cls):
+        orig_vars = cls.__dict__.copy()
+        slots = orig_vars.get('__slots__')
+        if slots is not None:
+            if isinstance(slots, str):
+                slots = [slots]
+            for slots_var in slots:
+                orig_vars.pop(slots_var)
+        orig_vars.pop('__dict__', None)
+        orig_vars.pop('__weakref__', None)
+        if hasattr(cls, '__qualname__'):
+            orig_vars['__qualname__'] = cls.__qualname__
+        return metaclass(cls.__name__, cls.__bases__, orig_vars)
+    return wrapper
+
+
 class _Type(int):
     """Facilitate use of isinstance(space, _Type)"""
 
@@ -322,6 +345,7 @@ class Singleton(type):
         return self
 
 
+@add_metaclass(Singleton)
 class Node(object):
     """A Maya dependency node
 
@@ -340,9 +364,6 @@ class Node(object):
         (5.0, 0.0, 0.0)
 
     """
-
-    if ENABLE_NODE_REUSE:
-        __metaclass__ = Singleton
 
     _Fn = om.MFnDependencyNode
 
@@ -5029,6 +5050,7 @@ class MetaNode(type):
         return super(MetaNode, cls).__init__(*args, **kwargs)
 
 
+@add_metaclass(MetaNode)
 class DgNode(om.MPxNode):
     """Abstract baseclass for a Maya DG node
 
@@ -5040,8 +5062,6 @@ class DgNode(om.MPxNode):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
     name = "defaultNode"
@@ -5056,6 +5076,7 @@ class DgNode(om.MPxNode):
         pass
 
 
+@add_metaclass(MetaNode)
 class SurfaceShape(om.MPxSurfaceShape):
     """Abstract baseclass for a Maya shape
 
@@ -5067,8 +5088,6 @@ class SurfaceShape(om.MPxSurfaceShape):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
     classification = "drawdb/geometry/custom"
@@ -5088,6 +5107,7 @@ class SurfaceShape(om.MPxSurfaceShape):
         pass
 
 
+@add_metaclass(MetaNode)
 class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
     """Abstract baseclass for a Maya shape
 
@@ -5099,8 +5119,6 @@ class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
     classification = "drawdb/geometry/custom"
@@ -5116,6 +5134,7 @@ class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
         pass
 
 
+@add_metaclass(MetaNode)
 class LocatorNode(omui.MPxLocatorNode):
     """Abstract baseclass for a Maya locator
 
@@ -5127,8 +5146,6 @@ class LocatorNode(omui.MPxLocatorNode):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     name = "defaultNode"
     typeid = TypeId(StartId)
