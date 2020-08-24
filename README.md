@@ -832,6 +832,28 @@ node["myArray"][2]
 
 <br>
 
+### Matrix Attributes
+
+Create and edit matrix attributes like any other attribute.
+
+For example, here's how you can store a copy of the current worldmatrix of any given node.
+
+```py
+import cmdx
+
+node = cmdx.createNode("transform")
+node["translate"] = (1, 2, 3)
+node["rotate", cmdx.Degrees] = (20, 30, 40)
+
+# Create a new matrix attribute
+node["myMatrix"] = cmdx.Matrix()
+
+# Store current world matrix in this custom attribute
+node["myMatrix"] = node["worldMatrix"][0].asMatrix()
+```
+
+<br>
+
 ### Native Types
 
 Maya boasts a library of classes that provide mathematical convenience functionality, such as rotating a vector, multiplying matrices or converting between Euler degrees and Quaternions.
