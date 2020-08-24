@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 PY3 = sys.version_info[0] == 3
 
@@ -3283,6 +3283,11 @@ def _python_to_plug(value, plug):
     elif isinstance(value, om.MPoint):
         for index, value in enumerate(value):
             _python_to_plug(value, plug[index])
+
+    elif isinstance(value, om.MMatrix):
+        matrixData = om.MFnMatrixData()
+        matobj = matrixData.create(value)
+        plug._mplug.setMObject(matobj)
 
     elif plug._mplug.isCompound:
         count = plug._mplug.numChildren()
