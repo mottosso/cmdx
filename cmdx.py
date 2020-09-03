@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 PY3 = sys.version_info[0] == 3
 
@@ -2846,6 +2846,10 @@ class TransformationMatrix(om.MTransformationMatrix):
     def asMatrixInverse(self):
         return super(TransformationMatrix, self).asMatrixInverse()
 
+    # A more intuitive alternative
+    translate = translateBy
+    rotate = rotateBy
+
     if ENABLE_PEP8:
         x_axis = xAxis
         y_axis = yAxis
@@ -2867,6 +2871,8 @@ class MatrixType(om.MMatrix):
 Transformation = TransformationMatrix
 Tm = TransformationMatrix
 Mat = MatrixType
+Mat4 = MatrixType
+Matrix4 = MatrixType
 
 
 class Vector(om.MVector):
@@ -4785,6 +4791,31 @@ class Distance3(Compound):
 
 class Distance4(Compound):
     Multi = ("XYZW", Distance)
+
+
+# Convenience aliases, for when it isn't clear e.g. `Matrix()`
+# is referring to an attribute rather than the datatype.
+EnumAttribute = Enum
+DividerAttribute = Divider
+StringAttribute = String
+MessageAttribute = Message
+MatrixAttribute = Matrix
+LongAttribute = Long
+DoubleAttribute = Double
+Double3Attribute = Double3
+BooleanAttribute = Boolean
+AbstractUnitAttribute = AbstractUnit
+AngleAttribute = Angle
+TimeAttribute = Time
+DistanceAttribute = Distance
+CompoundAttribute = Compound
+Double2Attribute = Double2
+Double4Attribute = Double4
+Angle2Attribute = Angle2
+Angle3Attribute = Angle3
+Distance2Attribute = Distance2
+Distance3Attribute = Distance3
+Distance4Attribute = Distance4
 
 
 # --------------------------------------------------------
