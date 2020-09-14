@@ -38,6 +38,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 | 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2019 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2019)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2020 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2020)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 
 ##### Usecases
 
@@ -317,6 +319,7 @@ Any node created or queried via `cmdx` is kept around until the next time the sa
 For example, when `encode`d or returned as children of another node.
 
 ```python
+>>> import cmdx
 >>> node = cmdx.createNode("transform", name="parent")
 >>> cmdx.encode("|parent") is node
 True
@@ -325,6 +328,8 @@ True
 This property survives function calls too.
 
 ```python
+>>> import cmdx
+>>> from maya import cmds
 >>> def function1():
 ...   return cmdx.createNode("transform", name="parent")
 ...
@@ -364,6 +369,8 @@ With module level caching, a repeated query to either an `MObject` or `MPlug` is
 In addition to reusing things internally, you are able to re-use things yourself by using nodes as e.g. keys to dictionaries.
 
 ```python
+>>> import cmdx
+>>> from maya import cmds
 >>> _ = cmds.file(new=True, force=True)
 >>> node = cmdx.createNode("animCurveTA")
 >>> nodes = {node: {"key": "value"}}
@@ -393,13 +400,15 @@ These tap directly into the dictionary used to maintain references to each `cmdx
 However keep in mind that you can only retrieve nodes that have previously been access by `cmdx`.
 
 ```python
->>> from maya.api import OpenMaya as om
->>> fn = om.MFnDagNode()
->>> mobj = fn.create("transform")
->>> handle = om.MObjectHandle(mobj)
->>> assert_raises(KeyError, cmdx.fromHash, handle.hashCode())
->>> node = cmdx.Node(mobj)
->>> node = cmdx.fromHash(handle.hashCode())
+from maya.api import OpenMaya as om
+import cmdx
+fn = om.MFnDagNode()
+mobj = fn.create("transform")
+handle = om.MObjectHandle(mobj)
+node = cmdx.fromHash(handle.hashCode())
+assert node is None, "%s should have been None" % node
+node = cmdx.Node(mobj)
+node = cmdx.fromHash(handle.hashCode())
 ```
 
 A more robust alternative is to instead pass the `MObject` directly.
@@ -819,6 +828,28 @@ node["myArray"] = (5, 5, 5)
 node["myArray"][1] = 10
 node["myArray"][2]
 # 5
+```
+
+<br>
+
+### Matrix Attributes
+
+Create and edit matrix attributes like any other attribute.
+
+For example, here's how you can store a copy of the current worldmatrix of any given node.
+
+```py
+import cmdx
+
+node = cmdx.createNode("transform")
+node["translate"] = (1, 2, 3)
+node["rotate", cmdx.Degrees] = (20, 30, 40)
+
+# Create a new matrix attribute
+node["myMatrix"] = cmdx.Matrix()
+
+# Store current world matrix in this custom attribute
+node["myMatrix"] = node["worldMatrix"][0].asMatrix()
 ```
 
 <br>
