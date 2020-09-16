@@ -2500,13 +2500,6 @@ class Plug(object):
             100.0
             >>> node["ty"].read(unit=Meters)
             1.0
-            >>> animcurve = createNode("animCurveTL")
-            >>> animcurve["output"] >> node["tx"]
-            >>> animcurve.keys(times=[1.0, 2.0], values=[0.0, 5.0])
-            >>> node["tx"].read()
-            0.0
-            >>> node["tx"].read(time=2.0)
-            5.0
 
         """
         unit = unit if unit is not None else self._unit
