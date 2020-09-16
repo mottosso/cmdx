@@ -1097,7 +1097,55 @@ cmdx.connectAttr(a + ".translateX", b + ".translateX")
 
 ### Plug-ins
 
-`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins. It also comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
+`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins.
+
+**Usage**
+
+```py
+import cmdx
+
+class MyNode(cmdx.DgNode):
+    name = "myNode"
+    typeid = om.MTypeId(0x85005)
+
+initializePlugin2 = cmdx.initialize2(MyNode)
+uninitializePlugin2 = cmdx.uninitialize2(MyNode)
+```
+
+Simply save this file to e.g. `myNode.py` and load it from within Maya like this.
+
+```py
+from maya import cmds
+cmds.loadPlugin("/path/to/myNode.py")
+cmds.createNode("myNode")
+```
+
+**See also:**
+
+- [Examples](https://github.com/mottosso/cmdx/tree/master/examples)
+
+**Available superclasses:**
+
+- `cmdx.DgNode`
+- `cmdx.SurfaceShape`
+- `cmdx.SurfaceShapeUI`
+- `cmdx.LocatorNode`
+
+**Keep in mind**
+
+- Don't forget to `cmdx.unloadPlugin` before loading it anew
+- Every Maya node **requires** a *globally unique* "TypeId"
+- You can register your own series of IDs for free, [here](https://mayaid.autodesk.io/)
+- Try **not to undo** the creation of your custom node, as you will be unable to unload it without restarting Maya
+- If two nodes with the same ID exists in the same scene, Maya may crash and will be unable to load the file (if you are even able to save it)
+- The `2` refers to Maya API 2.0, which is the default API used by `cmdx`. You can alternatively define a variable or function called `maya_useNewAPI` and use `initializePlugin` without the suffix `2`.
+- See the [Maya API Documentation](https://help.autodesk.com/view/MAYAUL/2017/ENU/?guid=__py_ref_class_open_maya_u_i_1_1_m_px_locator_node_html) for superclass documentation, these are merely aliases for the original node types, without the prefix `M`.
+
+<br>
+
+#### Declarative
+
+`cmdx` comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
 
 **Before**
 
@@ -1157,7 +1205,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     attributes = [
         cmdx.String("myString"),
@@ -1185,7 +1233,7 @@ import external_library
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     defaults = external_library.get_defaults()
 
@@ -1206,7 +1254,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     defaults = {
         "myString": "myDefault",
