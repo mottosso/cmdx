@@ -2500,17 +2500,12 @@ class Plug(object):
             100.0
             >>> node["ty"].read(unit=Meters)
             1.0
-            >>> if hasattr(om.MDGContext, "makeCurrent"):
-            ...   animcurve = createNode("animCurveTL")
-            ...   animcurve["output"] >> node["tx"]
-            ...   animcurve.keys(times=[1.0, 2.0], values=[0.0, 5.0])
-            ...   node["tx"].read()
-            ...   context = om.MDGContext(om.MTime(2.0, om.MTime.uiUnit()))
-            ...   _ = context.makeCurrent()
-            ...   node["tx"].read()
-            ...   _ = om.MDGContext.kNormal.makeCurrent()
-            ...
+            >>> animcurve = createNode("animCurveTL")
+            >>> animcurve["output"] >> node["tx"]
+            >>> animcurve.keys(times=[1.0, 2.0], values=[0.0, 5.0])
+            >>> node["tx"].read()
             0.0
+            >>> node["tx"].read(time=2.0)
             5.0
 
         """

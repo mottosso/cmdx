@@ -149,6 +149,19 @@ def test_getattrtime():
     assert_almost_equals(transform["ty"].read(time=5), 5.0, places=5)
     assert_almost_equals(transform["ty"].read(time=10), 10.0, places=5)
 
+    # From the current context (Maya 2018 and above)
+    if hasattr(om.MDGContext, "makeCurrent"):
+        context = om.MDGContext(om.MTime(1.0, om.MTime.uiUnit()))
+        context.makeCurrent()
+        assert_almost_equals(transform["ty"].read(), 1.0, places=5)
+        context = om.MDGContext(om.MTime(5.0, om.MTime.uiUnit()))
+        context.makeCurrent()
+        assert_almost_equals(transform["ty"].read(), 5.0, places=5)
+        context = om.MDGContext(om.MTime(10.0, om.MTime.uiUnit()))
+        context.makeCurrent()
+        assert_almost_equals(transform["ty"].read(), 10.0, places=5)
+        om.MDGContext.kNormal.makeCurrent()
+
 
 def test_setattr():
     """Setting attributes works well"""
