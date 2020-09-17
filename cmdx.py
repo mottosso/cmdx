@@ -186,6 +186,29 @@ def protected(func):
     return func_wrapper
 
 
+def add_metaclass(metaclass):
+    """Add metaclass to Python 2 and 3 class
+
+    Helper decorator, from six.py
+
+    """
+
+    def wrapper(cls):
+        orig_vars = cls.__dict__.copy()
+        slots = orig_vars.get('__slots__')
+        if slots is not None:
+            if isinstance(slots, str):
+                slots = [slots]
+            for slots_var in slots:
+                orig_vars.pop(slots_var)
+        orig_vars.pop('__dict__', None)
+        orig_vars.pop('__weakref__', None)
+        if hasattr(cls, '__qualname__'):
+            orig_vars['__qualname__'] = cls.__qualname__
+        return metaclass(cls.__name__, cls.__bases__, orig_vars)
+    return wrapper
+
+
 class _Type(int):
     """Facilitate use of isinstance(space, _Type)"""
 
@@ -322,6 +345,7 @@ class Singleton(type):
         return self
 
 
+@add_metaclass(Singleton)
 class Node(object):
     """A Maya dependency node
 
@@ -340,9 +364,6 @@ class Node(object):
         (5.0, 0.0, 0.0)
 
     """
-
-    if ENABLE_NODE_REUSE:
-        __metaclass__ = Singleton
 
     _Fn = om.MFnDependencyNode
 
@@ -2839,6 +2860,10 @@ class TransformationMatrix(om.MTransformationMatrix):
     def asMatrixInverse(self):
         return super(TransformationMatrix, self).asMatrixInverse()
 
+    # A more intuitive alternative
+    translate = translateBy
+    rotate = rotateBy
+
     if ENABLE_PEP8:
         x_axis = xAxis
         y_axis = yAxis
@@ -2860,6 +2885,8 @@ class MatrixType(om.MMatrix):
 Transformation = TransformationMatrix
 Tm = TransformationMatrix
 Mat = MatrixType
+Mat4 = MatrixType
+Matrix4 = MatrixType
 
 
 class Vector(om.MVector):
@@ -3279,6 +3306,11 @@ def _python_to_plug(value, plug):
         for index, value in enumerate(value):
             _python_to_plug(value, plug[index])
 
+    elif isinstance(value, om.MMatrix):
+        matrixData = om.MFnMatrixData()
+        matobj = matrixData.create(value)
+        plug._mplug.setMObject(matobj)
+
     elif plug._mplug.isCompound:
         count = plug._mplug.numChildren()
         return _python_to_plug([value] * count, plug)
@@ -3394,7 +3426,7 @@ def fromHash(code, default=None):
     """Get existing node from MObjectHandle.hashCode()"""
     try:
         return Singleton._instances["%x" % code]
-    except IndexError:
+    except KeyError:
         return default
 
 
@@ -4777,6 +4809,31 @@ class Distance4(Compound):
     Multi = ("XYZW", Distance)
 
 
+# Convenience aliases, for when it isn't clear e.g. `Matrix()`
+# is referring to an attribute rather than the datatype.
+EnumAttribute = Enum
+DividerAttribute = Divider
+StringAttribute = String
+MessageAttribute = Message
+MatrixAttribute = Matrix
+LongAttribute = Long
+DoubleAttribute = Double
+Double3Attribute = Double3
+BooleanAttribute = Boolean
+AbstractUnitAttribute = AbstractUnit
+AngleAttribute = Angle
+TimeAttribute = Time
+DistanceAttribute = Distance
+CompoundAttribute = Compound
+Double2Attribute = Double2
+Double4Attribute = Double4
+Angle2Attribute = Angle2
+Angle3Attribute = Angle3
+Distance2Attribute = Distance2
+Distance3Attribute = Distance3
+Distance4Attribute = Distance4
+
+
 # --------------------------------------------------------
 #
 # Undo/Redo Support
@@ -5045,6 +5102,7 @@ class MetaNode(type):
         return super(MetaNode, cls).__init__(*args, **kwargs)
 
 
+@add_metaclass(MetaNode)
 class DgNode(om.MPxNode):
     """Abstract baseclass for a Maya DG node
 
@@ -5056,8 +5114,6 @@ class DgNode(om.MPxNode):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
     name = "defaultNode"
@@ -5072,6 +5128,7 @@ class DgNode(om.MPxNode):
         pass
 
 
+@add_metaclass(MetaNode)
 class SurfaceShape(om.MPxSurfaceShape):
     """Abstract baseclass for a Maya shape
 
@@ -5083,8 +5140,6 @@ class SurfaceShape(om.MPxSurfaceShape):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
     classification = "drawdb/geometry/custom"
@@ -5104,6 +5159,7 @@ class SurfaceShape(om.MPxSurfaceShape):
         pass
 
 
+@add_metaclass(MetaNode)
 class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
     """Abstract baseclass for a Maya shape
 
@@ -5115,8 +5171,6 @@ class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     typeid = TypeId(StartId)
     classification = "drawdb/geometry/custom"
@@ -5132,6 +5186,7 @@ class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
         pass
 
 
+@add_metaclass(MetaNode)
 class LocatorNode(omui.MPxLocatorNode):
     """Abstract baseclass for a Maya locator
 
@@ -5143,8 +5198,6 @@ class LocatorNode(omui.MPxLocatorNode):
         defaults (dict, optional): Dictionary of default values
 
     """
-
-    __metaclass__ = MetaNode
 
     name = "defaultNode"
     typeid = TypeId(StartId)

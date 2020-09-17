@@ -38,6 +38,8 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 | 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 | 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2019 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2019)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| 2020 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2020)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
 
 ##### Usecases
 
@@ -317,6 +319,7 @@ Any node created or queried via `cmdx` is kept around until the next time the sa
 For example, when `encode`d or returned as children of another node.
 
 ```python
+>>> import cmdx
 >>> node = cmdx.createNode("transform", name="parent")
 >>> cmdx.encode("|parent") is node
 True
@@ -325,6 +328,8 @@ True
 This property survives function calls too.
 
 ```python
+>>> import cmdx
+>>> from maya import cmds
 >>> def function1():
 ...   return cmdx.createNode("transform", name="parent")
 ...
@@ -364,6 +369,8 @@ With module level caching, a repeated query to either an `MObject` or `MPlug` is
 In addition to reusing things internally, you are able to re-use things yourself by using nodes as e.g. keys to dictionaries.
 
 ```python
+>>> import cmdx
+>>> from maya import cmds
 >>> _ = cmds.file(new=True, force=True)
 >>> node = cmdx.createNode("animCurveTA")
 >>> nodes = {node: {"key": "value"}}
@@ -393,13 +400,15 @@ These tap directly into the dictionary used to maintain references to each `cmdx
 However keep in mind that you can only retrieve nodes that have previously been access by `cmdx`.
 
 ```python
->>> from maya.api import OpenMaya as om
->>> fn = om.MFnDagNode()
->>> mobj = fn.create("transform")
->>> handle = om.MObjectHandle(mobj)
->>> assert_raises(KeyError, cmdx.fromHash, handle.hashCode())
->>> node = cmdx.Node(mobj)
->>> node = cmdx.fromHash(handle.hashCode())
+from maya.api import OpenMaya as om
+import cmdx
+fn = om.MFnDagNode()
+mobj = fn.create("transform")
+handle = om.MObjectHandle(mobj)
+node = cmdx.fromHash(handle.hashCode())
+assert node is None, "%s should have been None" % node
+node = cmdx.Node(mobj)
+node = cmdx.fromHash(handle.hashCode())
 ```
 
 A more robust alternative is to instead pass the `MObject` directly.
@@ -837,6 +846,28 @@ node["myArray"][2]
 
 <br>
 
+### Matrix Attributes
+
+Create and edit matrix attributes like any other attribute.
+
+For example, here's how you can store a copy of the current worldmatrix of any given node.
+
+```py
+import cmdx
+
+node = cmdx.createNode("transform")
+node["translate"] = (1, 2, 3)
+node["rotate", cmdx.Degrees] = (20, 30, 40)
+
+# Create a new matrix attribute
+node["myMatrix"] = cmdx.Matrix()
+
+# Store current world matrix in this custom attribute
+node["myMatrix"] = node["worldMatrix"][0].asMatrix()
+```
+
+<br>
+
 ### Native Types
 
 Maya boasts a library of classes that provide mathematical convenience functionality, such as rotating a vector, multiplying matrices or converting between Euler degrees and Quaternions.
@@ -1080,7 +1111,55 @@ cmdx.connectAttr(a + ".translateX", b + ".translateX")
 
 ### Plug-ins
 
-`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins. It also comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
+`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins.
+
+**Usage**
+
+```py
+import cmdx
+
+class MyNode(cmdx.DgNode):
+    name = "myNode"
+    typeid = om.MTypeId(0x85005)
+
+initializePlugin2 = cmdx.initialize2(MyNode)
+uninitializePlugin2 = cmdx.uninitialize2(MyNode)
+```
+
+Simply save this file to e.g. `myNode.py` and load it from within Maya like this.
+
+```py
+from maya import cmds
+cmds.loadPlugin("/path/to/myNode.py")
+cmds.createNode("myNode")
+```
+
+**See also:**
+
+- [Examples](https://github.com/mottosso/cmdx/tree/master/examples)
+
+**Available superclasses:**
+
+- `cmdx.DgNode`
+- `cmdx.SurfaceShape`
+- `cmdx.SurfaceShapeUI`
+- `cmdx.LocatorNode`
+
+**Keep in mind**
+
+- Don't forget to `cmdx.unloadPlugin` before loading it anew
+- Every Maya node **requires** a *globally unique* "TypeId"
+- You can register your own series of IDs for free, [here](https://mayaid.autodesk.io/)
+- Try **not to undo** the creation of your custom node, as you will be unable to unload it without restarting Maya
+- If two nodes with the same ID exists in the same scene, Maya may crash and will be unable to load the file (if you are even able to save it)
+- The `2` refers to Maya API 2.0, which is the default API used by `cmdx`. You can alternatively define a variable or function called `maya_useNewAPI` and use `initializePlugin` without the suffix `2`.
+- See the [Maya API Documentation](https://help.autodesk.com/view/MAYAUL/2017/ENU/?guid=__py_ref_class_open_maya_u_i_1_1_m_px_locator_node_html) for superclass documentation, these are merely aliases for the original node types, without the prefix `M`.
+
+<br>
+
+#### Declarative
+
+`cmdx` comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
 
 **Before**
 
@@ -1140,7 +1219,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     attributes = [
         cmdx.String("myString"),
@@ -1168,7 +1247,7 @@ import external_library
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     defaults = external_library.get_defaults()
 
@@ -1189,7 +1268,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     defaults = {
         "myString": "myDefault",
