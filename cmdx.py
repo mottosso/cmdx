@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 PY3 = sys.version_info[0] == 3
 
@@ -2325,12 +2325,11 @@ class Plug(object):
 
         """
 
-        context = om.MDGContext.kNormal
-
         if time is not None:
             context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+            return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
 
-        return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
+        return om.MFnMatrixData(self._mplug.asMObject()).matrix()
 
     def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
@@ -2509,6 +2508,21 @@ class Plug(object):
         )
 
     def read(self, unit=None, time=None):
+        """Read attribute value
+
+        Arguments:
+            unit (int, optional): Unit with which to read plug
+            time (float, optional): Time at which to read plug
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["ty"] = 100.0
+            >>> node["ty"].read()
+            100.0
+            >>> node["ty"].read(unit=Meters)
+            1.0
+
+        """
         unit = unit if unit is not None else self._unit
         context = None
 
@@ -3066,8 +3080,10 @@ def _plug_to_python(plug, unit=None, context=None):
 
     assert not plug.isNull, "'%s' was null" % plug
 
-    if context is None:
-        context = om.MDGContext.kNormal
+    kwargs = dict()
+
+    if context is not None:
+        kwargs["context"] = context
 
     # Multi attributes
     #   _____
@@ -3124,14 +3140,14 @@ def _plug_to_python(plug, unit=None, context=None):
                 plug = plug.elementByLogicalIndex(0)
 
             return tuple(
-                om.MFnMatrixData(plug.asMObject(context)).matrix()
+                om.MFnMatrixData(plug.asMObject(**kwargs)).matrix()
             )
 
         elif innerType == om.MFnData.kString:
-            return plug.asString(context)
+            return plug.asString(**kwargs)
 
         elif innerType == om.MFnData.kNurbsCurve:
-            return om.MFnNurbsCurveData(plug.asMObject(context))
+            return om.MFnNurbsCurveData(plug.asMObject(**kwargs))
 
         elif innerType == om.MFnData.kComponentList:
             return None
@@ -3146,7 +3162,7 @@ def _plug_to_python(plug, unit=None, context=None):
             return None
 
     elif type == om.MFn.kMatrixAttribute:
-        return tuple(om.MFnMatrixData(plug.asMObject(context)).matrix())
+        return tuple(om.MFnMatrixData(plug.asMObject(**kwargs)).matrix())
 
     elif type == om.MFnData.kDoubleArray:
         raise TypeError("%s: kDoubleArray is not supported" % plug)
@@ -3155,38 +3171,38 @@ def _plug_to_python(plug, unit=None, context=None):
                   om.MFn.kFloatLinearAttribute):
 
         if unit is None:
-            return plug.asMDistance(context).asUnits(Centimeters)
+            return plug.asMDistance(**kwargs).asUnits(Centimeters)
         elif unit == Millimeters:
-            return plug.asMDistance(context).asMillimeters()
+            return plug.asMDistance(**kwargs).asMillimeters()
         elif unit == Centimeters:
-            return plug.asMDistance(context).asCentimeters()
+            return plug.asMDistance(**kwargs).asCentimeters()
         elif unit == Meters:
-            return plug.asMDistance(context).asMeters()
+            return plug.asMDistance(**kwargs).asMeters()
         elif unit == Kilometers:
-            return plug.asMDistance(context).asKilometers()
+            return plug.asMDistance(**kwargs).asKilometers()
         elif unit == Inches:
-            return plug.asMDistance(context).asInches()
+            return plug.asMDistance(**kwargs).asInches()
         elif unit == Feet:
-            return plug.asMDistance(context).asFeet()
+            return plug.asMDistance(**kwargs).asFeet()
         elif unit == Miles:
-            return plug.asMDistance(context).asMiles()
+            return plug.asMDistance(**kwargs).asMiles()
         elif unit == Yards:
-            return plug.asMDistance(context).asYards()
+            return plug.asMDistance(**kwargs).asYards()
         else:
             raise TypeError("Unsupported unit '%d'" % unit)
 
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
         if unit is None:
-            return plug.asMAngle(context).asUnits(Radians)
+            return plug.asMAngle(**kwargs).asUnits(Radians)
         elif unit == Degrees:
-            return plug.asMAngle(context).asDegrees()
+            return plug.asMAngle(**kwargs).asDegrees()
         elif unit == Radians:
-            return plug.asMAngle(context).asRadians()
+            return plug.asMAngle(**kwargs).asRadians()
         elif unit == AngularSeconds:
-            return plug.asMAngle(context).asAngSeconds()
+            return plug.asMAngle(**kwargs).asAngSeconds()
         elif unit == AngularMinutes:
-            return plug.asMAngle(context).asAngMinutes()
+            return plug.asMAngle(**kwargs).asAngMinutes()
         else:
             raise TypeError("Unsupported unit '%d'" % unit)
 
@@ -3195,18 +3211,18 @@ def _plug_to_python(plug, unit=None, context=None):
         innerType = om.MFnNumericAttribute(attr).numericType()
 
         if innerType == om.MFnNumericData.kBoolean:
-            return plug.asBool(context)
+            return plug.asBool(**kwargs)
 
         elif innerType in (om.MFnNumericData.kShort,
                            om.MFnNumericData.kInt,
                            om.MFnNumericData.kLong,
                            om.MFnNumericData.kByte):
-            return plug.asInt(context)
+            return plug.asInt(**kwargs)
 
         elif innerType in (om.MFnNumericData.kFloat,
                            om.MFnNumericData.kDouble,
                            om.MFnNumericData.kAddr):
-            return plug.asDouble(context)
+            return plug.asDouble(**kwargs)
 
         else:
             raise TypeError("Unsupported numeric type: %s"
@@ -3214,14 +3230,14 @@ def _plug_to_python(plug, unit=None, context=None):
 
     # Enum
     elif type == om.MFn.kEnumAttribute:
-        return plug.asShort(context)
+        return plug.asShort(**kwargs)
 
     elif type == om.MFn.kMessageAttribute:
         # In order to comply with `if plug:`
         return True
 
     elif type == om.MFn.kTimeAttribute:
-        return plug.asShort(context)
+        return plug.asShort(**kwargs)
 
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
