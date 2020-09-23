@@ -2158,6 +2158,9 @@ class Plug(object):
 
         """
 
+        # Rescue the user from certain crash
+        assert index >= 0, "Logical indexes cannot be negative"
+
         cls = self.__class__
 
         if isinstance(index, int):
@@ -2307,7 +2310,7 @@ class Plug(object):
         return self._mplug.asDouble()
 
     def asMatrix(self, time=None):
-        """Return plug as MMatrix
+        """Return plug as MatrixType
 
         Example:
             >>> node1 = createNode("transform")
@@ -2329,7 +2332,8 @@ class Plug(object):
             context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
             return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
 
-        return om.MFnMatrixData(self._mplug.asMObject()).matrix()
+
+        return MatrixType(om.MFnMatrixData(self._mplug.asMObject(context)).matrix())
 
     def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
@@ -2774,22 +2778,25 @@ class TransformationMatrix(om.MTransformationMatrix):
             vec = Vector(vec)
         return super(TransformationMatrix, self).translateBy(vec, space)
 
-    def rotateBy(self, vec, space=None):
+    def rotateBy(self, rot, space=None):
         """Handle arguments conveniently
 
         - Allow for optional `space` argument
         - Automatically convert tuple to Vector
 
+        Arguments:
+            rot (Vector, Quaternion): Rotation to add
+
         """
 
         space = space or sTransform
-        if isinstance(vec, (tuple, list)):
-            vec = Vector(vec)
+        if isinstance(rot, (tuple, list)):
+            rot = Vector(rot)
 
-        if isinstance(vec, om.MVector):
-            vec = EulerRotation(vec)
+        if isinstance(rot, om.MVector):
+            rot = EulerRotation(rot)
 
-        return super(TransformationMatrix, self).rotateBy(vec, space)
+        return super(TransformationMatrix, self).rotateBy(rot, space)
 
     def quaternion(self):
         """Return transformation matrix as a Quaternion"""
@@ -2815,7 +2822,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return super(TransformationMatrix, self).setTranslation(trans, space)
 
-    def scale(self, space=None):
+    def scaleBy(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).scale(space))
@@ -2855,14 +2862,15 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setRotation(rot)
 
     def asMatrix(self):
-        return super(TransformationMatrix, self).asMatrix()
+        return MatrixType(super(TransformationMatrix, self).asMatrix())
 
     def asMatrixInverse(self):
-        return super(TransformationMatrix, self).asMatrixInverse()
+        return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
     translate = translateBy
     rotate = rotateBy
+    scale = scaleBy
 
     if ENABLE_PEP8:
         x_axis = xAxis
@@ -2878,7 +2886,70 @@ class TransformationMatrix(om.MTransformationMatrix):
 
 
 class MatrixType(om.MMatrix):
-    pass
+    def __call__(self, *item):
+        """Native API 2.0 MMatrix does not support indexing
+
+        API 1.0 however *does*, except only for elements
+        and not rows. Screw both of those, indexing isn't hard.
+
+        Arguments:
+            item (int, tuple): 1 integer for row, 2 for element
+            
+        Identity/default matrix:
+            [[1.0, 0.0, 0.0, 0.0]]
+            [[0.0, 1.0, 0.0, 0.0]]
+            [[0.0, 0.0, 1.0, 0.0]]
+            [[0.0, 0.0, 0.0, 1.0]]
+
+        Example:
+            >>> m = MatrixType()
+            >>> m(0, 0)
+            1.0
+            >>> m(0, 1)
+            0.0
+            >>> m(1, 1)
+            1.0
+            >>> m(2, 1)
+            0.0
+            >>> m(3, 3)
+            1.0
+            >>>
+            >>> m(0)
+            (1, 0, 0, 0)
+
+        """
+
+        if isinstance(item, tuple):
+            assert len(item) == 2, (
+                "Must provide either 1 or 2 coordinates, "
+                "for row and element respectively"
+            )
+            return self.element(*item)
+
+        else:
+            return self.row(item)
+
+    def __mul__(self, other):
+        return type(self)(super(MatrixType, self).__mul__(other))
+
+    def __div__(self, other):
+        return type(self)(super(MatrixType, self).__div__(other))
+
+    def inverse(self):
+        return type(self)(super(MatrixType, self).inverse())
+
+    def row(self, index):
+        values = tuple(self)
+        return (
+            values[index * 4 + 0],
+            values[index * 4 + 1],
+            values[index * 4 + 2],
+            values[index * 4 + 3]
+        )
+
+    def element(self, row, col):
+        values = tuple(self)
+        return values[row * 4 + col % 4]
 
 
 # Alias
@@ -3258,6 +3329,10 @@ def _python_to_plug(value, plug):
     # Compound values
 
     if isinstance(value, (tuple, list)):
+        if plug.type() == "kMatrixAttribute":
+            assert len(value) == 16, "Value didn't appear to be a valid matrix"
+            return _python_to_plug(Matrix4(value), plug)
+
         for index, value in enumerate(value):
 
             # Tuple values are assumed flat:
