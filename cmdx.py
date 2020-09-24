@@ -2326,7 +2326,7 @@ class Plug(object):
         """
 
         if time is not None:
-            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+            context = DGContext(time=time)
             return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
 
         return om.MFnMatrixData(self._mplug.asMObject()).matrix()
@@ -2524,10 +2524,7 @@ class Plug(object):
 
         """
         unit = unit if unit is not None else self._unit
-        context = None
-
-        if time is not None:
-            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+        context = None if time is None else DGContext(time=time)
 
         try:
             value = _plug_to_python(
@@ -3915,6 +3912,37 @@ class DagModifier(_BaseModifier):
 
     if ENABLE_PEP8:
         create_node = createNode
+
+
+class DGContext(om.MDGContext):
+
+    def __init__(self, time=None):
+        """Context for evaluating the Maya DG
+
+        Extension of MDGContext to also accept time as a float. In Maya 2018
+        and above DGContext can also be used as a context manager.
+
+        Arguments:
+            time (float, om.MTime, optional): Time at which to evaluate context
+
+        """
+
+        if time is not None:
+            if isinstance(time, (int, float)):
+                time = om.MTime(time, om.MTime.uiUnit())
+            super(DGContext, self).__init__(time)
+        else:
+            super(DGContext, self).__init__()
+        self._previousContext = None
+
+    if __maya_version__ >= 2018:
+        def __enter__(self):
+            self._previousContext = self.makeCurrent()
+            return self
+
+        def __exit__(self, exc_type, exc_value, tb):
+            if self._previousContext:
+                self._previousContext.makeCurrent()
 
 
 def ls(*args, **kwargs):
