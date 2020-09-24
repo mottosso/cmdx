@@ -46,7 +46,6 @@ ENABLE_PEP8 = True
 ENABLE_UNDO = not SAFE_MODE
 
 # Required
-ENABLE_NODE_REUSE = True
 ENABLE_PLUG_REUSE = True
 
 if PY3:
@@ -83,9 +82,9 @@ Stats.PlugReuseCount = 0
 Stats.LastTiming = None
 
 # Node reuse depends on this member
-if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
-    log.warning("Disabling node reuse (OpenMaya.MObjectHandle not found)")
-    ENABLE_NODE_REUSE = False
+if not hasattr(om, "MObjectHandle"):
+    log.warning("Node reuse might not work in this version of Maya "
+                "(OpenMaya.MObjectHandle not found)")
 
 TimeUnit = om.MTime.uiUnit()
 
@@ -277,6 +276,17 @@ Inches = _Unit(om.MDistance, om.MDistance.kInches)
 Feet = _Unit(om.MDistance, om.MDistance.kFeet)
 Miles = _Unit(om.MDistance, om.MDistance.kMiles)
 Yards = _Unit(om.MDistance, om.MDistance.kYards)
+
+# Time units
+Milliseconds = _Unit(om.MTime, om.MTime.kMilliseconds)
+Minutes = _Unit(om.MTime, om.MTime.kMinutes)
+Seconds = _Unit(om.MTime, om.MTime.kSeconds)
+
+
+def UiUnit():
+    """Unlike other time units, this can be modified by the user at run-time"""
+    return _Unit(om.MTime, om.MTime.uiUnit())
+
 
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
@@ -496,14 +506,6 @@ class Node(object):
                 if issubclass(value[0], _AbstractAttribute):
                     Attribute, kwargs = value
                     attr = Attribute(key, **kwargs)
-
-                    if isinstance(attr, Divider):
-                        indent = "_"
-                        while indent in self:
-                            indent += "_"
-
-                        attr["name"] = indent
-                        attr["shortName"] = indent
 
                     try:
                         return self.addAttr(attr.create())
@@ -750,77 +752,65 @@ class Node(object):
         self._fn.setDoNotWrite(not bool(value))
 
     # Module-level branch; evaluated on import
-    if ENABLE_PLUG_REUSE:
-        @withTiming("findPlug() reuse {time:.4f} ns")
-        def findPlug(self, name, cached=False):
-            """Cache previously found plugs, for performance
+    @withTiming("findPlug() reuse {time:.4f} ns")
+    def findPlug(self, name, cached=False):
+        """Cache previously found plugs, for performance
 
-            Cost: 4.9 microseconds/call
+        Cost: 4.9 microseconds/call
 
-            Part of the time taken in querying an attribute is the
-            act of finding a plug given its name as a string.
+        Part of the time taken in querying an attribute is the
+        act of finding a plug given its name as a string.
 
-            This causes a 25% reduction in time taken for repeated
-            attribute queries. Though keep in mind that state is stored
-            in the `cmdx` object which currently does not survive rediscovery.
-            That is, if a node is created and later discovered through a call
-            to `encode`, then the original and discovered nodes carry one
-            state each.
+        This causes a 25% reduction in time taken for repeated
+        attribute queries. Though keep in mind that state is stored
+        in the `cmdx` object which currently does not survive rediscovery.
+        That is, if a node is created and later discovered through a call
+        to `encode`, then the original and discovered nodes carry one
+        state each.
 
-            Additional challenges include storing the same plug for both
-            long and short name of said attribute, which is currently not
-            the case.
+        Additional challenges include storing the same plug for both
+        long and short name of said attribute, which is currently not
+        the case.
 
-            Arguments:
-                name (str): Name of plug to find
-                cached (bool, optional): Return cached plug, or
-                    throw an exception. Default to False, which
-                    means it will run Maya's findPlug() and cache
-                    the result.
-                safe (bool, optional): Always find the plug through
-                    Maya's API, defaults to False. This will not perform
-                    any caching and is intended for use during debugging
-                    to spot whether caching is causing trouble.
+        Arguments:
+            name (str): Name of plug to find
+            cached (bool, optional): Return cached plug, or
+                throw an exception. Default to False, which
+                means it will run Maya's findPlug() and cache
+                the result.
+            safe (bool, optional): Always find the plug through
+                Maya's API, defaults to False. This will not perform
+                any caching and is intended for use during debugging
+                to spot whether caching is causing trouble.
 
-            Example:
-                >>> node = createNode("transform")
-                >>> node.findPlug("translateX", cached=True)
-                Traceback (most recent call last):
-                ...
-                KeyError: "'translateX' not cached"
-                >>> plug1 = node.findPlug("translateX")
-                >>> isinstance(plug1, om.MPlug)
-                True
-                >>> plug1 is node.findPlug("translateX")
-                True
-                >>> plug1 is node.findPlug("translateX", cached=True)
-                True
+        Example:
+            >>> node = createNode("transform")
+            >>> node.findPlug("translateX", cached=True)
+            Traceback (most recent call last):
+            ...
+            KeyError: "'translateX' not cached"
+            >>> plug1 = node.findPlug("translateX")
+            >>> isinstance(plug1, om.MPlug)
+            True
+            >>> plug1 is node.findPlug("translateX")
+            True
+            >>> plug1 is node.findPlug("translateX", cached=True)
+            True
 
-            """
+        """
 
-            try:
-                existing = self._state["plugs"][name]
-                Stats.PlugReuseCount += 1
-                return existing
-            except KeyError:
-                if cached:
-                    raise KeyError("'%s' not cached" % name)
+        try:
+            existing = self._state["plugs"][name]
+            Stats.PlugReuseCount += 1
+            return existing
+        except KeyError:
+            if cached:
+                raise KeyError("'%s' not cached" % name)
 
-            plug = self._fn.findPlug(name, False)
-            self._state["plugs"][name] = plug
+        plug = self._fn.findPlug(name, False)
+        self._state["plugs"][name] = plug
 
-            return plug
-
-    else:
-        @withTiming("findPlug() no reuse {time:.4f} ns")
-        def findPlug(self, name):
-            """Always lookup plug by name
-
-            Cost: 27.7 microseconds/call
-
-            """
-
-            return self._fn.findPlug(name, False)
+        return plug
 
     def update(self, attrs):
         """Apply a series of attributes all at once
@@ -2328,10 +2318,10 @@ class Plug(object):
 
         """
 
+        context = om.MDGContext.kNormal
+
         if time is not None:
             context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
-            return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
-
 
         return MatrixType(om.MFnMatrixData(self._mplug.asMObject(context)).matrix())
 
@@ -2469,6 +2459,36 @@ class Plug(object):
     def lockAndHide(self):
         self.lock()
         self.hide()
+
+    @property
+    def default(self):
+        """Return default value of plug"""
+        return _plug_to_default(self._mplug)
+
+    def reset(self):
+        """Restore plug to default value"""
+
+        if self.writable:
+            self.write(self.default)
+        else:
+            raise TypeError(
+                "Cannot reset non-writable attribute '%s'" % self.path()
+            )
+
+    @property
+    def writable(self):
+        """Can the user write to this attribute?
+    
+        Convenience for combined call to `plug.connected`
+        and `plug.locked`.
+
+        Example:
+            >> if node["translateX"].writable:
+            ..   node["translateX"] = 5
+
+        """
+
+        return not any([self.connected, self.locked])
 
     def show(self):
         """Show attribute in channel box
@@ -3139,6 +3159,37 @@ class CachedPlug(Plug):
         return self._value
 
 
+def _plug_to_default(plug):
+    """Find default value from plug, regardless of attribute type"""
+
+    if plug.isArray:
+        raise TypeError("Array plugs are unsupported")
+
+    if plug.isCompound:
+        raise TypeError("Compound plugs are unsupported")
+
+    attr = plug.attribute()
+    type = attr.apiType()
+
+    if type == om.MFn.kTypedAttribute:
+        return om.MFnTypedAttribute(attr).default
+
+    elif type in (om.MFn.kDoubleLinearAttribute,
+                  om.MFn.kFloatLinearAttribute,
+                  om.MFn.kDoubleAngleAttribute,
+                  om.MFn.kFloatAngleAttribute):
+        return om.MFnUnitAttribute(attr).default
+
+    elif type == om.MFn.kNumericAttribute:
+        return om.MFnNumericAttribute(attr).default
+
+    elif type == om.MFn.kEnumAttribute:
+        return om.MFnEnumAttribute(attr).default
+
+    else:
+        raise TypeError("Attribute type '%s' unsupported" % type)
+
+
 def _plug_to_python(plug, unit=None, context=None):
     """Convert native `plug` to Python type
 
@@ -3308,7 +3359,10 @@ def _plug_to_python(plug, unit=None, context=None):
         return True
 
     elif type == om.MFn.kTimeAttribute:
-        return plug.asShort(**kwargs)
+        if unit:
+            return plug.asMTime(**kwargs).asUnits(unit)
+        else:
+            return plug.asMTime(**kwargs).value
 
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
@@ -3802,6 +3856,9 @@ class _BaseModifier(object):
 
         _python_to_mod(value, plug, self._modifier)
 
+    def resetAttr(self, plug):
+        self.setAttr(plug, plug.default)
+
     @record_history
     def connect(self, src, dst, force=True):
         if isinstance(src, Plug):
@@ -3874,6 +3931,7 @@ class _BaseModifier(object):
         delete_node = deleteNode
         rename_node = renameNode
         set_attr = setAttr
+        reset_attr = resetAttr
 
 
 class DGModifier(_BaseModifier):
@@ -4655,8 +4713,11 @@ class Enum(_AbstractAttribute):
 class Divider(Enum):
     """Visual divider in channel box"""
 
-    def __init__(self, label):
-        super(Divider, self).__init__("_", fields=(label,), label=" ")
+    def __init__(self, label, **kwargs):
+        kwargs.pop("name", None)
+        kwargs.pop("fields", None)
+        kwargs.pop("label", None)
+        super(Divider, self).__init__(label, fields=(label,), label=" ", **kwargs)
 
 
 class String(_AbstractAttribute):
