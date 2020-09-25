@@ -3935,14 +3935,22 @@ class DGContext(om.MDGContext):
             super(DGContext, self).__init__()
         self._previousContext = None
 
-    if __maya_version__ >= 2018:
-        def __enter__(self):
+    def __enter__(self):
+        if __maya_version__ >= 2018:
             self._previousContext = self.makeCurrent()
             return self
+        else:
+            cmds.error(
+                "'%s' does not support context manager functionality for Maya 2017 "
+                "and below" % self.__class__.__name__
+            )
 
-        def __exit__(self, exc_type, exc_value, tb):
-            if self._previousContext:
-                self._previousContext.makeCurrent()
+    def __exit__(self, exc_type, exc_value, tb):
+        if self._previousContext:
+            self._previousContext.makeCurrent()
+
+# Alias
+Context = DGContext
 
 
 def ls(*args, **kwargs):
