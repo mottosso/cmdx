@@ -240,6 +240,7 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 
 | Goal            | Description
 |:----------------|:-------------
+| Readable        | For code that is read more than it is written
 | Fast            | Faster than PyMEL, and cmds
 | Lightweight     | A single Python module, implementing critical parts well, leaving the rest to `cmds`
 | Persistent      | References to nodes do not break
