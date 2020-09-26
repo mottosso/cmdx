@@ -1207,6 +1207,11 @@ class DagNode(Node):
 
         return self.path().count("|") - 1
 
+    @property
+    def boundingBox(self):
+        """Return a cmdx.BoundingBox of this DAG node"""
+        return BoundingBox(self._fn.boundingBox)
+
     def hide(self):
         """Set visibility to False"""
         self["visibility"] = False
@@ -1630,6 +1635,7 @@ class DagNode(Node):
         limit_value = limitValue
         set_limit = setLimit
         enable_limit = enableLimit
+        bounding_box = boundingBox
 
 
 # MFnTransform Limit Types
@@ -3024,6 +3030,9 @@ class Point(om.MPoint):
 
 class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
+
+    def volume(self):
+        return self.width * self.height * self.depth
 
 
 class Quaternion(om.MQuaternion):
