@@ -151,16 +151,12 @@ def test_getattrtime():
 
     # From the current context (Maya 2018 and above)
     if hasattr(om.MDGContext, "makeCurrent"):
-        context = om.MDGContext(om.MTime(1.0, om.MTime.uiUnit()))
-        context.makeCurrent()
-        assert_almost_equals(transform["ty"].read(), 1.0, places=5)
-        context = om.MDGContext(om.MTime(5.0, om.MTime.uiUnit()))
-        context.makeCurrent()
-        assert_almost_equals(transform["ty"].read(), 5.0, places=5)
-        context = om.MDGContext(om.MTime(10.0, om.MTime.uiUnit()))
-        context.makeCurrent()
-        assert_almost_equals(transform["ty"].read(), 10.0, places=5)
-        om.MDGContext.kNormal.makeCurrent()
+        with cmdx.DGContext(1.0):
+            assert_almost_equals(transform["ty"].read(), 1.0, places=5)
+        with cmdx.DGContext(5.0):
+            assert_almost_equals(transform["ty"].read(), 5.0, places=5)
+        with cmdx.DGContext(10.0):
+            assert_almost_equals(transform["ty"].read(), 10.0, places=5)
 
 
 def test_setattr():

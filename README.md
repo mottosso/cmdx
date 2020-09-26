@@ -793,7 +793,7 @@ node["tx"].read(time=50)
 # 10.0
 ```
 
-In Maya 2018 and above, `Plug.read` will yield the result based on the current evaluation context. Following on from the above example.
+In Maya 2018 and above, `Plug.read` will yield the result based on the current evaluation context. Following on from the previous example.
 
 ```python
 from maya.api import OpenMaya as om
@@ -803,6 +803,13 @@ context.makeCurrent()
 node["tx"].read() # Evaluates the context at frame 50
 # 10.0
 om.MDGContext.kNormal.makeCurrent()
+```
+
+The `cmdx.DGContext` class is also provided to make evaluating the DG in another context simpler. When used as a context manager it will set the current context then restore the previous context upon completion.
+
+```python
+with cmdx.DGContext(50):
+    node["tx"].read()
 ```
 
 <br>
