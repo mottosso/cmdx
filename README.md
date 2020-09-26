@@ -786,14 +786,18 @@ import cmdx
 from maya import cmds
 node = cmdx.createNode("transform")
 
-cmds.setKeyframe(str(node), attribute="tx", time=[1, 100], value=0.0)
-cmds.setKeyframe(str(node), attribute="tx", time=[50], value=10.0)
-cmds.keyTangent(str(node), attribute="tx", time=(1, 100), outTangentType="linear")
+# Make some animation
+tx = cmdx.create_node("animCurveTL")
+tx.keys(times=[1, 50, 100], values=[0.0, 10.0, 0.0], interpolation=cmdx.Linear)
+
+# Query it
+node = cmdx.create_node("transform")
+node["tx"] << tx["output"]
 node["tx"].read(time=50)
 # 10.0
 ```
 
-In Maya 2018 and above, `Plug.read` will yield the result based on the current evaluation context. Following on from the above example.
+In Maya 2018 and above, `Plug.read` will yield the result based on the current evaluation context. Following on from the previous example.
 
 ```python
 from maya.api import OpenMaya as om
@@ -803,6 +807,13 @@ context.makeCurrent()
 node["tx"].read() # Evaluates the context at frame 50
 # 10.0
 om.MDGContext.kNormal.makeCurrent()
+```
+
+The `cmdx.DGContext` class is also provided to make evaluating the DG in another context simpler. When used as a context manager it will set the current context then restore the previous context upon completion.
+
+```python
+with cmdx.DGContext(50):
+    node["tx"].read()
 ```
 
 <br>

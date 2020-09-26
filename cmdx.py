@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"
 
 PY3 = sys.version_info[0] == 3
 
@@ -2321,12 +2321,13 @@ class Plug(object):
 
         """
 
-        context = om.MDGContext.kNormal
-
         if time is not None:
-            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+            context = om.MDGContext(time=time)
+            obj = self._mplug.asMObject(context)
+        else:
+            obj = self._mplug.asMObject()
 
-        return MatrixType(om.MFnMatrixData(self._mplug.asMObject(context)).matrix())
+        return om.MFnMatrixData(obj).matrix()
 
     def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
@@ -2551,10 +2552,7 @@ class Plug(object):
 
         """
         unit = unit if unit is not None else self._unit
-        context = None
-
-        if time is not None:
-            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+        context = None if time is None else DGContext(time=time)
 
         try:
             value = _plug_to_python(
@@ -2938,7 +2936,7 @@ class MatrixType(om.MMatrix):
             1.0
             >>>
             >>> m(0)
-            (1, 0, 0, 0)
+            (1.0, 0.0, 0.0, 0.0)
 
         """
 
@@ -4056,6 +4054,45 @@ class DagModifier(_BaseModifier):
 
     if ENABLE_PEP8:
         create_node = createNode
+
+
+class DGContext(om.MDGContext):
+
+    def __init__(self, time=None):
+        """Context for evaluating the Maya DG
+
+        Extension of MDGContext to also accept time as a float. In Maya 2018
+        and above DGContext can also be used as a context manager.
+
+        Arguments:
+            time (float, om.MTime, optional): Time at which to evaluate context
+
+        """
+
+        if time is not None:
+            if isinstance(time, (int, float)):
+                time = om.MTime(time, om.MTime.uiUnit())
+            super(DGContext, self).__init__(time)
+        else:
+            super(DGContext, self).__init__()
+        self._previousContext = None
+
+    def __enter__(self):
+        if __maya_version__ >= 2018:
+            self._previousContext = self.makeCurrent()
+            return self
+        else:
+            cmds.error(
+                "'%s' does not support context manager functionality for Maya 2017 "
+                "and below" % self.__class__.__name__
+            )
+
+    def __exit__(self, exc_type, exc_value, tb):
+        if self._previousContext:
+            self._previousContext.makeCurrent()
+
+# Alias
+Context = DGContext
 
 
 def ls(*args, **kwargs):
