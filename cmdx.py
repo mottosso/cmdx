@@ -2154,9 +2154,6 @@ class Plug(object):
 
         """
 
-        # Rescue the user from certain crash
-        assert index >= 0, "Logical indexes cannot be negative"
-
         cls = self.__class__
 
         if isinstance(index, int):
@@ -2945,15 +2942,17 @@ class MatrixType(om.MMatrix):
 
         """
 
-        if isinstance(item, tuple):
-            assert len(item) == 2, (
-                "Must provide either 1 or 2 coordinates, "
-                "for row and element respectively"
-            )
+        if len(item) == 1:
+            return self.row(*item)
+
+        elif len(item) == 2:
             return self.element(*item)
 
         else:
-            return self.row(item)
+            raise ValueError(
+                "Must provide either 1 or 2 coordinates, "
+                "for row and element respectively"
+            )
 
     def __mul__(self, other):
         return type(self)(super(MatrixType, self).__mul__(other))
