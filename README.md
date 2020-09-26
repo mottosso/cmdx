@@ -786,9 +786,13 @@ import cmdx
 from maya import cmds
 node = cmdx.createNode("transform")
 
-cmds.setKeyframe(str(node), attribute="tx", time=[1, 100], value=0.0)
-cmds.setKeyframe(str(node), attribute="tx", time=[50], value=10.0)
-cmds.keyTangent(str(node), attribute="tx", time=(1, 100), outTangentType="linear")
+# Make some animation
+tx = cmdx.create_node("animCurveTL")
+tx.keys(times=[1, 50, 100], values=[0.0, 10.0, 0.0], interpolation=cmdx.Linear)
+
+# Query it
+node = cmdx.create_node("transform")
+node["tx"] << tx["output"]
 node["tx"].read(time=50)
 # 10.0
 ```

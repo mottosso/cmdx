@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.5"
+__version__ = "0.4.6"
 
 PY3 = sys.version_info[0] == 3
 
@@ -46,7 +46,6 @@ ENABLE_PEP8 = True
 ENABLE_UNDO = not SAFE_MODE
 
 # Required
-ENABLE_NODE_REUSE = True
 ENABLE_PLUG_REUSE = True
 
 if PY3:
@@ -83,9 +82,9 @@ Stats.PlugReuseCount = 0
 Stats.LastTiming = None
 
 # Node reuse depends on this member
-if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
-    log.warning("Disabling node reuse (OpenMaya.MObjectHandle not found)")
-    ENABLE_NODE_REUSE = False
+if not hasattr(om, "MObjectHandle"):
+    log.warning("Node reuse might not work in this version of Maya "
+                "(OpenMaya.MObjectHandle not found)")
 
 TimeUnit = om.MTime.uiUnit()
 
@@ -277,6 +276,17 @@ Inches = _Unit(om.MDistance, om.MDistance.kInches)
 Feet = _Unit(om.MDistance, om.MDistance.kFeet)
 Miles = _Unit(om.MDistance, om.MDistance.kMiles)
 Yards = _Unit(om.MDistance, om.MDistance.kYards)
+
+# Time units
+Milliseconds = _Unit(om.MTime, om.MTime.kMilliseconds)
+Minutes = _Unit(om.MTime, om.MTime.kMinutes)
+Seconds = _Unit(om.MTime, om.MTime.kSeconds)
+
+
+def UiUnit():
+    """Unlike other time units, this can be modified by the user at run-time"""
+    return _Unit(om.MTime, om.MTime.uiUnit())
+
 
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
@@ -496,14 +506,6 @@ class Node(object):
                 if issubclass(value[0], _AbstractAttribute):
                     Attribute, kwargs = value
                     attr = Attribute(key, **kwargs)
-
-                    if isinstance(attr, Divider):
-                        indent = "_"
-                        while indent in self:
-                            indent += "_"
-
-                        attr["name"] = indent
-                        attr["shortName"] = indent
 
                     try:
                         return self.addAttr(attr.create())
@@ -750,77 +752,65 @@ class Node(object):
         self._fn.setDoNotWrite(not bool(value))
 
     # Module-level branch; evaluated on import
-    if ENABLE_PLUG_REUSE:
-        @withTiming("findPlug() reuse {time:.4f} ns")
-        def findPlug(self, name, cached=False):
-            """Cache previously found plugs, for performance
+    @withTiming("findPlug() reuse {time:.4f} ns")
+    def findPlug(self, name, cached=False):
+        """Cache previously found plugs, for performance
 
-            Cost: 4.9 microseconds/call
+        Cost: 4.9 microseconds/call
 
-            Part of the time taken in querying an attribute is the
-            act of finding a plug given its name as a string.
+        Part of the time taken in querying an attribute is the
+        act of finding a plug given its name as a string.
 
-            This causes a 25% reduction in time taken for repeated
-            attribute queries. Though keep in mind that state is stored
-            in the `cmdx` object which currently does not survive rediscovery.
-            That is, if a node is created and later discovered through a call
-            to `encode`, then the original and discovered nodes carry one
-            state each.
+        This causes a 25% reduction in time taken for repeated
+        attribute queries. Though keep in mind that state is stored
+        in the `cmdx` object which currently does not survive rediscovery.
+        That is, if a node is created and later discovered through a call
+        to `encode`, then the original and discovered nodes carry one
+        state each.
 
-            Additional challenges include storing the same plug for both
-            long and short name of said attribute, which is currently not
-            the case.
+        Additional challenges include storing the same plug for both
+        long and short name of said attribute, which is currently not
+        the case.
 
-            Arguments:
-                name (str): Name of plug to find
-                cached (bool, optional): Return cached plug, or
-                    throw an exception. Default to False, which
-                    means it will run Maya's findPlug() and cache
-                    the result.
-                safe (bool, optional): Always find the plug through
-                    Maya's API, defaults to False. This will not perform
-                    any caching and is intended for use during debugging
-                    to spot whether caching is causing trouble.
+        Arguments:
+            name (str): Name of plug to find
+            cached (bool, optional): Return cached plug, or
+                throw an exception. Default to False, which
+                means it will run Maya's findPlug() and cache
+                the result.
+            safe (bool, optional): Always find the plug through
+                Maya's API, defaults to False. This will not perform
+                any caching and is intended for use during debugging
+                to spot whether caching is causing trouble.
 
-            Example:
-                >>> node = createNode("transform")
-                >>> node.findPlug("translateX", cached=True)
-                Traceback (most recent call last):
-                ...
-                KeyError: "'translateX' not cached"
-                >>> plug1 = node.findPlug("translateX")
-                >>> isinstance(plug1, om.MPlug)
-                True
-                >>> plug1 is node.findPlug("translateX")
-                True
-                >>> plug1 is node.findPlug("translateX", cached=True)
-                True
+        Example:
+            >>> node = createNode("transform")
+            >>> node.findPlug("translateX", cached=True)
+            Traceback (most recent call last):
+            ...
+            KeyError: "'translateX' not cached"
+            >>> plug1 = node.findPlug("translateX")
+            >>> isinstance(plug1, om.MPlug)
+            True
+            >>> plug1 is node.findPlug("translateX")
+            True
+            >>> plug1 is node.findPlug("translateX", cached=True)
+            True
 
-            """
+        """
 
-            try:
-                existing = self._state["plugs"][name]
-                Stats.PlugReuseCount += 1
-                return existing
-            except KeyError:
-                if cached:
-                    raise KeyError("'%s' not cached" % name)
+        try:
+            existing = self._state["plugs"][name]
+            Stats.PlugReuseCount += 1
+            return existing
+        except KeyError:
+            if cached:
+                raise KeyError("'%s' not cached" % name)
 
-            plug = self._fn.findPlug(name, False)
-            self._state["plugs"][name] = plug
+        plug = self._fn.findPlug(name, False)
+        self._state["plugs"][name] = plug
 
-            return plug
-
-    else:
-        @withTiming("findPlug() no reuse {time:.4f} ns")
-        def findPlug(self, name):
-            """Always lookup plug by name
-
-            Cost: 27.7 microseconds/call
-
-            """
-
-            return self._fn.findPlug(name, False)
+        return plug
 
     def update(self, attrs):
         """Apply a series of attributes all at once
@@ -1216,6 +1206,11 @@ class DagNode(Node):
         """
 
         return self.path().count("|") - 1
+
+    @property
+    def boundingBox(self):
+        """Return a cmdx.BoundingBox of this DAG node"""
+        return BoundingBox(self._fn.boundingBox)
 
     def hide(self):
         """Set visibility to False"""
@@ -1640,6 +1635,7 @@ class DagNode(Node):
         limit_value = limitValue
         set_limit = setLimit
         enable_limit = enableLimit
+        bounding_box = boundingBox
 
 
 # MFnTransform Limit Types
@@ -2307,7 +2303,7 @@ class Plug(object):
         return self._mplug.asDouble()
 
     def asMatrix(self, time=None):
-        """Return plug as MMatrix
+        """Return plug as MatrixType
 
         Example:
             >>> node1 = createNode("transform")
@@ -2326,10 +2322,12 @@ class Plug(object):
         """
 
         if time is not None:
-            context = DGContext(time=time)
-            return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
+            context = om.MDGContext(time=time)
+            obj = self._mplug.asMObject(context)
+        else:
+            obj = self._mplug.asMObject()
 
-        return om.MFnMatrixData(self._mplug.asMObject()).matrix()
+        return om.MFnMatrixData(obj).matrix()
 
     def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
@@ -2465,6 +2463,36 @@ class Plug(object):
     def lockAndHide(self):
         self.lock()
         self.hide()
+
+    @property
+    def default(self):
+        """Return default value of plug"""
+        return _plug_to_default(self._mplug)
+
+    def reset(self):
+        """Restore plug to default value"""
+
+        if self.writable:
+            self.write(self.default)
+        else:
+            raise TypeError(
+                "Cannot reset non-writable attribute '%s'" % self.path()
+            )
+
+    @property
+    def writable(self):
+        """Can the user write to this attribute?
+    
+        Convenience for combined call to `plug.connected`
+        and `plug.locked`.
+
+        Example:
+            >> if node["translateX"].writable:
+            ..   node["translateX"] = 5
+
+        """
+
+        return not any([self.connected, self.locked])
 
     def show(self):
         """Show attribute in channel box
@@ -2771,22 +2799,25 @@ class TransformationMatrix(om.MTransformationMatrix):
             vec = Vector(vec)
         return super(TransformationMatrix, self).translateBy(vec, space)
 
-    def rotateBy(self, vec, space=None):
+    def rotateBy(self, rot, space=None):
         """Handle arguments conveniently
 
         - Allow for optional `space` argument
         - Automatically convert tuple to Vector
 
+        Arguments:
+            rot (Vector, Quaternion): Rotation to add
+
         """
 
         space = space or sTransform
-        if isinstance(vec, (tuple, list)):
-            vec = Vector(vec)
+        if isinstance(rot, (tuple, list)):
+            rot = Vector(rot)
 
-        if isinstance(vec, om.MVector):
-            vec = EulerRotation(vec)
+        if isinstance(rot, om.MVector):
+            rot = EulerRotation(rot)
 
-        return super(TransformationMatrix, self).rotateBy(vec, space)
+        return super(TransformationMatrix, self).rotateBy(rot, space)
 
     def quaternion(self):
         """Return transformation matrix as a Quaternion"""
@@ -2812,7 +2843,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return super(TransformationMatrix, self).setTranslation(trans, space)
 
-    def scale(self, space=None):
+    def scaleBy(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).scale(space))
@@ -2852,14 +2883,15 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setRotation(rot)
 
     def asMatrix(self):
-        return super(TransformationMatrix, self).asMatrix()
+        return MatrixType(super(TransformationMatrix, self).asMatrix())
 
     def asMatrixInverse(self):
-        return super(TransformationMatrix, self).asMatrixInverse()
+        return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
     translate = translateBy
     rotate = rotateBy
+    scale = scaleBy
 
     if ENABLE_PEP8:
         x_axis = xAxis
@@ -2875,7 +2907,72 @@ class TransformationMatrix(om.MTransformationMatrix):
 
 
 class MatrixType(om.MMatrix):
-    pass
+    def __call__(self, *item):
+        """Native API 2.0 MMatrix does not support indexing
+
+        API 1.0 however *does*, except only for elements
+        and not rows. Screw both of those, indexing isn't hard.
+
+        Arguments:
+            item (int, tuple): 1 integer for row, 2 for element
+            
+        Identity/default matrix:
+            [[1.0, 0.0, 0.0, 0.0]]
+            [[0.0, 1.0, 0.0, 0.0]]
+            [[0.0, 0.0, 1.0, 0.0]]
+            [[0.0, 0.0, 0.0, 1.0]]
+
+        Example:
+            >>> m = MatrixType()
+            >>> m(0, 0)
+            1.0
+            >>> m(0, 1)
+            0.0
+            >>> m(1, 1)
+            1.0
+            >>> m(2, 1)
+            0.0
+            >>> m(3, 3)
+            1.0
+            >>>
+            >>> m(0)
+            (1.0, 0.0, 0.0, 0.0)
+
+        """
+
+        if len(item) == 1:
+            return self.row(*item)
+
+        elif len(item) == 2:
+            return self.element(*item)
+
+        else:
+            raise ValueError(
+                "Must provide either 1 or 2 coordinates, "
+                "for row and element respectively"
+            )
+
+    def __mul__(self, other):
+        return type(self)(super(MatrixType, self).__mul__(other))
+
+    def __div__(self, other):
+        return type(self)(super(MatrixType, self).__div__(other))
+
+    def inverse(self):
+        return type(self)(super(MatrixType, self).inverse())
+
+    def row(self, index):
+        values = tuple(self)
+        return (
+            values[index * 4 + 0],
+            values[index * 4 + 1],
+            values[index * 4 + 2],
+            values[index * 4 + 3]
+        )
+
+    def element(self, row, col):
+        values = tuple(self)
+        return values[row * 4 + col % 4]
 
 
 # Alias
@@ -2930,6 +3027,9 @@ class Point(om.MPoint):
 
 class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
+
+    def volume(self):
+        return self.width * self.height * self.depth
 
 
 class Quaternion(om.MQuaternion):
@@ -3063,6 +3163,37 @@ class CachedPlug(Plug):
 
     def read(self):
         return self._value
+
+
+def _plug_to_default(plug):
+    """Find default value from plug, regardless of attribute type"""
+
+    if plug.isArray:
+        raise TypeError("Array plugs are unsupported")
+
+    if plug.isCompound:
+        raise TypeError("Compound plugs are unsupported")
+
+    attr = plug.attribute()
+    type = attr.apiType()
+
+    if type == om.MFn.kTypedAttribute:
+        return om.MFnTypedAttribute(attr).default
+
+    elif type in (om.MFn.kDoubleLinearAttribute,
+                  om.MFn.kFloatLinearAttribute,
+                  om.MFn.kDoubleAngleAttribute,
+                  om.MFn.kFloatAngleAttribute):
+        return om.MFnUnitAttribute(attr).default
+
+    elif type == om.MFn.kNumericAttribute:
+        return om.MFnNumericAttribute(attr).default
+
+    elif type == om.MFn.kEnumAttribute:
+        return om.MFnEnumAttribute(attr).default
+
+    else:
+        raise TypeError("Attribute type '%s' unsupported" % type)
 
 
 def _plug_to_python(plug, unit=None, context=None):
@@ -3234,7 +3365,10 @@ def _plug_to_python(plug, unit=None, context=None):
         return True
 
     elif type == om.MFn.kTimeAttribute:
-        return plug.asShort(**kwargs)
+        if unit:
+            return plug.asMTime(**kwargs).asUnits(unit)
+        else:
+            return plug.asMTime(**kwargs).value
 
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
@@ -3255,6 +3389,10 @@ def _python_to_plug(value, plug):
     # Compound values
 
     if isinstance(value, (tuple, list)):
+        if plug.type() == "kMatrixAttribute":
+            assert len(value) == 16, "Value didn't appear to be a valid matrix"
+            return _python_to_plug(Matrix4(value), plug)
+
         for index, value in enumerate(value):
 
             # Tuple values are assumed flat:
@@ -3724,6 +3862,9 @@ class _BaseModifier(object):
 
         _python_to_mod(value, plug, self._modifier)
 
+    def resetAttr(self, plug):
+        self.setAttr(plug, plug.default)
+
     @record_history
     def connect(self, src, dst, force=True):
         if isinstance(src, Plug):
@@ -3796,6 +3937,7 @@ class _BaseModifier(object):
         delete_node = deleteNode
         rename_node = renameNode
         set_attr = setAttr
+        reset_attr = resetAttr
 
 
 class DGModifier(_BaseModifier):
@@ -4616,8 +4758,11 @@ class Enum(_AbstractAttribute):
 class Divider(Enum):
     """Visual divider in channel box"""
 
-    def __init__(self, label):
-        super(Divider, self).__init__("_", fields=(label,), label=" ")
+    def __init__(self, label, **kwargs):
+        kwargs.pop("name", None)
+        kwargs.pop("fields", None)
+        kwargs.pop("label", None)
+        super(Divider, self).__init__(label, fields=(label,), label=" ", **kwargs)
 
 
 class String(_AbstractAttribute):
