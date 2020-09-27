@@ -2289,7 +2289,7 @@ class Plug(object):
     def count(self):
         return self._mplug.evaluateNumElements()
 
-    def asDouble(self):
+    def asDouble(self, time=None):
         """Return plug as double (Python float)
 
         Example:
@@ -2300,6 +2300,8 @@ class Plug(object):
 
         """
 
+        if time is not None:
+            return self._mplug.asDouble(DGContext(time=time))
         return self._mplug.asDouble()
 
     def asMatrix(self, time=None):
@@ -2322,7 +2324,7 @@ class Plug(object):
         """
 
         if time is not None:
-            context = om.MDGContext(time=time)
+            context = DGContext(time=time)
             obj = self._mplug.asMObject(context)
         else:
             obj = self._mplug.asMObject()
@@ -2357,9 +2359,9 @@ class Plug(object):
         value = self.read(time=time)
         value = Euler(value).asQuaternion()
 
-    def asVector(self):
+    def asVector(self, time=None):
         assert self.isArray or self.isCompound, "'%s' not an array" % self
-        return Vector(self.read())
+        return Vector(self.read(time=time))
 
     @property
     def connected(self):
@@ -2482,7 +2484,7 @@ class Plug(object):
     @property
     def writable(self):
         """Can the user write to this attribute?
-    
+
         Convenience for combined call to `plug.connected`
         and `plug.locked`.
 
@@ -2915,7 +2917,7 @@ class MatrixType(om.MMatrix):
 
         Arguments:
             item (int, tuple): 1 integer for row, 2 for element
-            
+
         Identity/default matrix:
             [[1.0, 0.0, 0.0, 0.0]]
             [[0.0, 1.0, 0.0, 0.0]]
@@ -4135,12 +4137,13 @@ def createNode(type, name=None, parent=None):
     return node
 
 
-def getAttr(attr, type=None):
+def getAttr(attr, type=None, time=None):
     """Read `attr`
 
     Arguments:
         attr (Plug): Attribute as a cmdx.Plug
         type (str, optional): Unused
+        time (float, optional): Time at which to evaluate the attribute
 
     Example:
         >>> node = createNode("transform")
@@ -4149,7 +4152,7 @@ def getAttr(attr, type=None):
 
     """
 
-    return attr.read()
+    return attr.read(time=time)
 
 
 def setAttr(attr, value, type=None):
