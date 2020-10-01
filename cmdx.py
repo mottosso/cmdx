@@ -3399,10 +3399,10 @@ def _plug_to_python(plug, unit=None, context=None):
         return True
 
     elif type == om.MFn.kTimeAttribute:
-        if unit:
-            return plug.asMTime(**kwargs).asUnits(unit)
-        else:
-            return plug.asMTime(**kwargs).value
+        # MTime.value returns in UI units, which is inconsistent
+        # with e.g. angular and linear attributes, which both return
+        # UI-independent units.
+        return plug.asMTime(**kwargs).asUnits(unit or Seconds)
 
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
