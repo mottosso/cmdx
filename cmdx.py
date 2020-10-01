@@ -4250,6 +4250,9 @@ def listRelatives(node,
     if not isinstance(node, DagNode):
         return None
 
+    if isinstance(node, str):
+        node = encode(node)
+
     elif allDescendents:
         return list(node.descendents(type=type))
 
