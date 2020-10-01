@@ -3243,7 +3243,7 @@ def _plug_to_python(plug, unit=None, context=None):
         >>> cmds.currentTime(1)
         1.0
         >>> time = encode("time1")
-        >>> UiUnits()  # 24 fps
+        >>> UiUnit()  # 24 fps
         6
         >>> "%.3f" % time["outTime"]  # Seconds
         '0.042'
