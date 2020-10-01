@@ -3238,6 +3238,17 @@ def _plug_to_python(plug, unit=None, context=None):
         unit (int, optional): Return value in this unit, e.g. Meters
         context (om.MDGContext, optional): Return value in this context
 
+    Examples:
+        >>> from maya import cmds
+        >>> cmds.currentTime(1)
+        >>> time = encode("time1")
+        >>> UiUnits()  # 24 fps
+        6
+        >>> "%.3f" % time["outTime"]  # Seconds
+        0.042
+        >>> "%.2f" % time["outTime", UiUnits()]
+        1.0
+
     """
 
     assert not plug.isNull, "'%s' was null" % plug
