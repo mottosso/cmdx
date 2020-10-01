@@ -3247,7 +3247,7 @@ def _plug_to_python(plug, unit=None, context=None):
         6
         >>> "%.3f" % time["outTime"]  # Seconds
         '0.042'
-        >>> "%.2f" % time["outTime", UiUnit()]
+        >>> "%.1f" % time["outTime", UiUnit()]
         '1.0'
 
     """
