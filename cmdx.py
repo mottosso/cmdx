@@ -3241,13 +3241,14 @@ def _plug_to_python(plug, unit=None, context=None):
     Examples:
         >>> from maya import cmds
         >>> cmds.currentTime(1)
+        1.0
         >>> time = encode("time1")
         >>> UiUnits()  # 24 fps
         6
         >>> "%.3f" % time["outTime"]  # Seconds
-        0.042
-        >>> "%.2f" % time["outTime", UiUnits()]
-        1.0
+        '0.042'
+        >>> "%.2f" % time["outTime", UiUnit()]
+        '1.0'
 
     """
 
