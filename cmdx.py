@@ -2235,12 +2235,27 @@ class Plug(object):
     def isCompound(self):
         return self._mplug.isCompound
 
-    def append(self, value):
+    def next_available_index(self, start_index=0):
+        # Assume a max of 10 million connections
+        max_index = 1e7
+
+        while start_index < max_index:
+            if not self[start_index].connected:
+                return start_index
+            start_index += 1
+
+        # No connections means the first index is available
+        return 0
+
+    def append(self, value, autofill=False):
         """Add `value` to end of self, which is an array
 
         Arguments:
             value (object): If value, create a new entry and append it.
                 If cmdx.Plug, create a new entry and connect it.
+            autofill (bool): Append to the next available index. This performs
+                a search for the first *unconnected* value of an array to
+                reuse potentially disconnected plugs and optimise space.
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -2252,13 +2267,32 @@ class Plug(object):
             Traceback (most recent call last):
             ...
             TypeError: "|appendTest.notArray" was not an array attribute
+            >>> node["myArray"][0] << node["tx"]
+            >>> node["myArray"][1] << node["ty"]
+            >>> node["myArray"][2] << node["tz"]
+            >>> node["myArray"].count()
+            3
+            >>> # Disconnect doesn't change count
+            >>> node["myArray"][1].disconnect()
+            >>> node["myArray"].count()
+            3
+            >>> node["myArray"].append(node["ty"])
+            >>> node["myArray"].count()
+            4
+            >>> # Reuse disconnected slot with autofill=True
+            >>> node["myArray"].append(node["rx"], autofill=True)
+            >>> node["myArray"].count()
+            4
 
         """
 
         if not self._mplug.isArray:
             raise TypeError("\"%s\" was not an array attribute" % self.path())
 
-        index = self.count()
+        if autofill:
+            index = self.next_available_index()
+        else:
+            index = self.count()
 
         if isinstance(value, Plug):
             self[index] << value
