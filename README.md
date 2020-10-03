@@ -240,6 +240,7 @@ With PyMEL as baseline, these are the primary goals of this project, in order of
 
 | Goal            | Description
 |:----------------|:-------------
+| Readable        | For code that is read more than it is written
 | Fast            | Faster than PyMEL, and cmds
 | Lightweight     | A single Python module, implementing critical parts well, leaving the rest to `cmds`
 | Persistent      | References to nodes do not break
@@ -421,7 +422,7 @@ mobj = fn.create("transform")
 node = cmdx.Node(mobj)
 ```
 
-This will use the hash if a `cmdx` instance of this `MObject` already exist, else it will instantiate a new. The performance difference is slim and as such this is the recommended approach. The exception is if you happen to already has either an `MObjectHandle` or a corresponding `hashCode` at hand, in which case you can save a handful of cycles per call by using `fromHash` or `fromHex`. 
+This will use the hash if a `cmdx` instance of this `MObject` already exist, else it will instantiate a new. The performance difference is slim and as such this is the recommended approach. The exception is if you happen to already has either an `MObjectHandle` or a corresponding `hashCode` at hand, in which case you can save a handful of cycles per call by using `fromHash` or `fromHex`.
 
 <br>
 
@@ -490,7 +491,7 @@ TypeError: listConnections() got an unexpected keyword argument 'source'
 ```
 
 
-The reason for this limitation is because the functions `cmds` 
+The reason for this limitation is because the functions `cmds`
 
 - Submit an [issue](issues) or [pull-request](#fork) with commands you miss
 
@@ -612,20 +613,20 @@ cmdx.createNode(cmdx.tTransform)
 
 Only the most commonly used and performance sensitive types are available as explicit types.
 
-- `tAddDoubleLinear` 
-- `tAddMatrix` 
-- `tAngleBetween` 
-- `tMultMatrix` 
-- `tAngleDimension` 
-- `tBezierCurve` 
-- `tBlendShape` 
-- `tCamera` 
-- `tChoice` 
-- `tChooser` 
-- `tCondition` 
-- `tTransform` 
-- `tTransformGeometry` 
-- `tWtAddMatrix` 
+- `tAddDoubleLinear`
+- `tAddMatrix`
+- `tAngleBetween`
+- `tMultMatrix`
+- `tAngleDimension`
+- `tBezierCurve`
+- `tBlendShape`
+- `tCamera`
+- `tChoice`
+- `tChooser`
+- `tCondition`
+- `tTransform`
+- `tTransformGeometry`
+- `tWtAddMatrix`
 
 <br>
 
@@ -786,9 +787,34 @@ import cmdx
 from maya import cmds
 node = cmdx.createNode("transform")
 
-cmds.setKeyframe(str(node), attribute="tx", time=[1, 100], value=0.0)
-cmds.setKeyframe(str(node), attribute="tx", time=[50], value=10.0)
-cmds.keyTangent(str(node), attribute="tx", time=(1, 100), outTangentType="linear")
+# Make some animation
+tx = cmdx.create_node("animCurveTL")
+tx.keys(times=[1, 50, 100], values=[0.0, 10.0, 0.0], interpolation=cmdx.Linear)
+
+# Query it
+node = cmdx.create_node("transform")
+node["tx"] << tx["output"]
+node["tx"].read(time=50)
+# 10.0
+```
+
+In Maya 2018 and above, `Plug.read` will yield the result based on the current evaluation context. Following on from the previous example.
+
+```python
+from maya.api import OpenMaya as om
+
+context = om.MDGContext(om.MTime(50, unit=om.MTime.uiUnit()))
+context.makeCurrent()
+node["tx"].read() # Evaluates the context at frame 50
+# 10.0
+om.MDGContext.kNormal.makeCurrent()
+```
+
+The `cmdx.DGContext` class is also provided to make evaluating the DG in another context simpler. When used as a context manager it will set the current context then restore the previous context upon completion.
+
+```python
+with cmdx.DGContext(50):
+    node["tx"].read()
 ```
 
 <br>
@@ -1097,7 +1123,55 @@ cmdx.connectAttr(a + ".translateX", b + ".translateX")
 
 ### Plug-ins
 
-`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins. It also comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
+`cmdx` is fast enough for use in `draw()` and `compute()` of plug-ins.
+
+**Usage**
+
+```py
+import cmdx
+
+class MyNode(cmdx.DgNode):
+    name = "myNode"
+    typeid = om.MTypeId(0x85005)
+
+initializePlugin2 = cmdx.initialize2(MyNode)
+uninitializePlugin2 = cmdx.uninitialize2(MyNode)
+```
+
+Simply save this file to e.g. `myNode.py` and load it from within Maya like this.
+
+```py
+from maya import cmds
+cmds.loadPlugin("/path/to/myNode.py")
+cmds.createNode("myNode")
+```
+
+**See also:**
+
+- [Examples](https://github.com/mottosso/cmdx/tree/master/examples)
+
+**Available superclasses:**
+
+- `cmdx.DgNode`
+- `cmdx.SurfaceShape`
+- `cmdx.SurfaceShapeUI`
+- `cmdx.LocatorNode`
+
+**Keep in mind**
+
+- Don't forget to `cmdx.unloadPlugin` before loading it anew
+- Every Maya node **requires** a *globally unique* "TypeId"
+- You can register your own series of IDs for free, [here](https://mayaid.autodesk.io/)
+- Try **not to undo** the creation of your custom node, as you will be unable to unload it without restarting Maya
+- If two nodes with the same ID exists in the same scene, Maya may crash and will be unable to load the file (if you are even able to save it)
+- The `2` refers to Maya API 2.0, which is the default API used by `cmdx`. You can alternatively define a variable or function called `maya_useNewAPI` and use `initializePlugin` without the suffix `2`.
+- See the [Maya API Documentation](https://help.autodesk.com/view/MAYAUL/2017/ENU/?guid=__py_ref_class_open_maya_u_i_1_1_m_px_locator_node_html) for superclass documentation, these are merely aliases for the original node types, without the prefix `M`.
+
+<br>
+
+#### Declarative
+
+`cmdx` comes with a *declarative* method of writing Maya plug-ins. "Declarative" means that rather than writing instructions for your plug-in, you write a description of it.
 
 **Before**
 
@@ -1157,7 +1231,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     attributes = [
         cmdx.String("myString"),
@@ -1185,7 +1259,7 @@ import external_library
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     defaults = external_library.get_defaults()
 
@@ -1206,7 +1280,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = cmdx.MTypeId(0x85006)
+    typeid = cmdx.TypeId(0x85006)
 
     defaults = {
         "myString": "myDefault",
@@ -1321,7 +1395,7 @@ a.children() == [b, c]
 False  # The iterator does not equal the list, no matter the content
 ```
 
-From a performance perspective, returning all values from an iterator is equally fast as returning them all at once, as `cmds` does, so you may wonder why do it this way? 
+From a performance perspective, returning all values from an iterator is equally fast as returning them all at once, as `cmds` does, so you may wonder why do it this way?
 
 It's because an iterator only spends time computing the values requested, so returning any number *less than* the total number yields performance benefits.
 
@@ -1493,7 +1567,7 @@ On creation, a node is "selected" which is leveraged by subsequent commands, com
 
 A scene description never faces naming or parenting problems the way programmers do. In a scene description, there is no need to rename nor reparent; a node is created either as a child of another, or not. It is given a name, which is unique. No ambiguity.
 
-From there, it was given expressions, functions, branching logic and was made into a scripting language where the standard library is a scene description kit. 
+From there, it was given expressions, functions, branching logic and was made into a scripting language where the standard library is a scene description kit.
 
 `cmds` is tedious and `pymel` is slow. `cmds` is also a victim of its own success. Like MEL, it works with relative paths and the current selection; this facilitates the compact file format, whereby a node is created, and then any references to this node is implicit in each subsequent line. Long attribute names have a short equivalent and paths need only be given at enough specificity to not be ambiguous given everything else that was previously created. Great for scene a file format, not so great for code that operates on-top of this scene file.
 
@@ -1842,7 +1916,7 @@ Additional thoughts.
 
 #### MDagModifier
 
-`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`. 
+`createNode` of `OpenMaya.MDagModifier` is ~20% faster than `cmdx.createNode` *excluding* load. Including load is 5% *slower* than `cmdx`.
 
 ```python
 from maya.api import OpenMaya as om

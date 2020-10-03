@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.3"
+__version__ = "0.4.6"
 
 PY3 = sys.version_info[0] == 3
 
@@ -46,7 +46,6 @@ ENABLE_PEP8 = True
 ENABLE_UNDO = not SAFE_MODE
 
 # Required
-ENABLE_NODE_REUSE = True
 ENABLE_PLUG_REUSE = True
 
 if PY3:
@@ -83,9 +82,9 @@ Stats.PlugReuseCount = 0
 Stats.LastTiming = None
 
 # Node reuse depends on this member
-if ENABLE_NODE_REUSE and not hasattr(om, "MObjectHandle"):
-    log.warning("Disabling node reuse (OpenMaya.MObjectHandle not found)")
-    ENABLE_NODE_REUSE = False
+if not hasattr(om, "MObjectHandle"):
+    log.warning("Node reuse might not work in this version of Maya "
+                "(OpenMaya.MObjectHandle not found)")
 
 TimeUnit = om.MTime.uiUnit()
 
@@ -277,6 +276,17 @@ Inches = _Unit(om.MDistance, om.MDistance.kInches)
 Feet = _Unit(om.MDistance, om.MDistance.kFeet)
 Miles = _Unit(om.MDistance, om.MDistance.kMiles)
 Yards = _Unit(om.MDistance, om.MDistance.kYards)
+
+# Time units
+Milliseconds = _Unit(om.MTime, om.MTime.kMilliseconds)
+Minutes = _Unit(om.MTime, om.MTime.kMinutes)
+Seconds = _Unit(om.MTime, om.MTime.kSeconds)
+
+
+def UiUnit():
+    """Unlike other time units, this can be modified by the user at run-time"""
+    return _Unit(om.MTime, om.MTime.uiUnit())
+
 
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
@@ -496,14 +506,6 @@ class Node(object):
                 if issubclass(value[0], _AbstractAttribute):
                     Attribute, kwargs = value
                     attr = Attribute(key, **kwargs)
-
-                    if isinstance(attr, Divider):
-                        indent = "_"
-                        while indent in self:
-                            indent += "_"
-
-                        attr["name"] = indent
-                        attr["shortName"] = indent
 
                     try:
                         return self.addAttr(attr.create())
@@ -750,77 +752,65 @@ class Node(object):
         self._fn.setDoNotWrite(not bool(value))
 
     # Module-level branch; evaluated on import
-    if ENABLE_PLUG_REUSE:
-        @withTiming("findPlug() reuse {time:.4f} ns")
-        def findPlug(self, name, cached=False):
-            """Cache previously found plugs, for performance
+    @withTiming("findPlug() reuse {time:.4f} ns")
+    def findPlug(self, name, cached=False):
+        """Cache previously found plugs, for performance
 
-            Cost: 4.9 microseconds/call
+        Cost: 4.9 microseconds/call
 
-            Part of the time taken in querying an attribute is the
-            act of finding a plug given its name as a string.
+        Part of the time taken in querying an attribute is the
+        act of finding a plug given its name as a string.
 
-            This causes a 25% reduction in time taken for repeated
-            attribute queries. Though keep in mind that state is stored
-            in the `cmdx` object which currently does not survive rediscovery.
-            That is, if a node is created and later discovered through a call
-            to `encode`, then the original and discovered nodes carry one
-            state each.
+        This causes a 25% reduction in time taken for repeated
+        attribute queries. Though keep in mind that state is stored
+        in the `cmdx` object which currently does not survive rediscovery.
+        That is, if a node is created and later discovered through a call
+        to `encode`, then the original and discovered nodes carry one
+        state each.
 
-            Additional challenges include storing the same plug for both
-            long and short name of said attribute, which is currently not
-            the case.
+        Additional challenges include storing the same plug for both
+        long and short name of said attribute, which is currently not
+        the case.
 
-            Arguments:
-                name (str): Name of plug to find
-                cached (bool, optional): Return cached plug, or
-                    throw an exception. Default to False, which
-                    means it will run Maya's findPlug() and cache
-                    the result.
-                safe (bool, optional): Always find the plug through
-                    Maya's API, defaults to False. This will not perform
-                    any caching and is intended for use during debugging
-                    to spot whether caching is causing trouble.
+        Arguments:
+            name (str): Name of plug to find
+            cached (bool, optional): Return cached plug, or
+                throw an exception. Default to False, which
+                means it will run Maya's findPlug() and cache
+                the result.
+            safe (bool, optional): Always find the plug through
+                Maya's API, defaults to False. This will not perform
+                any caching and is intended for use during debugging
+                to spot whether caching is causing trouble.
 
-            Example:
-                >>> node = createNode("transform")
-                >>> node.findPlug("translateX", cached=True)
-                Traceback (most recent call last):
-                ...
-                KeyError: "'translateX' not cached"
-                >>> plug1 = node.findPlug("translateX")
-                >>> isinstance(plug1, om.MPlug)
-                True
-                >>> plug1 is node.findPlug("translateX")
-                True
-                >>> plug1 is node.findPlug("translateX", cached=True)
-                True
+        Example:
+            >>> node = createNode("transform")
+            >>> node.findPlug("translateX", cached=True)
+            Traceback (most recent call last):
+            ...
+            KeyError: "'translateX' not cached"
+            >>> plug1 = node.findPlug("translateX")
+            >>> isinstance(plug1, om.MPlug)
+            True
+            >>> plug1 is node.findPlug("translateX")
+            True
+            >>> plug1 is node.findPlug("translateX", cached=True)
+            True
 
-            """
+        """
 
-            try:
-                existing = self._state["plugs"][name]
-                Stats.PlugReuseCount += 1
-                return existing
-            except KeyError:
-                if cached:
-                    raise KeyError("'%s' not cached" % name)
+        try:
+            existing = self._state["plugs"][name]
+            Stats.PlugReuseCount += 1
+            return existing
+        except KeyError:
+            if cached:
+                raise KeyError("'%s' not cached" % name)
 
-            plug = self._fn.findPlug(name, False)
-            self._state["plugs"][name] = plug
+        plug = self._fn.findPlug(name, False)
+        self._state["plugs"][name] = plug
 
-            return plug
-
-    else:
-        @withTiming("findPlug() no reuse {time:.4f} ns")
-        def findPlug(self, name):
-            """Always lookup plug by name
-
-            Cost: 27.7 microseconds/call
-
-            """
-
-            return self._fn.findPlug(name, False)
+        return plug
 
     def update(self, attrs):
         """Apply a series of attributes all at once
@@ -1216,6 +1206,11 @@ class DagNode(Node):
         """
 
         return self.path().count("|") - 1
+
+    @property
+    def boundingBox(self):
+        """Return a cmdx.BoundingBox of this DAG node"""
+        return BoundingBox(self._fn.boundingBox)
 
     def hide(self):
         """Set visibility to False"""
@@ -1640,6 +1635,7 @@ class DagNode(Node):
         limit_value = limitValue
         set_limit = setLimit
         enable_limit = enableLimit
+        bounding_box = boundingBox
 
 
 # MFnTransform Limit Types
@@ -2239,12 +2235,27 @@ class Plug(object):
     def isCompound(self):
         return self._mplug.isCompound
 
-    def append(self, value):
+    def next_available_index(self, start_index=0):
+        # Assume a max of 10 million connections
+        max_index = 1e7
+
+        while start_index < max_index:
+            if not self[start_index].connected:
+                return start_index
+            start_index += 1
+
+        # No connections means the first index is available
+        return 0
+
+    def append(self, value, autofill=False):
         """Add `value` to end of self, which is an array
 
         Arguments:
             value (object): If value, create a new entry and append it.
                 If cmdx.Plug, create a new entry and connect it.
+            autofill (bool): Append to the next available index. This performs
+                a search for the first *unconnected* value of an array to
+                reuse potentially disconnected plugs and optimise space.
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -2256,13 +2267,32 @@ class Plug(object):
             Traceback (most recent call last):
             ...
             TypeError: "|appendTest.notArray" was not an array attribute
+            >>> node["myArray"][0] << node["tx"]
+            >>> node["myArray"][1] << node["ty"]
+            >>> node["myArray"][2] << node["tz"]
+            >>> node["myArray"].count()
+            3
+            >>> # Disconnect doesn't change count
+            >>> node["myArray"][1].disconnect()
+            >>> node["myArray"].count()
+            3
+            >>> node["myArray"].append(node["ty"])
+            >>> node["myArray"].count()
+            4
+            >>> # Reuse disconnected slot with autofill=True
+            >>> node["myArray"].append(node["rx"], autofill=True)
+            >>> node["myArray"].count()
+            4
 
         """
 
         if not self._mplug.isArray:
             raise TypeError("\"%s\" was not an array attribute" % self.path())
 
-        index = self.count()
+        if autofill:
+            index = self.next_available_index()
+        else:
+            index = self.count()
 
         if isinstance(value, Plug):
             self[index] << value
@@ -2293,7 +2323,7 @@ class Plug(object):
     def count(self):
         return self._mplug.evaluateNumElements()
 
-    def asDouble(self):
+    def asDouble(self, time=None):
         """Return plug as double (Python float)
 
         Example:
@@ -2304,10 +2334,12 @@ class Plug(object):
 
         """
 
+        if time is not None:
+            return self._mplug.asDouble(DGContext(time=time))
         return self._mplug.asDouble()
 
     def asMatrix(self, time=None):
-        """Return plug as MMatrix
+        """Return plug as MatrixType
 
         Example:
             >>> node1 = createNode("transform")
@@ -2325,12 +2357,13 @@ class Plug(object):
 
         """
 
-        context = om.MDGContext.kNormal
-
         if time is not None:
-            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+            context = DGContext(time=time)
+            obj = self._mplug.asMObject(context)
+        else:
+            obj = self._mplug.asMObject()
 
-        return om.MFnMatrixData(self._mplug.asMObject(context)).matrix()
+        return om.MFnMatrixData(obj).matrix()
 
     def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
@@ -2360,9 +2393,9 @@ class Plug(object):
         value = self.read(time=time)
         value = Euler(value).asQuaternion()
 
-    def asVector(self):
+    def asVector(self, time=None):
         assert self.isArray or self.isCompound, "'%s' not an array" % self
-        return Vector(self.read())
+        return Vector(self.read(time=time))
 
     @property
     def connected(self):
@@ -2467,6 +2500,36 @@ class Plug(object):
         self.lock()
         self.hide()
 
+    @property
+    def default(self):
+        """Return default value of plug"""
+        return _plug_to_default(self._mplug)
+
+    def reset(self):
+        """Restore plug to default value"""
+
+        if self.writable:
+            self.write(self.default)
+        else:
+            raise TypeError(
+                "Cannot reset non-writable attribute '%s'" % self.path()
+            )
+
+    @property
+    def writable(self):
+        """Can the user write to this attribute?
+
+        Convenience for combined call to `plug.connected`
+        and `plug.locked`.
+
+        Example:
+            >> if node["translateX"].writable:
+            ..   node["translateX"] = 5
+
+        """
+
+        return not any([self.connected, self.locked])
+
     def show(self):
         """Show attribute in channel box
 
@@ -2509,11 +2572,23 @@ class Plug(object):
         )
 
     def read(self, unit=None, time=None):
-        unit = unit if unit is not None else self._unit
-        context = None
+        """Read attribute value
 
-        if time is not None:
-            context = om.MDGContext(om.MTime(time, om.MTime.uiUnit()))
+        Arguments:
+            unit (int, optional): Unit with which to read plug
+            time (float, optional): Time at which to read plug
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["ty"] = 100.0
+            >>> node["ty"].read()
+            100.0
+            >>> node["ty"].read(unit=Meters)
+            1.0
+
+        """
+        unit = unit if unit is not None else self._unit
+        context = None if time is None else DGContext(time=time)
 
         try:
             value = _plug_to_python(
@@ -2760,22 +2835,25 @@ class TransformationMatrix(om.MTransformationMatrix):
             vec = Vector(vec)
         return super(TransformationMatrix, self).translateBy(vec, space)
 
-    def rotateBy(self, vec, space=None):
+    def rotateBy(self, rot, space=None):
         """Handle arguments conveniently
 
         - Allow for optional `space` argument
         - Automatically convert tuple to Vector
 
+        Arguments:
+            rot (Vector, Quaternion): Rotation to add
+
         """
 
         space = space or sTransform
-        if isinstance(vec, (tuple, list)):
-            vec = Vector(vec)
+        if isinstance(rot, (tuple, list)):
+            rot = Vector(rot)
 
-        if isinstance(vec, om.MVector):
-            vec = EulerRotation(vec)
+        if isinstance(rot, om.MVector):
+            rot = EulerRotation(rot)
 
-        return super(TransformationMatrix, self).rotateBy(vec, space)
+        return super(TransformationMatrix, self).rotateBy(rot, space)
 
     def quaternion(self):
         """Return transformation matrix as a Quaternion"""
@@ -2801,7 +2879,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return super(TransformationMatrix, self).setTranslation(trans, space)
 
-    def scale(self, space=None):
+    def scaleBy(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).scale(space))
@@ -2841,14 +2919,15 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setRotation(rot)
 
     def asMatrix(self):
-        return super(TransformationMatrix, self).asMatrix()
+        return MatrixType(super(TransformationMatrix, self).asMatrix())
 
     def asMatrixInverse(self):
-        return super(TransformationMatrix, self).asMatrixInverse()
+        return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
     translate = translateBy
     rotate = rotateBy
+    scale = scaleBy
 
     if ENABLE_PEP8:
         x_axis = xAxis
@@ -2864,7 +2943,72 @@ class TransformationMatrix(om.MTransformationMatrix):
 
 
 class MatrixType(om.MMatrix):
-    pass
+    def __call__(self, *item):
+        """Native API 2.0 MMatrix does not support indexing
+
+        API 1.0 however *does*, except only for elements
+        and not rows. Screw both of those, indexing isn't hard.
+
+        Arguments:
+            item (int, tuple): 1 integer for row, 2 for element
+
+        Identity/default matrix:
+            [[1.0, 0.0, 0.0, 0.0]]
+            [[0.0, 1.0, 0.0, 0.0]]
+            [[0.0, 0.0, 1.0, 0.0]]
+            [[0.0, 0.0, 0.0, 1.0]]
+
+        Example:
+            >>> m = MatrixType()
+            >>> m(0, 0)
+            1.0
+            >>> m(0, 1)
+            0.0
+            >>> m(1, 1)
+            1.0
+            >>> m(2, 1)
+            0.0
+            >>> m(3, 3)
+            1.0
+            >>>
+            >>> m(0)
+            (1.0, 0.0, 0.0, 0.0)
+
+        """
+
+        if len(item) == 1:
+            return self.row(*item)
+
+        elif len(item) == 2:
+            return self.element(*item)
+
+        else:
+            raise ValueError(
+                "Must provide either 1 or 2 coordinates, "
+                "for row and element respectively"
+            )
+
+    def __mul__(self, other):
+        return type(self)(super(MatrixType, self).__mul__(other))
+
+    def __div__(self, other):
+        return type(self)(super(MatrixType, self).__div__(other))
+
+    def inverse(self):
+        return type(self)(super(MatrixType, self).inverse())
+
+    def row(self, index):
+        values = tuple(self)
+        return (
+            values[index * 4 + 0],
+            values[index * 4 + 1],
+            values[index * 4 + 2],
+            values[index * 4 + 3]
+        )
+
+    def element(self, row, col):
+        values = tuple(self)
+        return values[row * 4 + col % 4]
 
 
 # Alias
@@ -2919,6 +3063,9 @@ class Point(om.MPoint):
 
 class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
+
+    def volume(self):
+        return self.width * self.height * self.depth
 
 
 class Quaternion(om.MQuaternion):
@@ -3054,6 +3201,37 @@ class CachedPlug(Plug):
         return self._value
 
 
+def _plug_to_default(plug):
+    """Find default value from plug, regardless of attribute type"""
+
+    if plug.isArray:
+        raise TypeError("Array plugs are unsupported")
+
+    if plug.isCompound:
+        raise TypeError("Compound plugs are unsupported")
+
+    attr = plug.attribute()
+    type = attr.apiType()
+
+    if type == om.MFn.kTypedAttribute:
+        return om.MFnTypedAttribute(attr).default
+
+    elif type in (om.MFn.kDoubleLinearAttribute,
+                  om.MFn.kFloatLinearAttribute,
+                  om.MFn.kDoubleAngleAttribute,
+                  om.MFn.kFloatAngleAttribute):
+        return om.MFnUnitAttribute(attr).default
+
+    elif type == om.MFn.kNumericAttribute:
+        return om.MFnNumericAttribute(attr).default
+
+    elif type == om.MFn.kEnumAttribute:
+        return om.MFnEnumAttribute(attr).default
+
+    else:
+        raise TypeError("Attribute type '%s' unsupported" % type)
+
+
 def _plug_to_python(plug, unit=None, context=None):
     """Convert native `plug` to Python type
 
@@ -3062,12 +3240,26 @@ def _plug_to_python(plug, unit=None, context=None):
         unit (int, optional): Return value in this unit, e.g. Meters
         context (om.MDGContext, optional): Return value in this context
 
+    Examples:
+        >>> from maya import cmds
+        >>> cmds.currentTime(1)
+        1.0
+        >>> time = encode("time1")
+        >>> UiUnit()  # 24 fps
+        6
+        >>> "%.3f" % time["outTime"]  # Seconds
+        '0.042'
+        >>> "%.1f" % time["outTime", UiUnit()]
+        '1.0'
+
     """
 
     assert not plug.isNull, "'%s' was null" % plug
 
-    if context is None:
-        context = om.MDGContext.kNormal
+    kwargs = dict()
+
+    if context is not None:
+        kwargs["context"] = context
 
     # Multi attributes
     #   _____
@@ -3124,14 +3316,14 @@ def _plug_to_python(plug, unit=None, context=None):
                 plug = plug.elementByLogicalIndex(0)
 
             return tuple(
-                om.MFnMatrixData(plug.asMObject(context)).matrix()
+                om.MFnMatrixData(plug.asMObject(**kwargs)).matrix()
             )
 
         elif innerType == om.MFnData.kString:
-            return plug.asString(context)
+            return plug.asString(**kwargs)
 
         elif innerType == om.MFnData.kNurbsCurve:
-            return om.MFnNurbsCurveData(plug.asMObject(context))
+            return om.MFnNurbsCurveData(plug.asMObject(**kwargs))
 
         elif innerType == om.MFnData.kComponentList:
             return None
@@ -3146,7 +3338,7 @@ def _plug_to_python(plug, unit=None, context=None):
             return None
 
     elif type == om.MFn.kMatrixAttribute:
-        return tuple(om.MFnMatrixData(plug.asMObject(context)).matrix())
+        return tuple(om.MFnMatrixData(plug.asMObject(**kwargs)).matrix())
 
     elif type == om.MFnData.kDoubleArray:
         raise TypeError("%s: kDoubleArray is not supported" % plug)
@@ -3155,38 +3347,38 @@ def _plug_to_python(plug, unit=None, context=None):
                   om.MFn.kFloatLinearAttribute):
 
         if unit is None:
-            return plug.asMDistance(context).asUnits(Centimeters)
+            return plug.asMDistance(**kwargs).asUnits(Centimeters)
         elif unit == Millimeters:
-            return plug.asMDistance(context).asMillimeters()
+            return plug.asMDistance(**kwargs).asMillimeters()
         elif unit == Centimeters:
-            return plug.asMDistance(context).asCentimeters()
+            return plug.asMDistance(**kwargs).asCentimeters()
         elif unit == Meters:
-            return plug.asMDistance(context).asMeters()
+            return plug.asMDistance(**kwargs).asMeters()
         elif unit == Kilometers:
-            return plug.asMDistance(context).asKilometers()
+            return plug.asMDistance(**kwargs).asKilometers()
         elif unit == Inches:
-            return plug.asMDistance(context).asInches()
+            return plug.asMDistance(**kwargs).asInches()
         elif unit == Feet:
-            return plug.asMDistance(context).asFeet()
+            return plug.asMDistance(**kwargs).asFeet()
         elif unit == Miles:
-            return plug.asMDistance(context).asMiles()
+            return plug.asMDistance(**kwargs).asMiles()
         elif unit == Yards:
-            return plug.asMDistance(context).asYards()
+            return plug.asMDistance(**kwargs).asYards()
         else:
             raise TypeError("Unsupported unit '%d'" % unit)
 
     elif type in (om.MFn.kDoubleAngleAttribute,
                   om.MFn.kFloatAngleAttribute):
         if unit is None:
-            return plug.asMAngle(context).asUnits(Radians)
+            return plug.asMAngle(**kwargs).asUnits(Radians)
         elif unit == Degrees:
-            return plug.asMAngle(context).asDegrees()
+            return plug.asMAngle(**kwargs).asDegrees()
         elif unit == Radians:
-            return plug.asMAngle(context).asRadians()
+            return plug.asMAngle(**kwargs).asRadians()
         elif unit == AngularSeconds:
-            return plug.asMAngle(context).asAngSeconds()
+            return plug.asMAngle(**kwargs).asAngSeconds()
         elif unit == AngularMinutes:
-            return plug.asMAngle(context).asAngMinutes()
+            return plug.asMAngle(**kwargs).asAngMinutes()
         else:
             raise TypeError("Unsupported unit '%d'" % unit)
 
@@ -3195,18 +3387,18 @@ def _plug_to_python(plug, unit=None, context=None):
         innerType = om.MFnNumericAttribute(attr).numericType()
 
         if innerType == om.MFnNumericData.kBoolean:
-            return plug.asBool(context)
+            return plug.asBool(**kwargs)
 
         elif innerType in (om.MFnNumericData.kShort,
                            om.MFnNumericData.kInt,
                            om.MFnNumericData.kLong,
                            om.MFnNumericData.kByte):
-            return plug.asInt(context)
+            return plug.asInt(**kwargs)
 
         elif innerType in (om.MFnNumericData.kFloat,
                            om.MFnNumericData.kDouble,
                            om.MFnNumericData.kAddr):
-            return plug.asDouble(context)
+            return plug.asDouble(**kwargs)
 
         else:
             raise TypeError("Unsupported numeric type: %s"
@@ -3214,14 +3406,17 @@ def _plug_to_python(plug, unit=None, context=None):
 
     # Enum
     elif type == om.MFn.kEnumAttribute:
-        return plug.asShort(context)
+        return plug.asShort(**kwargs)
 
     elif type == om.MFn.kMessageAttribute:
         # In order to comply with `if plug:`
         return True
 
     elif type == om.MFn.kTimeAttribute:
-        return plug.asShort(context)
+        # MTime.value returns in UI units, which is inconsistent
+        # with e.g. angular and linear attributes, which both return
+        # UI-independent units.
+        return plug.asMTime(**kwargs).asUnits(unit or Seconds)
 
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
@@ -3242,6 +3437,10 @@ def _python_to_plug(value, plug):
     # Compound values
 
     if isinstance(value, (tuple, list)):
+        if plug.type() == "kMatrixAttribute":
+            assert len(value) == 16, "Value didn't appear to be a valid matrix"
+            return _python_to_plug(Matrix4(value), plug)
+
         for index, value in enumerate(value):
 
             # Tuple values are assumed flat:
@@ -3711,6 +3910,9 @@ class _BaseModifier(object):
 
         _python_to_mod(value, plug, self._modifier)
 
+    def resetAttr(self, plug):
+        self.setAttr(plug, plug.default)
+
     @record_history
     def connect(self, src, dst, force=True):
         if isinstance(src, Plug):
@@ -3783,6 +3985,7 @@ class _BaseModifier(object):
         delete_node = deleteNode
         rename_node = renameNode
         set_attr = setAttr
+        reset_attr = resetAttr
 
 
 class DGModifier(_BaseModifier):
@@ -3901,6 +4104,45 @@ class DagModifier(_BaseModifier):
         create_node = createNode
 
 
+class DGContext(om.MDGContext):
+
+    def __init__(self, time=None):
+        """Context for evaluating the Maya DG
+
+        Extension of MDGContext to also accept time as a float. In Maya 2018
+        and above DGContext can also be used as a context manager.
+
+        Arguments:
+            time (float, om.MTime, optional): Time at which to evaluate context
+
+        """
+
+        if time is not None:
+            if isinstance(time, (int, float)):
+                time = om.MTime(time, om.MTime.uiUnit())
+            super(DGContext, self).__init__(time)
+        else:
+            super(DGContext, self).__init__()
+        self._previousContext = None
+
+    def __enter__(self):
+        if __maya_version__ >= 2018:
+            self._previousContext = self.makeCurrent()
+            return self
+        else:
+            cmds.error(
+                "'%s' does not support context manager functionality for Maya 2017 "
+                "and below" % self.__class__.__name__
+            )
+
+    def __exit__(self, exc_type, exc_value, tb):
+        if self._previousContext:
+            self._previousContext.makeCurrent()
+
+# Alias
+Context = DGContext
+
+
 def ls(*args, **kwargs):
     return map(encode, cmds.ls(*args, **kwargs))
 
@@ -3941,12 +4183,13 @@ def createNode(type, name=None, parent=None):
     return node
 
 
-def getAttr(attr, type=None):
+def getAttr(attr, type=None, time=None):
     """Read `attr`
 
     Arguments:
         attr (Plug): Attribute as a cmdx.Plug
         type (str, optional): Unused
+        time (float, optional): Time at which to evaluate the attribute
 
     Example:
         >>> node = createNode("transform")
@@ -3955,7 +4198,7 @@ def getAttr(attr, type=None):
 
     """
 
-    return attr.read()
+    return attr.read(time=time)
 
 
 def setAttr(attr, value, type=None):
@@ -4564,8 +4807,11 @@ class Enum(_AbstractAttribute):
 class Divider(Enum):
     """Visual divider in channel box"""
 
-    def __init__(self, label):
-        super(Divider, self).__init__("_", fields=(label,), label=" ")
+    def __init__(self, label, **kwargs):
+        kwargs.pop("name", None)
+        kwargs.pop("fields", None)
+        kwargs.pop("label", None)
+        super(Divider, self).__init__(label, fields=(label,), label=" ", **kwargs)
 
 
 class String(_AbstractAttribute):
