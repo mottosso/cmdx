@@ -734,6 +734,18 @@ class Node(object):
 
         return self._mobject.hasFn(type)
 
+    def isType(self, type):
+        if isinstance(type, om.MTypeId):
+            return type == self._fn.typeId
+        elif isinstance(type, string_types):
+            return type == self._fn.typeName
+        elif isinstance(type, (tuple, list)):
+            return self._fn.typeName in type or self._fn.typeId in type
+        elif isinstance(type, int):
+            return self._mobject.hasFn(type)
+
+        return False
+
     def lock(self, value=True):
         self._fn.isLocked = value
 
@@ -1042,7 +1054,7 @@ class Node(object):
         attribute = attr._mplug.attribute()
         self._fn.removeAttribute(attribute)
 
-    def connections(self, type=None, unit=None, plugs=False):
+    def connections(self, type=None, unit=None, plugs=False, source=True, destination=True, connections=False):
         """Yield plugs of node with a connection to any other plug
 
         Arguments:
@@ -1051,6 +1063,9 @@ class Node(object):
             type (str, optional): Restrict output to nodes of this type,
                 e.g. "transform" or "mesh"
             plugs (bool, optional): Return plugs, rather than nodes
+            source (bool, optional): Return inputs only
+            destination (bool, optional): Return outputs only
+            connections (bool, optional): Return tuples of the connected plugs
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1067,17 +1082,32 @@ class Node(object):
         """
 
         for plug in self._fn.getConnections():
-            mobject = plug.node()
-            node = Node(mobject)
-
-            if not type or type == node._fn.typeName:
-                plug = Plug(node, plug, unit)
-                for connection in plug.connections(plugs=plugs):
+            plug = Plug(self, plug, unit)
+            for connection in plug.connections(type=type, unit=unit, plugs=plugs, source=source, destination=destination):
+                if connections:
+                    yield connection, plug if plugs else self
+                else:
                     yield connection
 
-    def connection(self, type=None, unit=None, plug=False):
+    def connection(self, type=None, unit=None, plug=False, source=True, destination=True, connection=False):
         """Singular version of :func:`connections()`"""
-        return next(self.connections(type, unit, plug), None)
+        return next(self.connections(type, unit, plug, source, destination, connection), None)
+
+    def inputs(self, type=None, unit=None, plugs=False, connections=False):
+        """Return input connections from :func:`connections()`"""
+        return self.connections(type, unit, plugs, True, False, connections)
+
+    def input(self, type=None, unit=None, plug=None, connection=False):
+        """Return first input connection from :func:`connections()`"""
+        return next(self.connections(type, unit, plug, True, False, connection), None)
+
+    def outputs(self, type=None, plugs=False, unit=None, connections=False):
+        """Return output connections from :func:`connections()`"""
+        return self.connections(type, unit, plugs, False, True, connections)
+
+    def output(self, type=None, plug=False, unit=None, connection=False):
+        """Return first output connection from :func:`connections()`"""
+        return next(self.connections(type, unit, plug, False, True, connection), None)
 
     def rename(self, name):
         if not getattr(self._modifier, "isDone", True):
@@ -1094,6 +1124,7 @@ class Node(object):
         type_id = typeId
         type_name = typeName
         is_a = isA
+        is_type = isType
         is_locked = isLocked
         is_referenced = isReferenced
         find_plug = findPlug
@@ -1392,10 +1423,8 @@ class DagNode(Node):
         if self.isA(kShape):
             return
 
-        cls = DagNode
         Fn = self._fn.__class__
         op = operator.eq
-
         if isinstance(type, (tuple, list)):
             op = operator.contains
 
@@ -1416,7 +1445,7 @@ class DagNode(Node):
                 continue
 
             if not type or op(type, getattr(Fn(mobject), other)):
-                node = cls(mobject)
+                node = DagNode(mobject)
 
                 if not contains or node.shape(type=contains):
                     if query is None:
@@ -2731,21 +2760,20 @@ class Plug(object):
 
         """
 
-        op = operator.eq
-        other = "typeId"
-
-        if isinstance(type, string_types):
-            other = "typeName"
-
-        if isinstance(type, (tuple, list)):
-            op = operator.contains
-
         for plug in self._mplug.connectedTo(source, destination):
             mobject = plug.node()
             node = Node(mobject)
 
-            if not type or op(type, getattr(node._fn, other)):
-                yield Plug(node, plug, unit) if plugs else node
+            if type is None or node.isType(type):
+                if plugs:
+                    # for some reason mplug.connectedTo returns networked plugs sometimes
+                    # we have to convert them before using them
+                    # https://forums.autodesk.com/t5/maya-programming/maya-api-what-is-a-networked-plug-and-do-i-want-it-or-not/td-p/7182472
+                    if plug.isNetworked:
+                        plug = node.findPlug(plug.partialName())
+                    yield Plug(node, plug, unit)
+                else:
+                    yield node
 
     def connection(self,
                    type=None,
@@ -2759,6 +2787,18 @@ class Plug(object):
                                      destination=destination,
                                      plugs=plug,
                                      unit=unit), None)
+
+    def input(self, type=None, plug=False, unit=None):
+        """Return input connection from :func:`connections()`"""
+        return next(self.connections(type=type, source=True, destination=False, plugs=plug, unit=unit), None)
+
+    def outputs(self, type=None, plugs=False, unit=None):
+        """Return output connections from :func:`connections()`"""
+        return self.connections(type=type, source=False, destination=True, plugs=plugs, unit=unit)
+
+    def output(self, type=None, plug=False, unit=None):
+        """Return first output connection from :func:`connections()`"""
+        return next(self.connections(type=type, source=False, destination=True, plugs=plug, unit=unit), None)
 
     def source(self, unit=None):
         cls = self.__class__
