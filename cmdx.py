@@ -740,6 +740,9 @@ class Node(object):
     def isLocked(self):
         return self._fn.isLocked
 
+    def isReferenced(self):
+        return self._fn.isFromReferencedFile
+
     @property
     def storable(self):
         """Whether or not to save this node with the file"""
@@ -1092,6 +1095,7 @@ class Node(object):
         type_name = typeName
         is_a = isA
         is_locked = isLocked
+        is_referenced = isReferenced
         find_plug = findPlug
         add_attr = addAttr
         has_attr = hasAttr
@@ -2234,6 +2238,12 @@ class Plug(object):
         return self._mplug.isArray
 
     @property
+    def arrayIndices(self):
+        if not self.isArray:
+            raise TypeError('{} is not an array'.format(self.path()))
+        return self._mplug.getExistingArrayAttributeIndices()
+
+    @property
     def isCompound(self):
         return self._mplug.isCompound
 
@@ -2546,6 +2556,10 @@ class Plug(object):
 
         self.channelBox = True
 
+    @property
+    def editable(self):
+        return not self._mplug.isFreeToChange()
+
     def type(self):
         """Retrieve API type of plug as string
 
@@ -2560,20 +2574,20 @@ class Plug(object):
 
         return self._mplug.attribute().apiTypeStr
 
-    def path(self):
-        return "%s.%s" % (
-            self._node.path(), self._mplug.partialName(
+    def path(self, full=True):
+        return "{}.{}".format(
+            self._node.shortestPath(), self._mplug.partialName(
                 includeNodeName=False,
                 useLongNames=True,
-                useFullAttributePath=True
+                useFullAttributePath=full
             )
         )
 
-    def name(self, long=False):
+    def name(self, long=False, full=True):
         return self._mplug.partialName(
             includeNodeName=False,
             useLongNames=long,
-            useFullAttributePath=True
+            useFullAttributePath=full
         )
 
     def read(self, unit=None, time=None):
@@ -2768,6 +2782,7 @@ class Plug(object):
         as_vector = asVector
         channel_box = channelBox
         lock_and_hide = lockAndHide
+        array_indices = arrayIndices
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -3927,6 +3942,18 @@ class _BaseModifier(object):
     rename = renameNode
 
     @record_history
+    def addAttr(self, node, plug):
+        if isinstance(plug, _AbstractAttribute):
+            plug = plug.create()
+        return self._modifier.addAttribute(node._mobject, plug)
+
+    @record_history
+    def deleteAttr(self, plug):
+        node = plug.node()
+        node.clear()
+        return self._modifier.removeAttribute(node._mobject, plug._mplug.attribute())
+
+    @record_history
     def setAttr(self, plug, value):
         if isinstance(value, Plug):
             value = value.read()
@@ -3962,7 +3989,7 @@ class _BaseModifier(object):
             a (Plug): Starting point of a connection
             b (Plug, optional): End point of a connection, defaults to all
             source (bool, optional): Disconnect b, if it is a source
-            source (bool, optional): Disconnect b, if it is a destination
+            destination (bool, optional): Disconnect b, if it is a destination
 
         Normally, Maya only performs a disconnect if the
         connection is incoming. Bidirectional
@@ -4010,7 +4037,9 @@ class _BaseModifier(object):
         create_node = createNode
         delete_node = deleteNode
         rename_node = renameNode
+        add_attr = addAttr
         set_attr = setAttr
+        delete_attr = deleteAttr
         reset_attr = resetAttr
 
 
@@ -4649,6 +4678,7 @@ class _AbstractAttribute(dict):
     Hidden = False  # Display in Attribute Editor?
 
     Array = False
+    IndexMatters = True
     Connectable = True
 
     Keyable = True
@@ -4713,6 +4743,7 @@ class _AbstractAttribute(dict):
                  affectsAppearance=None,
                  affectsWorldSpace=None,
                  array=False,
+                 indexMatters=None,
                  connectable=True,
                  help=None):
 
@@ -4788,6 +4819,10 @@ class _AbstractAttribute(dict):
         self.Fn.affectsAppearance = self["affectsAppearance"]
         self.Fn.affectsWorldSpace = self["affectsWorldSpace"]
         self.Fn.array = self["array"]
+
+        if self["indexMatters"] is False:
+            self.Fn.readable = False
+            self.Fn.indexMatters = False
 
         if self["min"] is not None:
             self.Fn.setMin(self["min"])
