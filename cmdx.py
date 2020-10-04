@@ -4268,6 +4268,45 @@ class DGContext(om.MDGContext):
 Context = DGContext
 
 
+def _encode_object(arg):
+    if isinstance(arg, Node):
+        return arg.shortest_path()
+    elif isinstance(arg, Plug):
+        return arg.path(full=False)
+    elif isinstance(arg, (list, tuple, dict)):
+        return _encode_objects(arg)
+    return arg
+
+
+def _encode_objects(args):
+    if isinstance(args, list):
+        return map(_encode_object, args)
+    elif isinstance(args, tuple):
+        return tuple(map(_encode_object, args))
+    elif isinstance(args, dict):
+        d = {}
+        for k, v in args.iteritems():
+            d[_encode_object(k)] = _encode_object(v)
+        return d
+    else:
+        return _encode_object(args)
+
+
+def cmd(cmd, *args, **kwargs):
+    return cmd(*_encode_objects(args), **_encode_objects(kwargs))
+
+
+def encodeCmd(cmd, *args, **kwargs):
+    res = cmd(*_encode_objects(args), **_encode_objects(kwargs))
+    if isinstance(res, string_types):
+        return encode(res)
+    elif isinstance(res, list):
+        return map(encode, res)
+    elif isinstance(res, tuple):
+        return tuple(map(encode, res))
+    return res
+
+
 def ls(*args, **kwargs):
     return map(encode, cmds.ls(*args, **kwargs))
 
@@ -4519,6 +4558,7 @@ list_relatives = listRelatives
 list_connections = listConnections
 connect_attr = connectAttr
 obj_exists = objExists
+encode_cmd = encodeCmd
 
 # Speciality functions
 
