@@ -2374,7 +2374,7 @@ class Plug(object):
             >>> node = createNode("transform")
             >>> node["translateY"] = 12
             >>> node["rotate"] = 1
-            >>> tm = node["matrix"].asTm()
+            >>> tm = node["matrix"].asTransform()
             >>> map(round, tm.rotation())
             [1.0, 1.0, 1.0]
             >>> list(tm.translation())
@@ -2386,10 +2386,13 @@ class Plug(object):
 
     # Alias
     asTm = asTransformationMatrix
+    asTransform = asTransformationMatrix
 
     def asEulerRotation(self, order=kXYZ, time=None):
         value = self.read(time=time)
         return om.MEulerRotation(value, order)
+
+    asEuler = asEulerRotation
 
     def asQuaternion(self, time=None):
         value = self.read(time=time)
@@ -2758,7 +2761,9 @@ class Plug(object):
         as_double = asDouble
         as_matrix = asMatrix
         as_transformation_matrix = asTransformationMatrix
+        as_transform = asTransform
         as_euler_rotation = asEulerRotation
+        as_euler = asEuler
         as_quaternion = asQuaternion
         as_vector = asVector
         channel_box = channelBox
@@ -3053,6 +3058,12 @@ class Vector(om.MVector):
 
         return super(Vector, self).__iadd__(value)
 
+    def dot(self, value):
+        return super(Vector, self).__mul__(value)
+
+    def cross(self, value):
+        return super(Vector, self).__xor__(value)
+
 
 # Alias, it can't take anything other than values
 # and yet it isn't explicit in its name.
@@ -3139,8 +3150,21 @@ class EulerRotation(om.MEulerRotation):
     def asQuaternion(self):
         return super(EulerRotation, self).asQuaternion()
 
+    def asMatrix(self):
+        return super(EulerRotation, self).asMatrix()
+
+    order = {
+        'xyz': kXYZ,
+        'xzy': kXZY,
+        'yxz': kYXZ,
+        'yzx': kYZX,
+        'zxy': kZXY,
+        'zyx': kZYX
+    }
+
     if ENABLE_PEP8:
         as_quaternion = asQuaternion
+        as_matrix = asMatrix
 
 
 # Alias
