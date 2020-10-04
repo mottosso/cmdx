@@ -4192,9 +4192,38 @@ class DagModifier(_BaseModifier):
         return DagNode(mobj, exists=False, modifier=self)
 
     @record_history
-    def parent(self, node, parent=None):
-        parent = parent._mobject if parent is not None else None
-        self._modifier.reparentNode(node._mobject, parent)
+    def parent(self, node, parent=None, preserve=True):
+
+        if preserve:
+            if parent is None:
+                transform = node.transform(space=sWorld)
+            else:
+                transform = node.mapFrom(parent)
+
+        _parent = parent._mobject if parent is not None else om.MObject.kNullObj
+        self._modifier.reparentNode(node._mobject, _parent)
+
+        if preserve:
+            self.transform(node, transform)
+
+        if node.typeId == tJoint:
+            self.disconnect(node['inverseScale'])
+            if parent and parent.typeId == tJoint:
+                self.connect(parent['scale'], node['inverseScale'])
+
+    @record_history
+    def transform(self, node, transform):
+
+        if transform.rotationOrder() - 1 != node['ro']:
+            transform.reorderRotation(node['ro'].read() + 1)
+
+        if node['t'].editable and node['r'].editable and node['s'].editable and node['sh'].editable:
+            _python_to_mod(transform.translation(), node['t'], self._modifier)
+            _python_to_mod(transform.rotation(), node['r'], self._modifier)
+            _python_to_mod(transform.scale(), node['s'], self._modifier)
+            _python_to_mod(transform.shear(sObject), node['sh'], self._modifier)
+        else:
+            log.warn('{} transform is locked or connected!'.format(node))
 
     if ENABLE_PEP8:
         create_node = createNode
