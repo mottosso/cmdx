@@ -5160,8 +5160,7 @@ class Compound(_AbstractAttribute):
                          "writable",
                          "hidden",
                          "channelBox",
-                         "keyable",
-                         "array"):
+                         "keyable"):
                 child[attr] = self[attr]
 
             if child["default"] is None and default is not None:
