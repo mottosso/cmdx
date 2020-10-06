@@ -1053,7 +1053,13 @@ class Node(object):
         attribute = attr._mplug.attribute()
         self._fn.removeAttribute(attribute)
 
-    def connections(self, type=None, unit=None, plugs=False, source=True, destination=True, connections=False):
+    def connections(self,
+                    type=None,
+                    unit=None,
+                    plugs=False,
+                    source=True,
+                    destination=True,
+                    connections=False):
         """Yield plugs of node with a connection to any other plug
 
         Arguments:
@@ -1082,31 +1088,85 @@ class Node(object):
 
         for plug in self._fn.getConnections():
             plug = Plug(self, plug, unit)
-            for connection in plug.connections(type=type, unit=unit, plugs=plugs, source=source, destination=destination):
+            for connection in plug.connections(type=type,
+                                               unit=unit,
+                                               plugs=plugs,
+                                               source=source,
+                                               destination=destination):
                 if connections:
                     yield connection, plug if plugs else self
                 else:
                     yield connection
 
-    def connection(self, type=None, unit=None, plug=False, source=True, destination=True, connection=False):
+    def connection(self,
+                   type=None,
+                   unit=None,
+                   plug=False,
+                   source=True,
+                   destination=True,
+                   connection=False):
         """Singular version of :func:`connections()`"""
-        return next(self.connections(type, unit, plug, source, destination, connection), None)
+        return next(
+            self.connections(type=type,
+                             unit=unit,
+                             plugs=plug,
+                             source=source,
+                             destination=destination,
+                             connections=connection), None)
 
-    def inputs(self, type=None, unit=None, plugs=False, connections=False):
+    def inputs(self,
+               type=None,
+               unit=None,
+               plugs=False,
+               connections=False):
         """Return input connections from :func:`connections()`"""
-        return self.connections(type, unit, plugs, True, False, connections)
+        return self.connections(type=type,
+                                unit=unit,
+                                plugs=plugs,
+                                source=True,
+                                destination=False,
+                                connections=connections)
 
-    def input(self, type=None, unit=None, plug=None, connection=False):
+    def input(self,
+              type=None,
+              unit=None,
+              plug=None,
+              connection=False):
         """Return first input connection from :func:`connections()`"""
-        return next(self.connections(type, unit, plug, True, False, connection), None)
+        return next(
+            self.connections(type=type,
+                             unit=unit,
+                             plugs=plug,
+                             source=True,
+                             destination=False,
+                             connections=connection), None)
 
-    def outputs(self, type=None, plugs=False, unit=None, connections=False):
+    def outputs(self,
+                type=None,
+                plugs=False,
+                unit=None,
+                connections=False):
         """Return output connections from :func:`connections()`"""
-        return self.connections(type, unit, plugs, False, True, connections)
+        return self.connections(type=type,
+                                unit=unit,
+                                plugs=plugs,
+                                source=False,
+                                destination=True,
+                                connections=connections)
 
-    def output(self, type=None, plug=False, unit=None, connection=False):
+    def output(self,
+               type=None,
+               plug=False,
+               unit=None,
+               connection=False):
         """Return first output connection from :func:`connections()`"""
-        return next(self.connections(type, unit, plug, False, True, connection), None)
+        return next(
+            self.connections(type=type,
+                             unit=unit,
+                             plugs=plug,
+                             source=False,
+                             destination=True,
+                             connections=connection), None)
 
     def rename(self, name):
         if not getattr(self._modifier, "isDone", True):
@@ -2765,8 +2825,8 @@ class Plug(object):
 
             if type is None or node.isA(type):
                 if plugs:
-                    # for some reason mplug.connectedTo returns networked plugs sometimes
-                    # we have to convert them before using them
+                    # for some reason mplug.connectedTo returns networked plugs
+                    # sometimes, we have to convert them before using them
                     # https://forums.autodesk.com/t5/maya-programming/maya-api-what-is-a-networked-plug-and-do-i-want-it-or-not/td-p/7182472
                     if plug.isNetworked:
                         plug = node.findPlug(plug.partialName())
@@ -2787,17 +2847,38 @@ class Plug(object):
                                      plugs=plug,
                                      unit=unit), None)
 
-    def input(self, type=None, plug=False, unit=None):
+    def input(self,
+              type=None,
+              plug=False,
+              unit=None):
         """Return input connection from :func:`connections()`"""
-        return next(self.connections(type=type, source=True, destination=False, plugs=plug, unit=unit), None)
+        return next(self.connections(type=type,
+                                     source=True,
+                                     destination=False,
+                                     plugs=plug,
+                                     unit=unit), None)
 
-    def outputs(self, type=None, plugs=False, unit=None):
+    def outputs(self,
+                type=None,
+                plugs=False,
+                unit=None):
         """Return output connections from :func:`connections()`"""
-        return self.connections(type=type, source=False, destination=True, plugs=plugs, unit=unit)
+        return self.connections(type=type,
+                                source=False,
+                                destination=True,
+                                plugs=plugs,
+                                unit=unit)
 
-    def output(self, type=None, plug=False, unit=None):
+    def output(self,
+               type=None,
+               plug=False,
+               unit=None):
         """Return first output connection from :func:`connections()`"""
-        return next(self.connections(type=type, source=False, destination=True, plugs=plug, unit=unit), None)
+        return next(self.connections(type=type,
+                                     source=False,
+                                     destination=True,
+                                     plugs=plug,
+                                     unit=unit), None)
 
     def source(self, unit=None):
         cls = self.__class__
