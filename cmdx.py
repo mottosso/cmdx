@@ -298,6 +298,10 @@ def TimeUiUnit():
     return _Unit(om.MTime, om.MTime.uiUnit())
 
 
+# Alias
+UiUnit = TimeUiUnit
+
+
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
