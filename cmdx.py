@@ -4243,6 +4243,8 @@ def listRelatives(node,
         >>> parent = createNode("transform")
         >>> child = createNode("transform", parent=parent)
         >>> listRelatives(child, parent=True) == [parent]
+        >>> listRelatives(str(child), parent=True) == [str(parent)]
+        True
         True
 
     """
