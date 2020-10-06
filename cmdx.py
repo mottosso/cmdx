@@ -721,7 +721,10 @@ class Node(object):
         """Evaluate whether self is of `type`
 
         Arguments:
-            type (int): MFn function set constant
+            type (MTypeId, str, list, int): any kind of type to check
+                - MFn function set constant
+                - MTypeId objects
+                - nodetype names
 
         Example:
             >>> node = createNode("transform")
@@ -731,10 +734,6 @@ class Node(object):
             False
 
         """
-
-        return self._mobject.hasFn(type)
-
-    def isType(self, type):
         if isinstance(type, om.MTypeId):
             return type == self._fn.typeId
         elif isinstance(type, string_types):
@@ -1124,7 +1123,6 @@ class Node(object):
         type_id = typeId
         type_name = typeName
         is_a = isA
-        is_type = isType
         is_locked = isLocked
         is_referenced = isReferenced
         find_plug = findPlug
@@ -2765,7 +2763,7 @@ class Plug(object):
             mobject = plug.node()
             node = Node(mobject)
 
-            if type is None or node.isType(type):
+            if type is None or node.isA(type):
                 if plugs:
                     # for some reason mplug.connectedTo returns networked plugs sometimes
                     # we have to convert them before using them
