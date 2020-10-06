@@ -132,30 +132,30 @@ def test_getattrtime():
     """getAttr(time=)"""
     transform = cmdx.createNode("transform")
 
-    for time, value in ((1, 1.0),
-                        (10, 10.0)):
+    for time, value in ((0, 0.0),
+                        (24, 10.0)):
         cmds.setKeyframe(str(transform),
                          time=[time],
                          attribute="translateY",
                          value=value)
     cmds.keyTangent(str(transform),
                     edit=True,
-                    time=(1, 10),
+                    time=(0, 24),
                     attribute="translateY",
                     outTangentType="linear")
 
     # These floating point values can differ ever so slightly
-    assert_almost_equals(transform["ty"].read(time=1), 1.0, places=5)
-    assert_almost_equals(transform["ty"].read(time=5), 5.0, places=5)
-    assert_almost_equals(transform["ty"].read(time=10), 10.0, places=5)
+    assert_almost_equals(transform["ty"].read(time=0), 0.0, places=5)
+    assert_almost_equals(transform["ty"].read(time=0.5), 5.0, places=5)
+    assert_almost_equals(transform["ty"].read(time=1), 10.0, places=5)
 
     # From the current context (Maya 2018 and above)
     if hasattr(om.MDGContext, "makeCurrent"):
-        with cmdx.DGContext(1.0):
-            assert_almost_equals(transform["ty"].read(), 1.0, places=5)
-        with cmdx.DGContext(5.0):
+        with cmdx.DGContext(0):
+            assert_almost_equals(transform["ty"].read(), 0.0, places=5)
+        with cmdx.DGContext(0.5):
             assert_almost_equals(transform["ty"].read(), 5.0, places=5)
-        with cmdx.DGContext(10.0):
+        with cmdx.DGContext(1):
             assert_almost_equals(transform["ty"].read(), 10.0, places=5)
 
 
