@@ -4190,38 +4190,9 @@ class DagModifier(_BaseModifier):
         return DagNode(mobj, exists=False, modifier=self)
 
     @record_history
-    def parent(self, node, parent=None, preserve=True):
-
-        if preserve:
-            if parent is None:
-                transform = node.transform(space=sWorld)
-            else:
-                transform = node.mapFrom(parent)
-
-        _parent = parent._mobject if parent is not None else om.MObject.kNullObj
-        self._modifier.reparentNode(node._mobject, _parent)
-
-        if preserve:
-            self.transform(node, transform)
-
-        if node.typeId == tJoint:
-            self.disconnect(node['inverseScale'])
-            if parent and parent.typeId == tJoint:
-                self.connect(parent['scale'], node['inverseScale'])
-
-    @record_history
-    def transform(self, node, transform):
-
-        if transform.rotationOrder() - 1 != node['ro']:
-            transform.reorderRotation(node['ro'].read() + 1)
-
-        if node['t'].editable and node['r'].editable and node['s'].editable and node['sh'].editable:
-            _python_to_mod(transform.translation(), node['t'], self._modifier)
-            _python_to_mod(transform.rotation(), node['r'], self._modifier)
-            _python_to_mod(transform.scale(), node['s'], self._modifier)
-            _python_to_mod(transform.shear(sObject), node['sh'], self._modifier)
-        else:
-            log.warn('{} transform is locked or connected!'.format(node))
+    def parent(self, node, parent=None):
+        parent = parent._mobject if parent is not None else None
+        self._modifier.reparentNode(node._mobject, parent)
 
     if ENABLE_PEP8:
         create_node = createNode
@@ -4264,45 +4235,6 @@ class DGContext(om.MDGContext):
 
 # Alias
 Context = DGContext
-
-
-def _encode_object(arg):
-    if isinstance(arg, Node):
-        return arg.shortest_path()
-    elif isinstance(arg, Plug):
-        return arg.path(full=False)
-    elif isinstance(arg, (list, tuple, dict)):
-        return _encode_objects(arg)
-    return arg
-
-
-def _encode_objects(args):
-    if isinstance(args, list):
-        return map(_encode_object, args)
-    elif isinstance(args, tuple):
-        return tuple(map(_encode_object, args))
-    elif isinstance(args, dict):
-        d = {}
-        for k, v in args.iteritems():
-            d[_encode_object(k)] = _encode_object(v)
-        return d
-    else:
-        return _encode_object(args)
-
-
-def cmd(cmd, *args, **kwargs):
-    return cmd(*_encode_objects(args), **_encode_objects(kwargs))
-
-
-def encodeCmd(cmd, *args, **kwargs):
-    res = cmd(*_encode_objects(args), **_encode_objects(kwargs))
-    if isinstance(res, string_types):
-        return encode(res)
-    elif isinstance(res, list):
-        return map(encode, res)
-    elif isinstance(res, tuple):
-        return tuple(map(encode, res))
-    return res
 
 
 def ls(*args, **kwargs):
@@ -4556,7 +4488,6 @@ list_relatives = listRelatives
 list_connections = listConnections
 connect_attr = connectAttr
 obj_exists = objExists
-encode_cmd = encodeCmd
 
 # Speciality functions
 
