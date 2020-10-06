@@ -4116,7 +4116,7 @@ class DagModifier(_BaseModifier):
 
 class DGContext(om.MDGContext):
 
-    def __init__(self, time=None):
+    def __init__(self, time=None, unit=None):
         """Context for evaluating the Maya DG
 
         Extension of MDGContext to also accept time as a float. In Maya 2018
@@ -4128,8 +4128,9 @@ class DGContext(om.MDGContext):
         """
 
         if time is not None:
-            if isinstance(time, (int, float)):
-                time = Seconds(time)
+            if not isinstance(time, TimeType):
+                unit = unit or Seconds
+                time = unit(time)
             super(DGContext, self).__init__(time)
         else:
             super(DGContext, self).__init__()

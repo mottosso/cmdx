@@ -157,6 +157,20 @@ def test_getattrtime():
             assert_almost_equals(transform["ty"].read(), 5.0, places=5)
         with cmdx.DGContext(1):
             assert_almost_equals(transform["ty"].read(), 10.0, places=5)
+        # Custom units
+        with cmdx.DGContext(0, cmdx.TimeUiUnit()):
+            assert_almost_equals(transform["ty"].read(), 0.0, places=5)
+        with cmdx.DGContext(12, cmdx.TimeUiUnit()):
+            assert_almost_equals(transform["ty"].read(), 5.0, places=5)
+        with cmdx.DGContext(24, cmdx.TimeUiUnit()):
+            assert_almost_equals(transform["ty"].read(), 10.0, places=5)
+        # Alternate syntax
+        with cmdx.DGContext(cmdx.TimeUiUnit()(0)):
+            assert_almost_equals(transform["ty"].read(), 0.0, places=5)
+        with cmdx.DGContext(cmdx.TimeUiUnit()(12)):
+            assert_almost_equals(transform["ty"].read(), 5.0, places=5)
+        with cmdx.DGContext(cmdx.TimeUiUnit()(24)):
+            assert_almost_equals(transform["ty"].read(), 10.0, places=5)
 
 
 def test_setattr():
