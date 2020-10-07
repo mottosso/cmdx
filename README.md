@@ -584,15 +584,85 @@ I'm sure someone has, and yes there are.
 
 #### Undo
 
-With every command made through `maya.cmds`, the undo history is populated such that you can undo a *block* of commands all at once. `cmdx` doesn't do this, which is how it remains fast, but also impossible to undo. Any node created or attribute changed is *permanent*, which is why it is that much more important that you take care of the creations and changes that you make.
+With every command made through `maya.cmds`, the undo history is populated such that you can undo a *block* of commands all at once. `cmdx` doesn't do this, which is how it remains fast, but also less capable of undoing.
 
-For undoable operations, see the section on using [`Modifier`](#modifier).
+For undo, you've got two options.
+
+1. Use [`cmdx.DagModifier`](#modifier) or [`cmdx.DGModifier`](#modifier) for automatic undo of whatever to create or edit using these modifiers
+2. Use [`cmdx.commit`](https://mottosso.com/cmdx/#cmdx.commit) for manual control over what happens when the user tries to undo
+
+```py
+node = cmdx.createNode("transform")
+```
+
+This operation is undoable, because under the hood it calls `cmdx.DagModifier`.
+
+```py
+node["translateX"] = 5
+node["tx"] >> node["ty"]
+```
+
+These operations however is *not* undoable.
+
+In order to edit attributes with support for undo, you must use either a modifier or call `commit`. This is how the Maya API normally works, for both Python and C++.
+
+```py
+with cmdx.DagModifier() as mod:
+    mod.setAttr(node["translateX"], 5)
+    mod.connect(node["tx"], node["ty"])
+```
+
+Alternatively, call `commit`.
+
+```py
+previous_value = node["translateX"].read()
+
+def my_undo():
+    node["translateX"] = previous_value
+    node["ty"].disconnect()
+
+node["translateX"] = 5
+cmdx.commit(my_undo)
+```
+
+Typically, you should prefer to use a modifier as it will manage previous values for you and ensure things are undone in the right order (e.g. no need to undo attribute changes if the node is deleted).
+
+<br>
+
+### Undo Caveats
+
+With this level of control, you are able to put Maya in a bad state.
+
+```py
+a = cmdx.encode("existingNode")
+b = cmdx.createNode("transform", name="newNode")
+b["ty"] >> a["tx"]
+```
+
+Here, we are creating a new node and connecting it to `a`. As mentioned, connections are not undoable, so what do you think will happen when the user undos?
+
+1. `newNode` is deleted
+2. Connections are preserved
+
+But how can that be? What is `a["tx"]` connected to?! You'll find that the channel is locked and connected, but the connected node is unselectable and yet visible in odd places like the Node Editor but not Outliner.
+
+To address this, make sure that you include anything related to a block of operations in a modifier or `commit`. It can be multiple modifiers, that is fine, they will undo together en masse.
+
+```py
+a = cmdx.encode("existingTransform")
+
+with cmdx.DagModifier() as mod:
+    b = mod.createNode("transform")
+    mod.connect(b["ty"], a["tx"])
+```
+
+The user can now undo safely.
 
 <br>
 
 #### Crashes
 
-...
+If this happens to you, please report it along with a reproducible as that would qualify as a bug!
 
 <br>
 
