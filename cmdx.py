@@ -2096,7 +2096,7 @@ class Plug(object):
         if isinstance(other, str):
             try:
                 # E.g. node["t"] + "x"
-                return self._node[self.name() + other]
+                return self._node[self.name(long=False) + other]
             except ExistError:
                 # E.g. node["translate"] + "X"
                 return self._node[self.name(long=True) + other]
@@ -2662,20 +2662,50 @@ class Plug(object):
 
         return self._mplug.attribute().apiTypeStr
 
-    def path(self, full=True):
+    def path(self, full=False):
+        """Return path to attribute, including node path
+
+            Examples:
+                >>> persp = encode("persp")
+                >>> persp["translate"].path()
+                '|persp.translate'
+                >>> persp["translateX"].path()
+                '|persp.translateX'
+
+            """
+
         return "{}.{}".format(
-            self._node.shortestPath(), self._mplug.partialName(
+            self._node.path(), self._mplug.partialName(
                 includeNodeName=False,
                 useLongNames=True,
                 useFullAttributePath=full
             )
         )
 
-    def name(self, long=False, full=True):
-        return self._mplug.partialName(
-            includeNodeName=False,
-            useLongNames=long,
-            useFullAttributePath=full
+    def name(self, long=True, full=False):
+        """Return name part of an attribute
+
+        Examples:
+            >>> persp = encode("persp")
+            >>> persp["translateX"].name()
+            'translateX'
+            >>> persp["tx"].name()
+            'translateX'
+            >>> persp["tx"].name(long=False)
+            'tx'
+            >>> persp["tx"].name(full=True)
+            'translate.translateX'
+            >>> persp["tx"].name(long=False, full=True)
+            't.tx'
+
+        """
+
+        return "{}".format(
+            self._mplug.partialName(
+                includeNodeName=False,
+                useLongNames=long,
+                useFullAttributePath=full
+            )
         )
 
     def read(self, unit=None, time=None):
