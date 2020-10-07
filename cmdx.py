@@ -742,7 +742,7 @@ class Node(object):
             return self._fn.typeName in type or self._fn.typeId in type
         elif isinstance(type, int):
             return self._mobject.hasFn(type)
-
+        cmds.warning("Unsupported argument passed to isA('%s')" % type)
         return False
 
     def lock(self, value=True):
