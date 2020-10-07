@@ -2646,7 +2646,7 @@ class Plug(object):
 
     @property
     def editable(self):
-        return not self._mplug.isFreeToChange()
+        return self._mplug.isFreeToChange() == om.MPlug.kFreeToChange
 
     def type(self):
         """Retrieve API type of plug as string
