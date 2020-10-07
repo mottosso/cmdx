@@ -112,3 +112,4 @@ Interoperability
 
 .. autofunction:: encode
 .. autofunction:: decode
+.. autofunction:: commit
