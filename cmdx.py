@@ -4272,7 +4272,7 @@ class DagModifier(_BaseModifier):
 
     @record_history
     def parent(self, node, parent=None):
-        parent = parent._mobject if parent is not None else None
+        parent = parent._mobject if parent is not None else om.MObject.kNullObj
         self._modifier.reparentNode(node._mobject, parent)
 
     if ENABLE_PEP8:
