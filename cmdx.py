@@ -1231,8 +1231,9 @@ class DagNode(Node):
     def __init__(self, mobject, *args, **kwargs):
         super(DagNode, self).__init__(mobject, *args, **kwargs)
 
-        dagpath = om.MDagPath.getAPathTo(mobject)
-        self._tfn = om.MFnTransform(dagpath)
+        # Convert self._tfn to om.MFnTransform(self.dagPath())
+        # if you want to use its functions which require sWorld
+        self._tfn = om.MFnTransform(mobject)
 
     @protected
     def path(self):
