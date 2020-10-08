@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 
 PY3 = sys.version_info[0] == 3
 
@@ -85,8 +85,6 @@ Stats.LastTiming = None
 if not hasattr(om, "MObjectHandle"):
     log.warning("Node reuse might not work in this version of Maya "
                 "(OpenMaya.MObjectHandle not found)")
-
-TimeUnit = om.MTime.uiUnit()
 
 # DEPRECATED
 MTime = om.MTime
@@ -267,6 +265,12 @@ Radians = _Unit(om.MAngle, om.MAngle.kRadians)
 AngularMinutes = _Unit(om.MAngle, om.MAngle.kAngMinutes)
 AngularSeconds = _Unit(om.MAngle, om.MAngle.kAngSeconds)
 
+
+def AngleUiUnit():
+    """Unlike other angle units, this can be modified by the user at run-time"""
+    return _Unit(om.MAngle, om.MAngle.uiUnit())
+
+
 # Distance units
 Millimeters = _Unit(om.MDistance, om.MDistance.kMillimeters)
 Centimeters = _Unit(om.MDistance, om.MDistance.kCentimeters)
@@ -277,15 +281,25 @@ Feet = _Unit(om.MDistance, om.MDistance.kFeet)
 Miles = _Unit(om.MDistance, om.MDistance.kMiles)
 Yards = _Unit(om.MDistance, om.MDistance.kYards)
 
+
+def DistanceUiUnit():
+    """Unlike other distance units, this can be modified by the user at run-time"""
+    return _Unit(om.MDistance, om.MDistance.uiUnit())
+
+
 # Time units
 Milliseconds = _Unit(om.MTime, om.MTime.kMilliseconds)
 Minutes = _Unit(om.MTime, om.MTime.kMinutes)
 Seconds = _Unit(om.MTime, om.MTime.kSeconds)
 
 
-def UiUnit():
+def TimeUiUnit():
     """Unlike other time units, this can be modified by the user at run-time"""
     return _Unit(om.MTime, om.MTime.uiUnit())
+
+
+# Alias
+UiUnit = TimeUiUnit
 
 
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
@@ -1827,7 +1841,7 @@ class AnimCurve(Node):
             self._fna = oma.MFnAnimCurve(mobj)
 
         def key(self, time, value, interpolation=Linear):
-            time = om.MTime(time, om.MTime.uiUnit())
+            time = Seconds(time)
             index = self._fna.find(time)
 
             if index:
@@ -1836,7 +1850,7 @@ class AnimCurve(Node):
                 self._fna.addKey(time, value, interpolation, interpolation)
 
         def keys(self, times, values, interpolation=Linear):
-            times = map(lambda t: om.MTime(t, TimeUnit), times)
+            times = map(lambda t: Seconds(t), times)
 
             try:
                 self._fna.addKeys(times, values)
@@ -3245,11 +3259,11 @@ def _plug_to_python(plug, unit=None, context=None):
         >>> cmds.currentTime(1)
         1.0
         >>> time = encode("time1")
-        >>> UiUnit()  # 24 fps
+        >>> TimeUiUnit()  # 24 fps
         6
         >>> "%.3f" % time["outTime"]  # Seconds
         '0.042'
-        >>> "%.1f" % time["outTime", UiUnit()]
+        >>> "%.1f" % time["outTime", TimeUiUnit()]
         '1.0'
 
     """
@@ -4106,7 +4120,7 @@ class DagModifier(_BaseModifier):
 
 class DGContext(om.MDGContext):
 
-    def __init__(self, time=None):
+    def __init__(self, time=None, unit=None):
         """Context for evaluating the Maya DG
 
         Extension of MDGContext to also accept time as a float. In Maya 2018
@@ -4118,8 +4132,9 @@ class DGContext(om.MDGContext):
         """
 
         if time is not None:
-            if isinstance(time, (int, float)):
-                time = om.MTime(time, om.MTime.uiUnit())
+            if not isinstance(time, TimeType):
+                unit = unit or Seconds
+                time = unit(time)
             super(DGContext, self).__init__(time)
         else:
             super(DGContext, self).__init__()
