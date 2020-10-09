@@ -105,7 +105,7 @@ jobs:
           touch .nojekyll
           git add .nojekyll
           git commit -m "Commit generated documentation"
-        displayName: 'Commit pages'
+        displayName: "Commit pages"
         workingDirectory: build/html
 
       - task: InstallSSHKey@0
@@ -116,7 +116,7 @@ jobs:
       - script: |
           git remote add origin git@github.com:mottosso/cmdx.git
           git push -f origin HEAD:gh-pages
-        displayName: 'Publish GitHub Pages'
+        displayName: "Publish GitHub Pages"
         workingDirectory: build/html
 
     dependsOn: Maya
