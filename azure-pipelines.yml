@@ -88,6 +88,7 @@ jobs:
   # -----------------------------------------------------------------------
 
   - job: Deploy_Docs
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/tags')
     pool:
       vmImage: "ubuntu-latest"
     steps:
@@ -113,7 +114,7 @@ jobs:
           sshKeySecureFile: deploy_key
 
       - script: |
-          git remote add origin git@github.com:monkeez/cmdx.git
+          git remote add origin git@github.com:mottosso/cmdx.git
           git push -f origin HEAD:gh-pages
         displayName: 'Publish GitHub Pages'
         workingDirectory: build/html
