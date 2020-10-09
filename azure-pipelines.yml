@@ -91,9 +91,6 @@ jobs:
     pool:
       vmImage: "ubuntu-latest"
     steps:
-      - script: |
-          REPO=`git config remote.origin.url`
-
       - task: DownloadPipelineArtifact@2
         inputs:
           artifact: docs
@@ -116,7 +113,7 @@ jobs:
           sshKeySecureFile: deploy_key
 
       - script: |
-          git remote add origin $REPO
+          git remote add origin git@github.com:monkeez/cmdx.git
           git push -f origin HEAD:gh-pages
         displayName: 'Publish GitHub Pages'
         workingDirectory: build/html
