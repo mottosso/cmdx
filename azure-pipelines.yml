@@ -4,6 +4,7 @@ trigger:
   # Already default, but made explicit here
   branches:
     include: ["*"]
+    exclude: ["gh-pages"]
 
   # Ensure Azure triggers a build on a new tag
   # We use these for GitHub releases
@@ -57,7 +58,7 @@ jobs:
             sphinx \
             sphinxcontrib-napoleon
         displayName: "pip install"
-      
+
         # Since 2019, this sucker throws an unnecessary warning if not declared
       - script: |
           export XDG_RUNTIME_DIR=/var/tmp/runtime-root
@@ -67,12 +68,59 @@ jobs:
           mayapy --version
           mayapy run_tests.py
         displayName: "Unittests"
+
       - script: |
           mayapy build_livedocs.py && mayapy test_docs.py
         displayName: "Test docs"
+
       - script: |
           mayapy build_docs.py
         displayName: "Build docs"
+
+      - publish: $(System.DefaultWorkingDirectory)/build/html
+        artifact: docs
+        condition: and(succeeded(), eq(variables['containerImage'], 'mottosso/maya:2020'))
+
+  # -----------------------------------------------------------------------
+  #
+  # Deploy docs
+  #
+  # -----------------------------------------------------------------------
+
+  - job: Deploy_Docs
+    pool:
+      vmImage: "ubuntu-latest"
+    steps:
+      - task: DownloadPipelineArtifact@2
+        inputs:
+          artifact: docs
+          path: $(Build.SourcesDirectory)/build/html
+
+      - script: |
+          git init
+          git config --local user.name "Azure Pipelines"
+          git config --local user.email "mitchellcoote@gmail.com"
+          git add .
+          touch .nojekyll
+          git add .nojekyll
+          git commit -m "Commit generated documentation"
+        displayName: 'Commit pages'
+        workingDirectory: build/html
+
+      - task: InstallSSHKey@0
+        inputs:
+          knownHostsEntry: $(KNOWN_HOST)
+          sshKeySecureFile: deploy_key
+
+      - script: |
+          REPO=`git config remote.origin.url`
+          git remote add origin $REPO
+          git push -f origin HEAD:gh-pages
+        displayName: 'Publish GitHub Pages'
+        workingDirectory: build/html
+
+    dependsOn: Maya
+
 
   # -----------------------------------------------------------------------
   #
@@ -110,3 +158,5 @@ jobs:
         env:
           _LOGIN: $(PYPI_LOGIN)
           _PASSWORD: $(PYPI_PASSWORD)
+
+    dependsOn: Maya
