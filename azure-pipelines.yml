@@ -114,6 +114,7 @@ jobs:
 
       - script: |
           REPO=`git config remote.origin.url`
+          echo $REPO
           git remote add origin $REPO
           git push -f origin HEAD:gh-pages
         displayName: 'Publish GitHub Pages'
