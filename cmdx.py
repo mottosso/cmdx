@@ -4832,7 +4832,7 @@ class _AbstractAttribute(dict):
     IndexMatters = True
     Connectable = True
 
-    Keyable = True
+    Keyable = False
     ChannelBox = False
     AffectsAppearance = False
     AffectsWorldSpace = False
