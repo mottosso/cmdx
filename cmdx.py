@@ -1223,7 +1223,7 @@ class DagNode(Node):
     _Fn = om.MFnDagNode
 
     def __str__(self):
-        return self.shortestPath()
+        return self.path()
 
     def __repr__(self):
         return self.path()
