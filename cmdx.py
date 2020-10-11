@@ -4459,7 +4459,7 @@ def addAttr(node,
             "string": String,
             "long": Long,
             "bool": Boolean,
-            "enume": Enum,
+            "enum": Enum,
         }[attributeType]
 
     kwargs = {
