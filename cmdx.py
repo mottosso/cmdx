@@ -2663,6 +2663,61 @@ class Plug(object):
 
         return self._mplug.attribute().apiTypeStr
 
+    def typeClass(self):
+        """Retrieve cmdx type of plug
+
+        """
+
+        attr = self._mplug.attribute()
+        k = attr.apiType()
+
+        if k == om.MFn.kAttribute3Double:
+            return Double3
+
+        elif k == om.MFn.kNumericAttribute:
+            k = om.MFnNumericAttribute(attr).numericType()
+            if k == om.MFnNumericData.kBoolean:
+                return Boolean
+            elif k in (om.MFnNumericData.kLong, om.MFnNumericData.kInt):
+                return Long
+            elif k == om.MFnNumericData.kDouble:
+                return Double
+
+        elif k in (om.MFn.kDoubleAngleAttribute, om.MFn.kFloatAngleAttribute):
+            return Angle
+        elif k in (om.MFn.kDoubleLinearAttribute, om.MFn.kFloatLinearAttribute):
+            return Distance
+        elif k == om.MFn.kTimeAttribute:
+            return Time
+        elif k == om.MFn.kEnumAttribute:
+            return Enum
+
+        elif k == om.MFn.kUnitAttribute:
+            k = om.MFnUnitAttribute(attr).unitType()
+            if k == om.MFnUnitAttribute.kAngle:
+                return Angle
+            elif k == om.MFnUnitAttribute.kDistance:
+                return Distance
+            elif k == om.MFnUnitAttribute.kTime:
+                return Time
+
+        elif k == om.MFn.kTypedAttribute:
+            k = om.MFnTypedAttribute(attr).attrType()
+            if k == om.MFnData.kString:
+                return String
+            elif k == om.MFnData.kMatrix:
+                return Matrix
+
+        elif k == om.MFn.kCompoundAttribute:
+            return Compound
+        elif k in (om.Mfn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute):
+            return Matrix
+        elif k == om.MFn.kMessageAttribute:
+            return Message
+
+        t = self._mplug.attribute().apiTypeStr
+        log.warning('{} is not implemented'.format(t))
+
     def path(self, full=False):
         """Return path to attribute, including node path
 
@@ -2934,6 +2989,7 @@ class Plug(object):
         channel_box = channelBox
         lock_and_hide = lockAndHide
         array_indices = arrayIndices
+        type_class = typeClass
 
 
 class TransformationMatrix(om.MTransformationMatrix):
