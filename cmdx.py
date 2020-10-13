@@ -1317,13 +1317,15 @@ class DagNode(Node):
         """Set visibility to True"""
         self["visibility"] = True
 
-    def addChild(self, child, index=Last):
+    def addChild(self, child, index=Last, safe=True):
         """Add `child` to self
 
         Arguments:
             child (Node): Child to add
             index (int, optional): Physical location in hierarchy,
                 defaults to cmdx.Last
+            safe (bool): Prevents crash when the node to reparent was formerly
+                a descendent of the new parent. Costs 6µs/call
 
         Example:
             >>> parent = createNode("transform")
@@ -1333,6 +1335,10 @@ class DagNode(Node):
         """
 
         mobject = child._mobject
+        if safe:
+            parent = child.parent()
+            if parent is not None:
+                parent._fn.removeChild(mobject)
         self._fn.addChild(mobject, index)
 
     def assembly(self):
@@ -4623,7 +4629,7 @@ def rename(node, name):
         mod.rename(node, name)
 
 
-def parent(children, parent, relative=True, absolute=False):
+def parent(children, parent, relative=True, absolute=False, safe=True):
     assert isinstance(parent, DagNode), "parent must be DagNode"
 
     if not isinstance(children, (tuple, list)):
@@ -4631,7 +4637,7 @@ def parent(children, parent, relative=True, absolute=False):
 
     for child in children:
         assert isinstance(child, DagNode), "child must be DagNode"
-        parent.addChild(child)
+        parent.addChild(child, safe=safe)
 
 
 def objExists(obj):

@@ -187,6 +187,22 @@ Test("API 2.0", "createNode", lambda: om2.MFnDagNode().create("transform"), New)
 
 New()
 
+root1 = cmdx.createNode("transform")
+root2 = cmdx.createNode("transform")
+child = cmdx.createNode("transform", parent=root1)
+
+def teardown():
+    cmds.parent("transform3", "transform1", r=1)
+
+melparent = 'parent -r "transform3" "transform2";'
+Test("mel", "parent", lambda: mel.eval(melparent), number=1, repeat=1000, teardown=teardown)
+Test("cmds", "parent", lambda: cmds.parent("transform3", "transform2", r=1), number=1, repeat=1000, teardown=teardown)
+Test("cmdx", "parent", lambda: cmdx.parent(child, root2), number=1, repeat=1000, teardown=teardown)
+root1, root2, child = pm.ls(map(str, (root1, root2, child)))
+Test("PyMEL", "parent", lambda: pm.parent(child, root2, r=1), number=1, repeat=1000, teardown=teardown)
+
+New()
+
 parent = cmdx.createNode("transform")
 path = parent.path()
 pynode = pm.PyNode(path)
