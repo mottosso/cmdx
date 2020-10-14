@@ -216,6 +216,8 @@ kShape = _Type(om.MFn.kShape)
 kTransform = _Type(om.MFn.kTransform)
 kJoint = _Type(om.MFn.kJoint)
 kSet = _Type(om.MFn.kSet)
+kDeformer = _Type(om.MFn.kGeometryFilt)
+kConstraint = _Type(om.MFn.kConstraint)
 
 
 class _Space(int):
@@ -733,7 +735,10 @@ class Node(object):
         """Evaluate whether self is of `type`
 
         Arguments:
-            type (int): MFn function set constant
+            type (MTypeId, str, list, int): any kind of type to check
+                - MFn function set constant
+                - MTypeId objects
+                - nodetype names
 
         Example:
             >>> node = createNode("transform")
@@ -743,14 +748,25 @@ class Node(object):
             False
 
         """
-
-        return self._mobject.hasFn(type)
+        if isinstance(type, om.MTypeId):
+            return type == self._fn.typeId
+        elif isinstance(type, string_types):
+            return type == self._fn.typeName
+        elif isinstance(type, (tuple, list)):
+            return self._fn.typeName in type or self._fn.typeId in type
+        elif isinstance(type, int):
+            return self._mobject.hasFn(type)
+        cmds.warning("Unsupported argument passed to isA('%s')" % type)
+        return False
 
     def lock(self, value=True):
         self._fn.isLocked = value
 
     def isLocked(self):
         return self._fn.isLocked
+
+    def isReferenced(self):
+        return self._fn.isFromReferencedFile
 
     @property
     def storable(self):
@@ -1051,7 +1067,13 @@ class Node(object):
         attribute = attr._mplug.attribute()
         self._fn.removeAttribute(attribute)
 
-    def connections(self, type=None, unit=None, plugs=False):
+    def connections(self,
+                    type=None,
+                    unit=None,
+                    plugs=False,
+                    source=True,
+                    destination=True,
+                    connections=False):
         """Yield plugs of node with a connection to any other plug
 
         Arguments:
@@ -1060,6 +1082,9 @@ class Node(object):
             type (str, optional): Restrict output to nodes of this type,
                 e.g. "transform" or "mesh"
             plugs (bool, optional): Return plugs, rather than nodes
+            source (bool, optional): Return inputs only
+            destination (bool, optional): Return outputs only
+            connections (bool, optional): Return tuples of the connected plugs
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1076,17 +1101,86 @@ class Node(object):
         """
 
         for plug in self._fn.getConnections():
-            mobject = plug.node()
-            node = Node(mobject)
-
-            if not type or type == node._fn.typeName:
-                plug = Plug(node, plug, unit)
-                for connection in plug.connections(plugs=plugs):
+            plug = Plug(self, plug, unit)
+            for connection in plug.connections(type=type,
+                                               unit=unit,
+                                               plugs=plugs,
+                                               source=source,
+                                               destination=destination):
+                if connections:
+                    yield connection, plug if plugs else self
+                else:
                     yield connection
 
-    def connection(self, type=None, unit=None, plug=False):
+    def connection(self,
+                   type=None,
+                   unit=None,
+                   plug=False,
+                   source=True,
+                   destination=True,
+                   connection=False):
         """Singular version of :func:`connections()`"""
-        return next(self.connections(type, unit, plug), None)
+        return next(
+            self.connections(type=type,
+                             unit=unit,
+                             plugs=plug,
+                             source=source,
+                             destination=destination,
+                             connections=connection), None)
+
+    def inputs(self,
+               type=None,
+               unit=None,
+               plugs=False,
+               connections=False):
+        """Return input connections from :func:`connections()`"""
+        return self.connections(type=type,
+                                unit=unit,
+                                plugs=plugs,
+                                source=True,
+                                destination=False,
+                                connections=connections)
+
+    def input(self,
+              type=None,
+              unit=None,
+              plug=None,
+              connection=False):
+        """Return first input connection from :func:`connections()`"""
+        return next(
+            self.connections(type=type,
+                             unit=unit,
+                             plugs=plug,
+                             source=True,
+                             destination=False,
+                             connections=connection), None)
+
+    def outputs(self,
+                type=None,
+                plugs=False,
+                unit=None,
+                connections=False):
+        """Return output connections from :func:`connections()`"""
+        return self.connections(type=type,
+                                unit=unit,
+                                plugs=plugs,
+                                source=False,
+                                destination=True,
+                                connections=connections)
+
+    def output(self,
+               type=None,
+               plug=False,
+               unit=None,
+               connection=False):
+        """Return first output connection from :func:`connections()`"""
+        return next(
+            self.connections(type=type,
+                             unit=unit,
+                             plugs=plug,
+                             source=False,
+                             destination=True,
+                             connections=connection), None)
 
     def rename(self, name):
         if not getattr(self._modifier, "isDone", True):
@@ -1104,6 +1198,7 @@ class Node(object):
         type_name = typeName
         is_a = isA
         is_locked = isLocked
+        is_referenced = isReferenced
         find_plug = findPlug
         add_attr = addAttr
         has_attr = hasAttr
@@ -1150,6 +1245,8 @@ class DagNode(Node):
     def __init__(self, mobject, *args, **kwargs):
         super(DagNode, self).__init__(mobject, *args, **kwargs)
 
+        # Convert self._tfn to om.MFnTransform(self.dagPath())
+        # if you want to use its functions which require sWorld
         self._tfn = om.MFnTransform(mobject)
 
     @protected
@@ -1234,13 +1331,15 @@ class DagNode(Node):
         """Set visibility to True"""
         self["visibility"] = True
 
-    def addChild(self, child, index=Last):
+    def addChild(self, child, index=Last, safe=True):
         """Add `child` to self
 
         Arguments:
             child (Node): Child to add
             index (int, optional): Physical location in hierarchy,
                 defaults to cmdx.Last
+            safe (bool): Prevents crash when the node to reparent was formerly
+                a descendent of the new parent. Costs 6µs/call
 
         Example:
             >>> parent = createNode("transform")
@@ -1250,6 +1349,10 @@ class DagNode(Node):
         """
 
         mobject = child._mobject
+        if safe:
+            parent = child.parent()
+            if parent is not None:
+                parent._fn.removeChild(mobject)
         self._fn.addChild(mobject, index)
 
     def assembly(self):
@@ -1400,10 +1503,8 @@ class DagNode(Node):
         if self.isA(kShape):
             return
 
-        cls = DagNode
         Fn = self._fn.__class__
         op = operator.eq
-
         if isinstance(type, (tuple, list)):
             op = operator.contains
 
@@ -1424,7 +1525,7 @@ class DagNode(Node):
                 continue
 
             if not type or op(type, getattr(Fn(mobject), other)):
-                node = cls(mobject)
+                node = DagNode(mobject)
 
                 if not contains or node.shape(type=contains):
                     if query is None:
@@ -2016,7 +2117,7 @@ class Plug(object):
         if isinstance(other, str):
             try:
                 # E.g. node["t"] + "x"
-                return self._node[self.name() + other]
+                return self._node[self.name(long=False) + other]
             except ExistError:
                 # E.g. node["translate"] + "X"
                 return self._node[self.name(long=True) + other]
@@ -2246,6 +2347,12 @@ class Plug(object):
         return self._mplug.isArray
 
     @property
+    def arrayIndices(self):
+        if not self.isArray:
+            raise TypeError('{} is not an array'.format(self.path()))
+        return self._mplug.getExistingArrayAttributeIndices()
+
+    @property
     def isCompound(self):
         return self._mplug.isCompound
 
@@ -2386,7 +2493,7 @@ class Plug(object):
             >>> node = createNode("transform")
             >>> node["translateY"] = 12
             >>> node["rotate"] = 1
-            >>> tm = node["matrix"].asTm()
+            >>> tm = node["matrix"].asTransform()
             >>> map(round, tm.rotation())
             [1.0, 1.0, 1.0]
             >>> list(tm.translation())
@@ -2398,10 +2505,13 @@ class Plug(object):
 
     # Alias
     asTm = asTransformationMatrix
+    asTransform = asTransformationMatrix
 
     def asEulerRotation(self, order=kXYZ, time=None):
         value = self.read(time=time)
         return om.MEulerRotation(value, order)
+
+    asEuler = asEulerRotation
 
     def asQuaternion(self, time=None):
         value = self.read(time=time)
@@ -2555,6 +2665,10 @@ class Plug(object):
 
         self.channelBox = True
 
+    @property
+    def editable(self):
+        return self._mplug.isFreeToChange() == om.MPlug.kFreeToChange
+
     def type(self):
         """Retrieve API type of plug as string
 
@@ -2569,20 +2683,105 @@ class Plug(object):
 
         return self._mplug.attribute().apiTypeStr
 
-    def path(self):
-        return "%s.%s" % (
+    def typeClass(self):
+        """Retrieve cmdx type of plug
+
+        """
+
+        attr = self._mplug.attribute()
+        k = attr.apiType()
+
+        if k == om.MFn.kAttribute3Double:
+            return Double3
+
+        elif k == om.MFn.kNumericAttribute:
+            k = om.MFnNumericAttribute(attr).numericType()
+            if k == om.MFnNumericData.kBoolean:
+                return Boolean
+            elif k in (om.MFnNumericData.kLong, om.MFnNumericData.kInt):
+                return Long
+            elif k == om.MFnNumericData.kDouble:
+                return Double
+
+        elif k in (om.MFn.kDoubleAngleAttribute, om.MFn.kFloatAngleAttribute):
+            return Angle
+        elif k in (om.MFn.kDoubleLinearAttribute, om.MFn.kFloatLinearAttribute):
+            return Distance
+        elif k == om.MFn.kTimeAttribute:
+            return Time
+        elif k == om.MFn.kEnumAttribute:
+            return Enum
+
+        elif k == om.MFn.kUnitAttribute:
+            k = om.MFnUnitAttribute(attr).unitType()
+            if k == om.MFnUnitAttribute.kAngle:
+                return Angle
+            elif k == om.MFnUnitAttribute.kDistance:
+                return Distance
+            elif k == om.MFnUnitAttribute.kTime:
+                return Time
+
+        elif k == om.MFn.kTypedAttribute:
+            k = om.MFnTypedAttribute(attr).attrType()
+            if k == om.MFnData.kString:
+                return String
+            elif k == om.MFnData.kMatrix:
+                return Matrix
+
+        elif k == om.MFn.kCompoundAttribute:
+            return Compound
+        elif k in (om.Mfn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute):
+            return Matrix
+        elif k == om.MFn.kMessageAttribute:
+            return Message
+
+        t = self._mplug.attribute().apiTypeStr
+        log.warning('{} is not implemented'.format(t))
+
+    def path(self, full=False):
+        """Return path to attribute, including node path
+
+            Examples:
+                >>> persp = encode("persp")
+                >>> persp["translate"].path()
+                '|persp.translate'
+                >>> persp["translateX"].path()
+                '|persp.translateX'
+
+            """
+
+        return "{}.{}".format(
             self._node.path(), self._mplug.partialName(
                 includeNodeName=False,
                 useLongNames=True,
-                useFullAttributePath=True
+                useFullAttributePath=full
             )
         )
 
-    def name(self, long=False):
-        return self._mplug.partialName(
-            includeNodeName=False,
-            useLongNames=long,
-            useFullAttributePath=True
+    def name(self, long=True, full=False):
+        """Return name part of an attribute
+
+        Examples:
+            >>> persp = encode("persp")
+            >>> persp["translateX"].name()
+            'translateX'
+            >>> persp["tx"].name()
+            'translateX'
+            >>> persp["tx"].name(long=False)
+            'tx'
+            >>> persp["tx"].name(full=True)
+            'translate.translateX'
+            >>> persp["tx"].name(long=False, full=True)
+            't.tx'
+
+        """
+
+        return "{}".format(
+            self._mplug.partialName(
+                includeNodeName=False,
+                useLongNames=long,
+                useFullAttributePath=full
+            )
         )
 
     def read(self, unit=None, time=None):
@@ -2726,21 +2925,20 @@ class Plug(object):
 
         """
 
-        op = operator.eq
-        other = "typeId"
-
-        if isinstance(type, string_types):
-            other = "typeName"
-
-        if isinstance(type, (tuple, list)):
-            op = operator.contains
-
         for plug in self._mplug.connectedTo(source, destination):
             mobject = plug.node()
             node = Node(mobject)
 
-            if not type or op(type, getattr(node._fn, other)):
-                yield Plug(node, plug, unit) if plugs else node
+            if type is None or node.isA(type):
+                if plugs:
+                    # for some reason mplug.connectedTo returns networked plugs
+                    # sometimes, we have to convert them before using them
+                    # https://forums.autodesk.com/t5/maya-programming/maya-api-what-is-a-networked-plug-and-do-i-want-it-or-not/td-p/7182472
+                    if plug.isNetworked:
+                        plug = node.findPlug(plug.partialName())
+                    yield Plug(node, plug, unit)
+                else:
+                    yield node
 
     def connection(self,
                    type=None,
@@ -2752,6 +2950,39 @@ class Plug(object):
         return next(self.connections(type=type,
                                      source=source,
                                      destination=destination,
+                                     plugs=plug,
+                                     unit=unit), None)
+
+    def input(self,
+              type=None,
+              plug=False,
+              unit=None):
+        """Return input connection from :func:`connections()`"""
+        return next(self.connections(type=type,
+                                     source=True,
+                                     destination=False,
+                                     plugs=plug,
+                                     unit=unit), None)
+
+    def outputs(self,
+                type=None,
+                plugs=False,
+                unit=None):
+        """Return output connections from :func:`connections()`"""
+        return self.connections(type=type,
+                                source=False,
+                                destination=True,
+                                plugs=plugs,
+                                unit=unit)
+
+    def output(self,
+               type=None,
+               plug=False,
+               unit=None):
+        """Return first output connection from :func:`connections()`"""
+        return next(self.connections(type=type,
+                                     source=False,
+                                     destination=True,
                                      plugs=plug,
                                      unit=unit), None)
 
@@ -2770,11 +3001,15 @@ class Plug(object):
         as_double = asDouble
         as_matrix = asMatrix
         as_transformation_matrix = asTransformationMatrix
+        as_transform = asTransform
         as_euler_rotation = asEulerRotation
+        as_euler = asEuler
         as_quaternion = asQuaternion
         as_vector = asVector
         channel_box = channelBox
         lock_and_hide = lockAndHide
+        array_indices = arrayIndices
+        type_class = typeClass
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -3065,6 +3300,12 @@ class Vector(om.MVector):
 
         return super(Vector, self).__iadd__(value)
 
+    def dot(self, value):
+        return super(Vector, self).__mul__(value)
+
+    def cross(self, value):
+        return super(Vector, self).__xor__(value)
+
 
 # Alias, it can't take anything other than values
 # and yet it isn't explicit in its name.
@@ -3151,8 +3392,21 @@ class EulerRotation(om.MEulerRotation):
     def asQuaternion(self):
         return super(EulerRotation, self).asQuaternion()
 
+    def asMatrix(self):
+        return super(EulerRotation, self).asMatrix()
+
+    order = {
+        'xyz': kXYZ,
+        'xzy': kXZY,
+        'yxz': kYXZ,
+        'yzx': kYZX,
+        'zxy': kZXY,
+        'zyx': kZYX
+    }
+
     if ENABLE_PEP8:
         as_quaternion = asQuaternion
+        as_matrix = asMatrix
 
 
 # Alias
@@ -3915,6 +4169,18 @@ class _BaseModifier(object):
     rename = renameNode
 
     @record_history
+    def addAttr(self, node, plug):
+        if isinstance(plug, _AbstractAttribute):
+            plug = plug.create()
+        return self._modifier.addAttribute(node._mobject, plug)
+
+    @record_history
+    def deleteAttr(self, plug):
+        node = plug.node()
+        node.clear()
+        return self._modifier.removeAttribute(node._mobject, plug._mplug.attribute())
+
+    @record_history
     def setAttr(self, plug, value):
         if isinstance(value, Plug):
             value = value.read()
@@ -3950,7 +4216,7 @@ class _BaseModifier(object):
             a (Plug): Starting point of a connection
             b (Plug, optional): End point of a connection, defaults to all
             source (bool, optional): Disconnect b, if it is a source
-            source (bool, optional): Disconnect b, if it is a destination
+            destination (bool, optional): Disconnect b, if it is a destination
 
         Normally, Maya only performs a disconnect if the
         connection is incoming. Bidirectional
@@ -3998,7 +4264,9 @@ class _BaseModifier(object):
         create_node = createNode
         delete_node = deleteNode
         rename_node = renameNode
+        add_attr = addAttr
         set_attr = setAttr
+        delete_attr = deleteAttr
         reset_attr = resetAttr
 
 
@@ -4111,7 +4379,7 @@ class DagModifier(_BaseModifier):
 
     @record_history
     def parent(self, node, parent=None):
-        parent = parent._mobject if parent is not None else None
+        parent = parent._mobject if parent is not None else om.MObject.kNullObj
         self._modifier.reparentNode(node._mobject, parent)
 
     if ENABLE_PEP8:
@@ -4268,7 +4536,7 @@ def addAttr(node,
             "string": String,
             "long": Long,
             "bool": Boolean,
-            "enume": Enum,
+            "enum": Enum,
         }[attributeType]
 
     kwargs = {
@@ -4376,7 +4644,7 @@ def rename(node, name):
         mod.rename(node, name)
 
 
-def parent(children, parent, relative=True, absolute=False):
+def parent(children, parent, relative=True, absolute=False, safe=True):
     assert isinstance(parent, DagNode), "parent must be DagNode"
 
     if not isinstance(children, (tuple, list)):
@@ -4384,7 +4652,7 @@ def parent(children, parent, relative=True, absolute=False):
 
     for child in children:
         assert isinstance(child, DagNode), "child must be DagNode"
-        parent.addChild(child)
+        parent.addChild(child, safe=safe)
 
 
 def objExists(obj):
@@ -4638,9 +4906,10 @@ class _AbstractAttribute(dict):
     Hidden = False  # Display in Attribute Editor?
 
     Array = False
+    IndexMatters = True
     Connectable = True
 
-    Keyable = True
+    Keyable = False
     ChannelBox = False
     AffectsAppearance = False
     AffectsWorldSpace = False
@@ -4702,6 +4971,7 @@ class _AbstractAttribute(dict):
                  affectsAppearance=None,
                  affectsWorldSpace=None,
                  array=False,
+                 indexMatters=None,
                  connectable=True,
                  help=None):
 
@@ -4777,6 +5047,10 @@ class _AbstractAttribute(dict):
         self.Fn.affectsAppearance = self["affectsAppearance"]
         self.Fn.affectsWorldSpace = self["affectsWorldSpace"]
         self.Fn.array = self["array"]
+
+        if self["indexMatters"] is False:
+            self.Fn.readable = False
+            self.Fn.indexMatters = False
 
         if self["min"] is not None:
             self.Fn.setMin(self["min"])
@@ -5004,8 +5278,7 @@ class Compound(_AbstractAttribute):
                          "writable",
                          "hidden",
                          "channelBox",
-                         "keyable",
-                         "array"):
+                         "keyable"):
                 child[attr] = self[attr]
 
             if child["default"] is None and default is not None:
