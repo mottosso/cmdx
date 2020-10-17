@@ -94,6 +94,7 @@ MAngle = om.MAngle
 TimeType = om.MTime
 DistanceType = om.MDistance
 AngleType = om.MAngle
+ColorType = om.MColor
 
 ExistError = type("ExistError", (RuntimeError,), {})
 DoNothing = None
@@ -3753,6 +3754,11 @@ def _python_to_plug(value, plug):
         for index, value in enumerate(value):
             _python_to_plug(value, plug[index])
 
+    elif isinstance(value, om.MColor):
+        _python_to_plug(value[0], plug[0])
+        _python_to_plug(value[1], plug[1])
+        _python_to_plug(value[2], plug[2])
+
     elif isinstance(value, om.MPoint):
         for index, value in enumerate(value):
             _python_to_plug(value, plug[index])
@@ -3815,6 +3821,11 @@ def _python_to_mod(value, plug, mod):
     elif isinstance(value, om.MVector):
         for index, value in enumerate(value):
             _python_to_mod(value, plug[index], mod)
+
+    elif isinstance(value, om.MColor):
+        _python_to_mod(value[0], plug[0], mod)
+        _python_to_mod(value[1], plug[1], mod)
+        _python_to_mod(value[2], plug[2], mod)
 
     elif isinstance(value, string_types):
         mod.newPlugValueString(mplug, value)
