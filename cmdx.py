@@ -5224,9 +5224,9 @@ class Angle(AbstractUnit):
     def default(self, cls=None):
         default = super(Angle, self).default(cls)
 
-        # When no unit was explicitly passed, assume degrees
+        # When no unit was explicitly passed, assume radians
         if not isinstance(default, om.MAngle):
-            default = om.MAngle(default, om.MAngle.kDegrees)
+            default = om.MAngle(default, om.MAngle.kRadians)
 
         return default
 
