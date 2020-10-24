@@ -14,7 +14,8 @@ from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
-from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
+from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1, \
+    OpenMayaAnim as oma1
 
 __version__ = "0.4.7"
 
@@ -357,11 +358,16 @@ class Singleton(type):
         # It didn't exist, let's create one
         # But first, make sure we instantiate the right type
         if mobject.hasFn(om.MFn.kDagNode):
-            sup = DagNode
+            if mobject.hasFn(om.MFn.kMesh):
+                sup = Mesh
+            else:
+                sup = DagNode
         elif mobject.hasFn(om.MFn.kSet):
             sup = ObjectSet
         elif mobject.hasFn(om.MFn.kAnimCurve):
             sup = AnimCurve
+        elif mobject.hasFn(om.MFn.kGeometryFilt):
+            sup = Deformer
         else:
             sup = Node
 
@@ -1246,9 +1252,15 @@ class DagNode(Node):
     def __init__(self, mobject, *args, **kwargs):
         super(DagNode, self).__init__(mobject, *args, **kwargs)
 
-        # Convert self._tfn to om.MFnTransform(self.dagPath())
-        # if you want to use its functions which require sWorld
         self._tfn = om.MFnTransform(mobject)
+
+        # additional cache placeholders
+        self._mdagpath = None
+
+        # Create self._dagtfn with om.MFnTransform(self.dagPath())
+        # if you want to use dag node functions which require sWorld
+        self._dagfn = None
+        self._dagtfn = None
 
     @protected
     def path(self):
@@ -1282,7 +1294,9 @@ class DagNode(Node):
 
         """
 
-        return om.MDagPath.getAPathTo(self._mobject)
+        if self._mdagpath is None:
+            self._mdagpath = om.MDagPath.getAPathTo(self._mobject)
+        return self._mdagpath
 
     @protected
     def shortestPath(self):
@@ -1781,6 +1795,100 @@ kTranslateMinY = 20
 kTranslateMinZ = 22
 
 
+class Mesh(DagNode):
+
+    _Fn = om.MFnMesh
+    _legacy = False
+    try:
+        _Its = {
+            om.MFn.kMeshEdgeComponent: om.MItMeshEdge,
+            om.MFn.kMeshFaceVertComponent: om.MItMeshFaceVertex,
+            om.MFn.kMeshPolygonComponent: om.MItMeshPolygon,
+            om.MFn.kMeshVertComponent: om.MItMeshVertex
+        }
+    except AttributeError:
+        _Its = {
+            om.MFn.kMeshEdgeComponent: om1.MItMeshEdge,
+            om.MFn.kMeshFaceVertComponent: om1.MItMeshFaceVertex,
+            om.MFn.kMeshPolygonComponent: om1.MItMeshPolygon,
+            om.MFn.kMeshVertComponent: om1.MItMeshVertex
+        }
+        _legacy = True
+
+    def __init__(self, mobject, *args, **kwargs):
+        super(Mesh, self).__init__(mobject, *args, **kwargs)
+        self._its = {}
+
+    def iterator(self, type):
+        """ returns mesh iterator of given component type
+
+        Arguments:
+            type (int): MFn mesh component type
+        """
+        if type not in self._Its:
+            log.warning("invalid iterator type")
+            return
+
+        it = self._its.get(type)
+        if it is None:
+            it = self._Its[type](self.dagPath())
+            self._its[type] = it
+        return it
+
+    @property
+    def numVertices(self):
+        self._fn.syncObject()
+        return self._fn.numVertices
+
+    def vertices(self, indices=None):
+        """Build a MeshVertex component object from current mesh
+
+        Arguments:
+            indices (list): series of vertex indices
+        """
+        k = om.MFn.kMeshVertComponent
+
+        cps = om.MFnSingleIndexedComponent().create(k)
+        fn = om.MFnSingleIndexedComponent(cps)
+        if indices is None:
+            fn.setCompleteData(self.numVertices)
+        else:
+            fn.addElements(indices)
+
+        return MeshVertex(self, cps)
+
+    def vertex(self, index):
+        """Build a MeshVertex component object from current mesh
+
+        Arguments:
+            index (int): vertex index
+        """
+        k = om.MFn.kMeshVertComponent
+
+        cps = om.MFnSingleIndexedComponent().create(k)
+        fn = om.MFnSingleIndexedComponent(cps)
+        fn.addElement(index)
+
+        return MeshVertex(self, cps)
+
+    vtx = vertex
+
+    def getPoints(self, space=sObject):
+        if space == sWorld:
+            if self._dagfn is None:
+                self._dagfn = self._Fn(self.dagPath())
+            else:
+                self._dagfn.syncObject()
+            return self._dagfn.getPoints(sWorld)
+        else:
+            self._fn.syncObject()
+            return self._fn.getPoints(space)
+
+    if ENABLE_PEP8:
+        num_vertices = numVertices
+        get_points = getPoints
+
+
 class ObjectSet(Node):
     """Support set-type operations on Maya sets
 
@@ -1793,11 +1901,24 @@ class ObjectSet(Node):
             than the path.
 
             Therefore, when adding a node to an object set, it's important
-            that it is added either a DAG or DG node depending on what it it.
+            that it is added either a DAG or DG node depending on what it is.
 
             This class manages this automatically.
 
     """
+
+    _legacy = False
+    try:
+        _Fn = om.MFnSet
+    except AttributeError:
+        _legacy = True
+
+    def __init__(self, mobject, *args, **kwargs):
+        super(ObjectSet, self).__init__(mobject, *args, **kwargs)
+
+        if self._legacy:
+            mobj = _encode1(self.name(namespace=True))
+            self._fn = om1.MFnSet(mobj)
 
     @protected
     def shortestPath(self):
@@ -1815,21 +1936,33 @@ class ObjectSet(Node):
 
         """
 
-        return self.update([member])
+        self.update([member])
 
     def remove(self, members):
-        mobj = _encode1(self.name(namespace=True))
-        selectionList = om1.MSelectionList()
-
         if not isinstance(members, (tuple, list)):
-            selectionList.add(members.path())
+            members = [members]
+
+        if self._legacy:
+            selectionList = om1.MSelectionList()
+
+            for member in members:
+                path = member.path()
+                if ' ' in path:
+                    [selectionList.add(_path) for _path in path.split()]
+                else:
+                    selectionList.add(path)
 
         else:
+            selectionList = om.MSelectionList()
             for member in members:
-                selectionList.add(member.path())
+                if isinstance(member, Node):
+                    selectionList.add(member._mobject)
+                elif isinstance(member, Plug):
+                    selectionList.add(member._mplug)
+                elif isinstance(member, Component):
+                    selectionList.add((member._mdagpath, member._mobject))
 
-        fn = om1.MFnSet(mobj)
-        fn.removeMembers(selectionList)
+        self._fn.removeMembers(selectionList)
 
     def update(self, members):
         """Add several `members` to set
@@ -1838,14 +1971,24 @@ class ObjectSet(Node):
             members (list): Series of cmdx.Node instances
 
         """
+        if self._legacy:
+            cmds.sets(list(map(str, members)), forceElement=self.path())
+        else:
+            selectionList = om.MSelectionList()
 
-        cmds.sets(list(map(str, members)), forceElement=self.path())
+            for member in members:
+                if isinstance(member, Node):
+                    selectionList.add(member._mobject)
+                elif isinstance(member, Plug):
+                    selectionList.add(member._mplug)
+                elif isinstance(member, Component):
+                    selectionList.add((member._mdagpath, member._mobject))
+
+            self._fn.addMembers(selectionList)
 
     def clear(self):
         """Remove all members from set"""
-        mobj = _encode1(self.name(namespace=True))
-        fn = om1.MFnSet(mobj)
-        fn.clear()
+        self._fn.clear()
 
     def sort(self, key=lambda o: (o.typeName, o.path())):
         """Sort members of set by `key`
@@ -1897,43 +2040,41 @@ class ObjectSet(Node):
             [|a, |b, |c]
 
         """
+        if self._legacy:
+            members = set()
 
-        members = set()
-
-        def recurse(objset):
-            for member in objset:
-                if member.isA(om.MFn.kSet):
-                    recurse(member)
-                elif type is not None:
-                    if type == member.typeName:
+            def recurse(objset):
+                for member in objset:
+                    if member.isA(om.MFn.kSet):
+                        recurse(member)
+                    elif type is not None:
+                        if type == member.typeName:
+                            members.add(member)
+                    else:
                         members.add(member)
-                else:
-                    members.add(member)
 
-        recurse(self)
+            recurse(self)
 
-        return list(members)
+            return list(members)
+        else:
+            return iter(self.members(type=type, flatten=True))
 
     def member(self, type=None):
         """Return the first member"""
 
         return next(self.members(type), None)
 
-    def members(self, type=None):
-        op = operator.eq
-        other = "typeId"
+    def members(self, type=None, flatten=False):
+        if self._legacy:
+            memberList = cmds.sets(self.name(namespace=True), query=True) or []
+            for member in encodeList(memberList):
+                if type is None or (isinstance(member, Node) and member.isA(type)):
+                    yield member
 
-        if isinstance(type, string_types):
-            other = "typeName"
-
-        if isinstance(type, (tuple, list)):
-            op = operator.contains
-
-        for node in cmds.sets(self.name(namespace=True), query=True) or []:
-            node = encode(node)
-
-            if not type or op(type, getattr(node._fn, other)):
-                yield node
+        else:
+            for member in encodeSelectionList(self._fn.getMembers(flatten)):
+                if type is None or (isinstance(member, Node) and member.isA(type)):
+                    yield member
 
 
 class AnimCurve(Node):
@@ -1975,6 +2116,49 @@ class AnimCurve(Node):
                     )
 
                 raise
+
+
+class Deformer(Node):
+
+    _legacy = False
+    try:
+        _Fn = oma.MFnGeometryFilter
+    except AttributeError:
+        _legacy = True
+
+    def __init__(self, mobject, *args, **kwargs):
+        super(Deformer, self).__init__(mobject, *args, **kwargs)
+
+        if self._legacy:
+            mobj = _encode1(self.name(namespace=True))
+            self._fn = oma1.MFnGeometryFilter(mobj)
+
+    @property
+    def deformerSet(self):
+        if self._legacy:
+            return encode(om1.MFnSet(self._fn.deformerSet()).name())
+        else:
+            return ObjectSet(self._fn.deformerSet)
+
+    def outputShapeIndex(self, shape):
+        """Return index for output shape
+
+        Arguments:
+            shape (DagNode): deformed shape
+
+        """
+        if not shape.isA(kShape):
+            raise RuntimeError("node is not a shape")
+
+        if self._legacy:
+            mobj = _encode1(shape.path())
+        else:
+            mobj = shape._mobject
+        return int(self._fn.indexForOutputShape(mobj))
+
+    if ENABLE_PEP8:
+        deformer_set = deformerSet
+        output_shape_index = outputShapeIndex
 
 
 class Plug(object):
@@ -2683,6 +2867,9 @@ class Plug(object):
         """
 
         return self._mplug.attribute().apiTypeStr
+
+    # typeName is used as key for ObjectSet.sort
+    typeName = None
 
     def typeClass(self):
         """Retrieve cmdx type of plug
@@ -3861,13 +4048,120 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
-def encode(path):
-    """Convert relative or absolute `path` to cmdx Node
+class MetaComponent(type):
 
-    Fastest conversion from absolute path to Node
+    @withTiming()
+    def __call__(cls, mdagpath, mobject, exists=True, modifier=None):
+
+        if mobject.hasFn(om.MFn.kMeshVertComponent):
+            sup = MeshVertex
+        else:
+            sup = Component
+
+        self = super(MetaComponent, sup).__call__(mdagpath, mobject, exists, modifier)
+        return self
+
+
+@add_metaclass(MetaComponent)
+class Component(object):
+    _Fn = om.MFnComponent
+
+    typeName = None
+
+    def __init__(self, node, mobject, exists=True, modifier=None):
+        """A Maya component container
+
+        Arguments:
+            mdagpath (maya.api.OpenMaya.MDagPath): Internal shape dagPath
+            mobject (maya.api.OpenMaya.MObject): Internal component object
+        """
+        assert isinstance(node, DagNode), "%s is not a DagNode" % node
+        assert isinstance(mobject, om.MObject), "%s is not a MObject" % mobject
+
+        self._node = node
+        self._mdagpath = node.dagPath()
+
+        self._mobject = mobject
+        self._fn = self._Fn(mobject)
+
+        self._it = None
+
+    def __str__(self):
+        """Return component selection string
+        """
+        sl = om.MSelectionList()
+        sl.add((self._mdagpath, self._mobject))
+        return ' '.join(sl.getSelectionStrings(0))
+
+    path = __str__
+
+    def __nonzero__(self):
+        return not self._fn.isEmpty
+
+    __bool__ = __nonzero__
+
+    @property
+    def complete(self):
+        return self._fn.isComplete
+
+
+class Component1D(Component):
+    _Fn = om.MFnSingleIndexedComponent
+
+    def __len__(self):
+        return self._fn.getCompleteData()
+
+    def __contains__(self, item):
+        return item in self._fn.getElements()
+
+    def __iter__(self):
+        """Iterate over the component indices
+        """
+        if self._fn.isComplete:
+            for i in xrange(len(self)):
+                yield i
+        else:
+            for i in self._fn.getElements():
+                yield i
+
+    def iterate(self):
+        """Iterate over the component iterator from the indices list"""
+        it = self._node.iterator()
+
+        for i in self:
+            it.setIndex(i)
+            yield i
+
+    def append(self, item):
+        if not isinstance(item, int):
+            raise TypeError()
+        if item >= self._node.numVertices:
+            raise IndexError()
+        if not self._fn.isComplete and item not in self:
+            self._fn.addElement(item)
+
+    @property
+    def elements(self):
+        return self._fn.getElements()
+
+
+class MeshVertex(Component1D):
+    _type = om.MFn.kMeshVertComponent
+
+    def position(self, space=sObject):
+        if self._it is None:
+            self._it = self._node.iterator(self._type)
+        return self._it.position(space)
+
+
+def encode(path):
+    """Convert relative or absolute `path` to cmdx objects
+
+    Fastest conversion from absolute path to Node/Plug/Component
 
     Arguments:
-        path (str): Absolute or relative path to DAG or DG node
+        path (str): Absolute or relative path to DAG/DG node,
+            plug or component
 
     """
 
@@ -3881,7 +4175,72 @@ def encode(path):
         raise ExistError("'%s' does not exist" % path)
 
     mobj = selectionList.getDependNode(0)
+    if "." in path:  # costs 0.2µs
+        # check whether path is a plug or a component
+        try:
+            mdag, cp = selectionList.getComponent(0)
+            node = DagNode(mobj)
+            node._mdagpath = mdag
+            return Component(node, cp)
+        except:
+            mplug = selectionList.getPlug(0)
+            return Plug(Node(mobj), mplug)
+
     return Node(mobj)
+
+
+def encodeList(pathList):
+    """Convert relative or absolute `pathList` to cmdx objects
+
+    Fastest conversion from absolute path to Node/Plug/Component
+
+    Arguments:
+        pathList (list): Absolute or relative path to DAG/DG nodes,
+            plugs or components
+
+    """
+    assert isinstance(pathList, (list, tuple)), "%s is not a list" % pathList
+
+    selectionList = om.MSelectionList()
+
+    for path in pathList:
+        try:
+            selectionList.add(path)
+        except RuntimeError:
+            raise ExistError("'%s' does not exist" % path)
+
+    for encoded in encodeSelectionList(selectionList):
+        yield encoded
+
+
+def encodeSelectionList(selectionList):
+    """Convert a native MSelectionList to cmdx objects
+
+    Arguments:
+        selectionList (om.MSelectionList)
+    """
+    assert isinstance(selectionList, om.MSelectionList), "%s is not a MSelectionList" % selectionList
+
+    selectionIter = om.MItSelectionList(selectionList)
+
+    while not selectionIter.isDone():
+        mobj = selectionIter.getDependNode()
+        itemType = selectionIter.itemType()
+
+        if itemType == om.MItSelectionList.kDagSelectionItem:
+            if selectionIter.hasComponents():
+                mdag, cp = selectionIter.getComponent()
+                node = DagNode(mobj)
+                node._mdagpath = mdag
+                yield Component(node, cp)
+            else:
+                yield Node(mobj)
+
+        elif itemType == om.MItSelectionList.kPlugSelectionItem:
+            mplug = selectionIter.getPlug()
+            yield Plug(Node(mobj), mplug)
+
+        selectionIter.next()
 
 
 def fromHash(code, default=None):
@@ -3950,6 +4309,8 @@ def asHex(mobj):
 
 
 if ENABLE_PEP8:
+    encode_list = encodeList
+    encode_selection_list = encodeSelectionList
     from_hash = fromHash
     from_hex = fromHex
     to_hash = toHash
@@ -3988,7 +4349,8 @@ def _encode1(path):
     """Convert `path` to Maya API 1.0 MObject
 
     Arguments:
-        path (str): Absolute or relative path to DAG or DG node
+        path (str): Absolute or relative path to DAG/DG node,
+            plug or component
 
     Raises:
         ExistError on `path` not existing
@@ -4004,6 +4366,19 @@ def _encode1(path):
 
     mobject = om1.MObject()
     selectionList.getDependNode(0, mobject)
+
+    if "." in path:  # costs 0.2µs
+        # check whether path is a plug or a component
+        try:
+            mdag = om1.MDagPath()
+            cp = om1.MObject()
+            selectionList.getDagPath(0, mdag, cp)
+            return (mdag, cp)
+        except:
+            mplug = om1.MPlug()
+            mplug = selectionList.getPlug(0, mplug)
+            return mplug
+
     return mobject
 
 
