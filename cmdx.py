@@ -1798,22 +1798,12 @@ kTranslateMinZ = 22
 class Mesh(DagNode):
 
     _Fn = om.MFnMesh
-    _legacy = False
-    try:
-        _Its = {
-            om.MFn.kMeshEdgeComponent: om.MItMeshEdge,
-            om.MFn.kMeshFaceVertComponent: om.MItMeshFaceVertex,
-            om.MFn.kMeshPolygonComponent: om.MItMeshPolygon,
-            om.MFn.kMeshVertComponent: om.MItMeshVertex
-        }
-    except AttributeError:
-        _Its = {
-            om.MFn.kMeshEdgeComponent: om1.MItMeshEdge,
-            om.MFn.kMeshFaceVertComponent: om1.MItMeshFaceVertex,
-            om.MFn.kMeshPolygonComponent: om1.MItMeshPolygon,
-            om.MFn.kMeshVertComponent: om1.MItMeshVertex
-        }
-        _legacy = True
+    _Its = {
+        om.MFn.kMeshEdgeComponent: om.MItMeshEdge,
+        om.MFn.kMeshFaceVertComponent: om.MItMeshFaceVertex,
+        om.MFn.kMeshPolygonComponent: om.MItMeshPolygon,
+        om.MFn.kMeshVertComponent: om.MItMeshVertex
+    }
 
     def __init__(self, mobject, *args, **kwargs):
         super(Mesh, self).__init__(mobject, *args, **kwargs)
@@ -1879,35 +1869,9 @@ class Mesh(DagNode):
 
 
 class ObjectSet(Node):
-    """Support set-type operations on Maya sets
+    """Support set-type operations on Maya sets"""
 
-    Caveats
-        1. MFnSet was introduced in Maya 2016, this class backports
-            that behaviour for Maya 2015 SP3
-
-        2. Adding a DAG node as a DG node persists its function set
-            such that when you query it, it'll return the name rather
-            than the path.
-
-            Therefore, when adding a node to an object set, it's important
-            that it is added either a DAG or DG node depending on what it is.
-
-            This class manages this automatically.
-
-    """
-
-    _legacy = False
-    try:
-        _Fn = om.MFnSet
-    except AttributeError:
-        _legacy = True
-
-    def __init__(self, mobject, *args, **kwargs):
-        super(ObjectSet, self).__init__(mobject, *args, **kwargs)
-
-        if self._legacy:
-            mobj = _encode1(self.name(namespace=True))
-            self._fn = om1.MFnSet(mobj)
+    _Fn = om.MFnSet
 
     @protected
     def shortestPath(self):
@@ -1931,25 +1895,15 @@ class ObjectSet(Node):
         if not isinstance(members, (tuple, list)):
             members = [members]
 
-        if self._legacy:
-            selectionList = om1.MSelectionList()
+        selectionList = om.MSelectionList()
 
-            for member in members:
-                path = member.path()
-                if ' ' in path:
-                    [selectionList.add(_path) for _path in path.split()]
-                else:
-                    selectionList.add(path)
-
-        else:
-            selectionList = om.MSelectionList()
-            for member in members:
-                if isinstance(member, Node):
-                    selectionList.add(member._mobject)
-                elif isinstance(member, Plug):
-                    selectionList.add(member._mplug)
-                elif isinstance(member, Component):
-                    selectionList.add((member._mdagpath, member._mobject))
+        for member in members:
+            if isinstance(member, Node):
+                selectionList.add(member._mobject)
+            elif isinstance(member, Plug):
+                selectionList.add(member._mplug)
+            elif isinstance(member, Component):
+                selectionList.add((member._mdagpath, member._mobject))
 
         self._fn.removeMembers(selectionList)
 
@@ -1960,20 +1914,17 @@ class ObjectSet(Node):
             members (list): Series of cmdx.Node instances
 
         """
-        if self._legacy:
-            cmds.sets(list(map(str, members)), forceElement=self.path())
-        else:
-            selectionList = om.MSelectionList()
+        selectionList = om.MSelectionList()
 
-            for member in members:
-                if isinstance(member, Node):
-                    selectionList.add(member._mobject)
-                elif isinstance(member, Plug):
-                    selectionList.add(member._mplug)
-                elif isinstance(member, Component):
-                    selectionList.add((member._mdagpath, member._mobject))
+        for member in members:
+            if isinstance(member, Node):
+                selectionList.add(member._mobject)
+            elif isinstance(member, Plug):
+                selectionList.add(member._mplug)
+            elif isinstance(member, Component):
+                selectionList.add((member._mdagpath, member._mobject))
 
-            self._fn.addMembers(selectionList)
+        self._fn.addMembers(selectionList)
 
     def clear(self):
         """Remove all members from set"""
@@ -2029,24 +1980,8 @@ class ObjectSet(Node):
             [|a, |b, |c]
 
         """
-        if self._legacy:
-            members = set()
 
-            def recurse(objset):
-                for member in objset:
-                    if member.isA(om.MFn.kSet):
-                        recurse(member)
-                    elif type is not None:
-                        if type == member.typeName:
-                            members.add(member)
-                    else:
-                        members.add(member)
-
-            recurse(self)
-
-            return list(members)
-        else:
-            return iter(self.members(type=type, flatten=True))
+        return iter(self.members(type=type, flatten=True))
 
     def member(self, type=None):
         """Return the first member"""
@@ -2054,16 +1989,10 @@ class ObjectSet(Node):
         return next(self.members(type), None)
 
     def members(self, type=None, flatten=False):
-        if self._legacy:
-            memberList = cmds.sets(self.name(namespace=True), query=True) or []
-            for member in encodeList(memberList):
-                if type is None or (isinstance(member, Node) and member.isA(type)):
-                    yield member
 
-        else:
-            for member in encodeSelectionList(self._fn.getMembers(flatten)):
-                if type is None or (isinstance(member, Node) and member.isA(type)):
-                    yield member
+        for member in encodeSelectionList(self._fn.getMembers(flatten)):
+            if type is None or (isinstance(member, Node) and member.isA(type)):
+                yield member
 
 
 class AnimCurve(Node):
@@ -2109,24 +2038,10 @@ class AnimCurve(Node):
 
 class Deformer(Node):
 
-    _legacy = False
-    try:
-        _Fn = oma.MFnGeometryFilter
-    except AttributeError:
-        _legacy = True
-
-    def __init__(self, mobject, *args, **kwargs):
-        super(Deformer, self).__init__(mobject, *args, **kwargs)
-
-        if self._legacy:
-            mobj = _encode1(self.name(namespace=True))
-            self._fn = oma1.MFnGeometryFilter(mobj)
+    _Fn = oma.MFnGeometryFilter
 
     def deformerSet(self):
-        if self._legacy:
-            return encode(om1.MFnSet(self._fn.deformerSet()).name())
-        else:
-            return ObjectSet(self._fn.deformerSet)
+        return ObjectSet(self._fn.deformerSet)
 
     def outputShapeIndex(self, shape):
         """Return index for output shape
@@ -2138,10 +2053,7 @@ class Deformer(Node):
         if not shape.isA(kShape):
             raise RuntimeError("node is not a shape")
 
-        if self._legacy:
-            mobj = _encode1(shape.path())
-        else:
-            mobj = shape._mobject
+        mobj = shape._mobject
         return int(self._fn.indexForOutputShape(mobj))
 
     if ENABLE_PEP8:
