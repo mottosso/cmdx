@@ -1819,8 +1819,10 @@ class Mesh(DagNode):
         super(Mesh, self).__init__(mobject, *args, **kwargs)
         self._its = {}
 
+        self._vtx = None
+
     def iterator(self, type):
-        """ returns mesh iterator of given component type
+        """Return mesh iterator of given component type
 
         Arguments:
             type (int): MFn mesh component type
@@ -1840,38 +1842,25 @@ class Mesh(DagNode):
         self._fn.syncObject()
         return self._fn.numVertices
 
-    def vertices(self, indices=None):
-        """Build a MeshVertex component object from current mesh
-
-        Arguments:
-            indices (list): series of vertex indices
+    @property
+    def vtx(self):
+        """Return the full vertex Component object of this mesh
         """
-        k = om.MFn.kMeshVertComponent
+        if self._vtx is None:
+            k = om.MFn.kMeshVertComponent
 
-        cps = om.MFnSingleIndexedComponent().create(k)
-        fn = om.MFnSingleIndexedComponent(cps)
-        if indices is None:
+            cps = om.MFnSingleIndexedComponent().create(k)
+            fn = om.MFnSingleIndexedComponent(cps)
             fn.setCompleteData(self.numVertices)
-        else:
-            fn.addElements(indices)
 
-        return MeshVertex(self, cps)
+            self._vtx = MeshVertex(self, cps)
 
-    def vertex(self, index):
-        """Build a MeshVertex component object from current mesh
+        # update length if it changed
+        numVertices = self.numVertices
+        if len(self._vtx) != numVertices:
+            self._vtx._fn.setCompleteData(numVertices)
 
-        Arguments:
-            index (int): vertex index
-        """
-        k = om.MFn.kMeshVertComponent
-
-        cps = om.MFnSingleIndexedComponent().create(k)
-        fn = om.MFnSingleIndexedComponent(cps)
-        fn.addElement(index)
-
-        return MeshVertex(self, cps)
-
-    vtx = vertex
+        return self._vtx
 
     def getPoints(self, space=sObject):
         if space == sWorld:
@@ -2133,7 +2122,6 @@ class Deformer(Node):
             mobj = _encode1(self.name(namespace=True))
             self._fn = oma1.MFnGeometryFilter(mobj)
 
-    @property
     def deformerSet(self):
         if self._legacy:
             return encode(om1.MFnSet(self._fn.deformerSet()).name())
@@ -4072,7 +4060,7 @@ class Component(object):
         """A Maya component container
 
         Arguments:
-            mdagpath (maya.api.OpenMaya.MDagPath): Internal shape dagPath
+            node (DagNode): cmdx shape instance
             mobject (maya.api.OpenMaya.MObject): Internal component object
         """
         assert isinstance(node, DagNode), "%s is not a DagNode" % node
@@ -4124,6 +4112,24 @@ class Component1D(Component):
             for i in self._fn.getElements():
                 yield i
 
+    def __getitem__(self, index):
+        cps = self._Fn().create(self._type)
+        fn = self._Fn(cps)
+        n = self.maxLength()
+        if n is None:
+            raise IndexError("{} doesn't support get item".format(self.__class__))
+
+        if isinstance(index, slice):
+            fn.addElements(range(*index.indices(n)))
+        elif isinstance(index, tuple):
+            fn.addElements(index)
+        else:
+            if index < 0:
+                index = n + 1 + index
+            fn.addElement(index)
+
+        return self.__class__(self._node, cps)
+
     def iterate(self):
         """Iterate over the component iterator from the indices list"""
         it = self._node.iterator()
@@ -4135,7 +4141,7 @@ class Component1D(Component):
     def append(self, item):
         if not isinstance(item, int):
             raise TypeError()
-        if item >= self._node.numVertices:
+        if item >= self.maxLength():
             raise IndexError()
         if not self._fn.isComplete and item not in self:
             self._fn.addElement(item)
@@ -4148,10 +4154,16 @@ class Component1D(Component):
 class MeshVertex(Component1D):
     _type = om.MFn.kMeshVertComponent
 
+    def maxLength(self):
+        return self._node.numVertices
+
     def position(self, space=sObject):
         if self._it is None:
             self._it = self._node.iterator(self._type)
         return self._it.position(space)
+
+    if ENABLE_PEP8:
+        max_length = maxLength
 
 
 def encode(path):
