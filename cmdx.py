@@ -991,6 +991,11 @@ class Node(object):
 
         """
 
+        if isinstance(attr, str):
+            node, attr = attr.rsplit(".", 1)
+            node = cmdx.encode(node)
+            attr = node[attr]
+
         if isinstance(attr, _AbstractAttribute):
             attr = attr.create()
 
@@ -4169,6 +4174,11 @@ def setAttr(attr, value, type=None):
 
     """
 
+    if isinstance(attr, str):
+        node, attr = attr.rsplit(".", 1)
+        node = cmdx.encode(node)
+        attr = node[attr]
+
     attr.write(value)
 
 
@@ -4243,8 +4253,8 @@ def listRelatives(node,
         >>> parent = createNode("transform")
         >>> child = createNode("transform", parent=parent)
         >>> listRelatives(child, parent=True) == [parent]
-        >>> listRelatives(str(child), parent=True) == [str(parent)]
         True
+        >>> listRelatives(str(child), parent=True) == [str(parent)]
         True
 
     """
@@ -4257,7 +4267,6 @@ def listRelatives(node,
 
     elif allDescendents:
         return list(node.descendents(type=type))
-
     elif shapes:
         return list(node.shapes(type=type))
 
@@ -4306,10 +4315,21 @@ def connectAttr(src, dst):
 
     """
 
+    if isinstance(attr, str):
+        node, attr = attr.rsplit(".", 1)
+        node = cmdx.encode(node)
+        attr = node[attr]
+
     src.connect(dst)
 
 
 def delete(*nodes):
+    
+    if isinstance(attr, str):
+        node, attr = attr.rsplit(".", 1)
+        node = cmdx.encode(node)
+        attr = node[attr]
+
     with DGModifier() as mod:
         for node in nodes:
             mod.delete(node)
