@@ -14,8 +14,7 @@ from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
-from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1, \
-    OpenMayaAnim as oma1
+from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
 __version__ = "0.4.7"
 
@@ -4290,18 +4289,6 @@ def _encode1(path):
 
     mobject = om1.MObject()
     selectionList.getDependNode(0, mobject)
-
-    if "." in path:  # costs 0.2µs
-        # check whether path is a plug or a component
-        try:
-            mdag = om1.MDagPath()
-            cp = om1.MObject()
-            selectionList.getDagPath(0, mdag, cp)
-            return (mdag, cp)
-        except:
-            mplug = om1.MPlug()
-            mplug = selectionList.getPlug(0, mplug)
-            return mplug
 
     return mobject
 
