@@ -1833,7 +1833,7 @@ class Mesh(DagNode):
         return self._fn.numVertices
 
     @property
-    def vtx(self):
+    def vertex(self):
         """Return the full vertex Component object of this mesh
         """
         if self._vtx is None:
@@ -1845,12 +1845,12 @@ class Mesh(DagNode):
 
             self._vtx = MeshVertex(self, cps)
 
-        # update length if it changed
-        numVertices = self.numVertices
-        if len(self._vtx) != numVertices:
-            self._vtx._fn.setCompleteData(numVertices)
+        else:
+            self._vtx.updateMaxLength()
 
         return self._vtx
+
+    vtx = vertex
 
     def getPoints(self, space=sObject):
         if space == sWorld:
@@ -4028,20 +4028,38 @@ class Component1D(Component):
     def __getitem__(self, index):
         cps = self._Fn().create(self._type)
         fn = self._Fn(cps)
-        n = self.maxLength()
-        if n is None:
-            raise IndexError("{} doesn't support get item".format(self.__class__))
+
+        maxLength = self.maxLength()
 
         if isinstance(index, slice):
-            fn.addElements(range(*index.indices(n)))
+            if maxLength is None:
+                raise IndexError("{} doesn't support slicing".format(type(self)))
+            fn.addElements(range(*index.indices(maxLength)))
         elif isinstance(index, tuple):
             fn.addElements(index)
         else:
             if index < 0:
-                index = n + 1 + index
+                if maxLength is None:
+                    raise IndexError(
+                        "{} doesn't support negative index".format(type(self))
+                    )
+                index = maxLength + 1 + index
             fn.addElement(index)
 
-        return self.__class__(self._node, cps)
+        cls = type(self)
+        return cls(self._node, cps)
+
+    def maxLength(self):
+        """Override this method for component types with known length"""
+        return
+
+    def updateMaxLength(self):
+        maxLength = self.maxLength()
+        if maxLength is None:
+            return
+
+        if len(self) != maxLength:
+            self._fn.setCompleteData(maxLength)
 
     def iterate(self):
         """Iterate over the component iterator from the indices list"""
@@ -4062,6 +4080,10 @@ class Component1D(Component):
     @property
     def elements(self):
         return self._fn.getElements()
+
+    if ENABLE_PEP8:
+        max_length = maxLength
+        update_max_length = updateMaxLength
 
 
 class MeshVertex(Component1D):
