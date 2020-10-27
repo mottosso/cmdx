@@ -1982,7 +1982,7 @@ class ObjectSet(Node):
 
         """
 
-        return iter(self.members(type=type, flatten=True))
+        return list(self.members(type=type, flatten=True))
 
     def member(self, type=None):
         """Return the first member"""
