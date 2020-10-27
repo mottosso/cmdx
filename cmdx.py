@@ -1251,15 +1251,16 @@ class DagNode(Node):
     def __init__(self, mobject, *args, **kwargs):
         super(DagNode, self).__init__(mobject, *args, **kwargs)
 
+        # Update self._tfn with om.MFnTransform(self.dagPath())
+        # if you want to use dag node functions which require sWorld
         self._tfn = om.MFnTransform(mobject)
 
-        # additional cache placeholders
+        # Additional cache placeholders
         self._mdagpath = None
 
-        # Create self._dagtfn with om.MFnTransform(self.dagPath())
-        # if you want to use dag node functions which require sWorld
-        self._dagfn = None
-        self._dagtfn = None
+        # Flags to indicate if self._fn and self._tfn are upgraded with MDagPath
+        self._dagfn = False
+        self._dagtfn = False
 
     @protected
     def path(self):
@@ -1853,14 +1854,15 @@ class Mesh(DagNode):
 
     def getPoints(self, space=sObject):
         if space == sWorld:
-            if self._dagfn is None:
-                self._dagfn = self._Fn(self.dagPath())
+            if self._dagfn:
+                self._fn.syncObject()
             else:
-                self._dagfn.syncObject()
-            return self._dagfn.getPoints(sWorld)
+                self._fn = self._Fn(self.dagPath())
+                self._dagfn = True
         else:
             self._fn.syncObject()
-            return self._fn.getPoints(space)
+
+        return self._fn.getPoints(space)
 
     if ENABLE_PEP8:
         num_vertices = numVertices
