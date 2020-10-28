@@ -1931,13 +1931,18 @@ class ObjectSet(Node):
         """Remove all members from set"""
         self._fn.clear()
 
-    def sort(self, key=lambda o: (o.typeName, o.path())):
+    def sort(self, key=None):
         """Sort members of set by `key`
 
         Arguments:
             key (lambda): See built-in `sorted(key)` for reference
 
         """
+        if key is None:
+            key = lambda o: (
+                o.typeName if isinstance(o, Node) else None,
+                o.path()
+            )
 
         members = sorted(
             self.members(),
@@ -2768,9 +2773,6 @@ class Plug(object):
         """
 
         return self._mplug.attribute().apiTypeStr
-
-    # typeName is used as key for ObjectSet.sort
-    typeName = None
 
     def typeClass(self):
         """Retrieve cmdx type of plug
@@ -3967,8 +3969,6 @@ class MetaComponent(type):
 class Component(object):
     _Fn = om.MFnComponent
 
-    typeName = None
-
     def __init__(self, node, mobject, exists=True, modifier=None):
         """A Maya component container
 
@@ -4174,7 +4174,10 @@ def encodeSelectionList(selectionList):
         mobj = selectionIter.getDependNode()
         itemType = selectionIter.itemType()
 
-        if itemType == om.MItSelectionList.kDagSelectionItem:
+        if itemType == om.MItSelectionList.kDNselectionItem:
+            yield Node(mobj)
+
+        elif itemType == om.MItSelectionList.kDagSelectionItem:
             if selectionIter.hasComponents():
                 mdag, cp = selectionIter.getComponent()
                 node = DagNode(mobj)
