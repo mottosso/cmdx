@@ -1837,14 +1837,8 @@ class Mesh(DagNode):
         """Return the full vertex Component object of this mesh
         """
         if self._vtx is None:
-            k = om.MFn.kMeshVertComponent
-
-            cps = om.MFnSingleIndexedComponent().create(k)
-            fn = om.MFnSingleIndexedComponent(cps)
-            fn.setCompleteData(self.numVertices)
-
-            self._vtx = MeshVertex(self, cps)
-
+            mobject = MeshVertex.create(self.numVertices)
+            self._vtx = MeshVertex(self, mobject)
         else:
             self._vtx.updateMaxLength()
 
@@ -3951,36 +3945,41 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
-class MetaComponent(type):
+class Component(object):
+    """Initialize Component
 
-    @withTiming()
-    def __call__(cls, mdagpath, mobject, exists=True, modifier=None):
+    Private members:
+        node (Node): shape node instance which own desired components
+        mobject (om.MObject): Wrap this MObject
+        fn (om.MFnComponent): The corresponding function set
+        it (om.MIteratorType): Iterator linked to this component object
+
+    """
+
+    _Fn = om.MFnComponent
+    _Type = None
+
+    def __new__(cls, node, mobject):
 
         if mobject.hasFn(om.MFn.kMeshVertComponent):
             sup = MeshVertex
         else:
             sup = Component
 
-        self = super(MetaComponent, sup).__call__(mdagpath, mobject, exists, modifier)
-        return self
+        return super(Component, sup).__new__(sup)
 
-
-@add_metaclass(MetaComponent)
-class Component(object):
-    _Fn = om.MFnComponent
-
-    def __init__(self, node, mobject, exists=True, modifier=None):
-        """A Maya component container
-
-        Arguments:
-            node (DagNode): cmdx shape instance
-            mobject (maya.api.OpenMaya.MObject): Internal component object
+    def __init__(self, node, mobject):
         """
+        Arguments:
+            node (DagNode): shape node instance
+            mobject (maya.api.OpenMaya.MObject): Internal component object
+
+        """
+
         assert isinstance(node, DagNode), "%s is not a DagNode" % node
         assert isinstance(mobject, om.MObject), "%s is not a MObject" % mobject
 
         self._node = node
-        self._mdagpath = node.dagPath()
 
         self._mobject = mobject
         self._fn = self._Fn(mobject)
@@ -3988,10 +3987,10 @@ class Component(object):
         self._it = None
 
     def __str__(self):
-        """Return component selection string
-        """
+        """Return component selection string"""
+
         sl = om.MSelectionList()
-        sl.add((self._mdagpath, self._mobject))
+        sl.add((self._node.dagPath(), self._mobject))
         return ' '.join(sl.getSelectionStrings(0))
 
     path = __str__
@@ -4006,7 +4005,7 @@ class Component(object):
         return self._fn.isComplete
 
 
-class Component1D(Component):
+class _Component1D(Component):
     _Fn = om.MFnSingleIndexedComponent
 
     def __len__(self):
@@ -4049,6 +4048,22 @@ class Component1D(Component):
         cls = type(self)
         return cls(self._node, cps)
 
+    @classmethod
+    def create(cls, length=None):
+        """Return a new MObject of the corresponding component type"""
+
+        if cls._Type is None:
+            raise TypeError("{} has no constructor implemented".format(cls))
+
+        Fn = cls._Fn()
+        mobject = Fn.create(cls._Type)
+        fn = cls._Fn(mobject)
+
+        if length is not None:
+            fn.setCompleteData(length)
+
+        return mobject
+
     def maxLength(self):
         """Override this method for component types with known length"""
         return
@@ -4071,10 +4086,13 @@ class Component1D(Component):
 
     def append(self, item):
         if not isinstance(item, int):
-            raise TypeError()
-        if item >= self.maxLength():
-            raise IndexError()
-        if not self._fn.isComplete and item not in self:
+            raise TypeError("component index must be an integer")
+
+        maxLength = self.maxLength()
+        if maxLength is not None and (item >= maxLength or item < 0):
+            raise IndexError("component index out of range")
+
+        if not self._fn.isComplete:
             self._fn.addElement(item)
 
     @property
@@ -4086,15 +4104,15 @@ class Component1D(Component):
         update_max_length = updateMaxLength
 
 
-class MeshVertex(Component1D):
-    _type = om.MFn.kMeshVertComponent
+class MeshVertex(_Component1D):
+    _Type = om.MFn.kMeshVertComponent
 
     def maxLength(self):
         return self._node.numVertices
 
     def position(self, space=sObject):
         if self._it is None:
-            self._it = self._node.iterator(self._type)
+            self._it = self._node.iterator(self._Type)
         return self._it.position(space)
 
     if ENABLE_PEP8:
