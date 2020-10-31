@@ -1988,7 +1988,7 @@ class ObjectSet(Node):
 
     def members(self, type=None, flatten=False):
 
-        for member in encodeSelectionList(self._fn.getMembers(flatten)):
+        for member in _encodeSelectionList(self._fn.getMembers(flatten)):
             if type is None or (isinstance(member, Node) and member.isA(type)):
                 yield member
 
@@ -4172,11 +4172,11 @@ def encodeList(pathList):
         except RuntimeError:
             raise ExistError("'%s' does not exist" % path)
 
-    for encoded in encodeSelectionList(selectionList):
+    for encoded in _encodeSelectionList(selectionList):
         yield encoded
 
 
-def encodeSelectionList(selectionList):
+def _encodeSelectionList(selectionList):
     """Convert a native MSelectionList to cmdx objects
 
     Arguments:
@@ -4276,7 +4276,6 @@ def asHex(mobj):
 
 if ENABLE_PEP8:
     encode_list = encodeList
-    encode_selection_list = encodeSelectionList
     from_hash = fromHash
     from_hex = fromHex
     to_hash = toHash
