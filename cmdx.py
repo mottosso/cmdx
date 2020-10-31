@@ -1932,11 +1932,9 @@ class ObjectSet(Node):
             key (lambda): See built-in `sorted(key)` for reference
 
         """
-        if key is None:
-            key = lambda o: (
-                o.typeName if isinstance(o, Node) else None,
-                o.path()
-            )
+        key = key or (
+            lambda o: (o.typeName if isinstance(o, Node) else None, o.path())
+        )
 
         members = sorted(
             self.members(),
