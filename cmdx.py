@@ -4001,7 +4001,7 @@ class Component(object):
     __bool__ = __nonzero__
 
     @property
-    def complete(self):
+    def isComplete(self):
         return self._fn.isComplete
 
 
