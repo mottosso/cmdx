@@ -493,7 +493,7 @@ TypeError: listConnections() got an unexpected keyword argument 'source'
 
 The reason for this limitation is because the functions `cmds`
 
-- Submit an [issue](issues) or [pull-request](#fork) with commands you miss
+- Submit an [issue](issues) or [pull-request](#fork) with commands you miss.
 
 <br>
 
