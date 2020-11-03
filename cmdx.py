@@ -993,7 +993,7 @@ class Node(object):
 
         if isinstance(attr, str):
             node, attr = attr.rsplit(".", 1)
-            node = cmdx.encode(node)
+            node = encode(node)
             attr = node[attr]
 
         if isinstance(attr, _AbstractAttribute):
@@ -4176,7 +4176,7 @@ def setAttr(attr, value, type=None):
 
     if isinstance(attr, str):
         node, attr = attr.rsplit(".", 1)
-        node = cmdx.encode(node)
+        node = encode(node)
         attr = node[attr]
 
     attr.write(value)
@@ -4315,23 +4315,27 @@ def connectAttr(src, dst):
 
     """
 
-    if isinstance(attr, str):
-        node, attr = attr.rsplit(".", 1)
-        node = cmdx.encode(node)
-        attr = node[attr]
+    if isinstance(src, str):
+        node, src = src.rsplit(".", 1)
+        node = encode(node)
+        src = node[src]
+
+    if isinstance(dst, str):
+        node, dst = dst.rsplit(".", 1)
+        node = encode(node)
+        dst = node[dst]
 
     src.connect(dst)
 
 
 def delete(*nodes):
-    
-    if isinstance(attr, str):
-        node, attr = attr.rsplit(".", 1)
-        node = cmdx.encode(node)
-        attr = node[attr]
 
     with DGModifier() as mod:
         for node in nodes:
+            if isinstance(node, str):
+                node, node = node.rsplit(".", 1)
+                node = encode(node)
+                node = node[node]
             mod.delete(node)
 
 
