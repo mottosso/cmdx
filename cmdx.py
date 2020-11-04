@@ -5129,10 +5129,30 @@ class String(_AbstractAttribute):
     Type = om.MFnData.kString
     Default = ""
 
-    # string attributes can't have default values (http://help.autodesk.com/cloudhelp/2020/ENU/Maya-Tech-Docs/Commands/addAttr.html#flagdefaultValue),
-    # or at least it isn't saved in scenes (https://github.com/mottosso/cmdx/issues/34)
-    # -> don't pass the default to OpenMaya, instead set it during Node.addAttr()
     def default(self, cls=None):
+        """
+        string attributes can't have default values (http://help.autodesk.com/cloudhelp/2020/ENU/Maya-Tech-Docs/Commands/addAttr.html#flagdefaultValue),
+        or at least it isn't saved in scenes (https://github.com/mottosso/cmdx/issues/34)
+        -> don't pass the default to OpenMaya, instead set it during Node.addAttr()
+
+        Test:
+            >>> # new scene with a sphere with "my_string" attribute
+            >>> cmds.file(new=True, force=True)
+            >>> sphere_name = cmds.sphere()[0]
+            >>> sphere = cmdx.encode(sphere_name)
+            >>> sphere.add_attr(cmdx.String("my_string", default="foo"))
+            >>> 
+            >>> # save scene
+            >>> scene_path = "test.ma"
+            >>> cmds.file(rename=scene_path)
+            >>> cmds.file(save=True, type="mayaAscii")
+            >>> 
+            >>> # reload scene & check "my_string"
+            >>> cmds.file(scene_path, open=True, force=True)
+            >>> sphere = cmdx.encode(sphere_name)
+            >>> sphere["my_string"] == "foo"
+            True
+        """
         return None
 
     def read(self, data):
