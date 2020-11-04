@@ -5153,8 +5153,8 @@ class String(_AbstractAttribute):
             >>> sphere = cmdx.encode(sphere_name)
             >>> print(sphere)
             |nurbsSphere1
-            >>> sphere["my_string"]
-            "foo"
+            >>> str(sphere["my_string"])
+            foo
         """
         return None
 
