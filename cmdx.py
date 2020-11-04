@@ -5152,7 +5152,6 @@ class String(_AbstractAttribute):
             >>> _ = cmds.file(save=True, type="mayaAscii")
             >>> # reload scene & check "my_string"
             >>> _ = cmds.file(scene_path, open=True, force=True)
-            >>> scene_file.close()  # deletes the temp file (supposedly)
             >>> sphere = cmdx.encode(sphere_name)
             >>> str(sphere)
             '|nurbsSphere1'
@@ -5161,8 +5160,9 @@ class String(_AbstractAttribute):
             ...     with open(scene_path) as f: print(f.read())
             >>> sphere["my_string"].name()
             'my_string'
+            >>> scene_file.close()  # deletes the temp file (supposedly)
             >>> sphere["my_string"].read()
-            'foo'
+            u'foo'
         """
         return None
 
