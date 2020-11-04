@@ -512,7 +512,7 @@ class Node(object):
             key, unit = key
 
             # Convert value to the given unit
-            if isinstance(value, (list, tuple)):
+            if isinstance(value, (list, tuple, om.MVector)):
                 value = list(unit(v) for v in value)
             else:
                 value = unit(value)
