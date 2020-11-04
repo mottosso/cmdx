@@ -5148,7 +5148,7 @@ class String(_AbstractAttribute):
             >>> import tempfile
             >>> scene_file = tempfile.NamedTemporaryFile(prefix="test_string_attribute_", suffix=".ma")
             >>> scene_path = scene_file.name
-            >>> scene_path = cmds.file(rename="test.ma")
+            >>> _ = cmds.file(rename=scene_path)
             >>> _ = cmds.file(save=True, type="mayaAscii")
             >>> # reload scene & check "my_string"
             >>> _ = cmds.file(scene_path, open=True, force=True)
