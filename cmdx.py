@@ -5138,25 +5138,23 @@ class String(_AbstractAttribute):
         Test:
             >>> import cmdx
             >>> # new scene with a sphere with "my_string" attribute
-            >>> cmds.file(new=True, force=True)
+            >>> _ = cmds.file(new=True, force=True)
             >>> sphere_name = cmds.sphere()[0]
             >>> sphere = cmdx.encode(sphere_name)
             >>> sphere.add_attr(cmdx.String("my_string", default="foo"))
             >>> 
             >>> # save scene
             >>> scene_path = "test.ma"
-            >>> cmds.file(rename=scene_path)
-            >>> cmds.file(save=True, type="mayaAscii")
+            >>> _ = cmds.file(rename=scene_path)
+            >>> _ = cmds.file(save=True, type="mayaAscii")
             >>> 
             >>> # reload scene & check "my_string"
-            >>> cmds.file(scene_path, open=True, force=True)
-            >>> print(sphere_name)
+            >>> _ = cmds.file(scene_path, open=True, force=True)
             >>> sphere = cmdx.encode(sphere_name)
             >>> print(sphere)
-            >>> my_string = sphere["my_string"]
-            >>> print(my_string)
-            >>> my_string == "foo"
-            True
+            |nurbsSphere1
+            >>> sphere["my_string"]
+            "foo"
         """
         return None
 
