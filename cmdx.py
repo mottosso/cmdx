@@ -10,6 +10,7 @@ if MYPY:
     long = int
     buffer = bytearray
     file = object
+del MYPY
 
 import os
 import sys
