@@ -5254,11 +5254,11 @@ class Distance(AbstractUnit):
 
 
 class Compound(_AbstractAttribute):
-    Fn = om.MFnCompoundAttribute()
     Multi = None
 
     def __init__(self, name, children=None, **kwargs):
-        self.Fn = om.MFnCompoundAttribute()  # see https://github.com/mottosso/cmdx/issues/5#issuecomment-717330454
+        # see https://github.com/mottosso/cmdx/issues/5#issuecomment-717330454
+        self.Fn = om.MFnCompoundAttribute()
         if not children and self.Multi:
             default = kwargs.pop("default", None)
             children, Type = self.Multi
