@@ -5143,7 +5143,7 @@ class String(_AbstractAttribute):
             >>> sphere = cmdx.encode(sphere_name)
             >>> sphere.add_attr(cmdx.String("my_string", default="foo"))
             >>> sphere["my_string"].name()
-            my_string
+            'my_string'
             >>> # save scene
             >>> scene_path = "test.ma"
             >>> _ = cmds.file(rename=scene_path)
@@ -5154,7 +5154,7 @@ class String(_AbstractAttribute):
             >>> print(sphere)
             |nurbsSphere1
             >>> sphere["my_string"].name()
-            my_string
+            'my_string'
             >>> sphere["my_string"].read()
             foo
         """
