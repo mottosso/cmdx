@@ -5142,18 +5142,20 @@ class String(_AbstractAttribute):
             >>> sphere_name = cmds.sphere()[0]
             >>> sphere = cmdx.encode(sphere_name)
             >>> sphere.add_attr(cmdx.String("my_string", default="foo"))
-            >>> 
+            >>> sphere["my_string"].name()
+            my_string
             >>> # save scene
             >>> scene_path = "test.ma"
             >>> _ = cmds.file(rename=scene_path)
             >>> _ = cmds.file(save=True, type="mayaAscii")
-            >>> 
             >>> # reload scene & check "my_string"
             >>> _ = cmds.file(scene_path, open=True, force=True)
             >>> sphere = cmdx.encode(sphere_name)
             >>> print(sphere)
             |nurbsSphere1
-            >>> str(sphere["my_string"])
+            >>> sphere["my_string"].name()
+            my_string
+            >>> sphere["my_string"].read()
             foo
         """
         return None
