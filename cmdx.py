@@ -5146,14 +5146,15 @@ class String(_AbstractAttribute):
             'my_string'
             >>> # save scene
             >>> scene_path = cmds.file(rename="test.ma")
-            >>> print(scene_path)
             >>> _ = cmds.file(save=True, type="mayaAscii")
-            >>> with open(scene_path) as f: print(f.read())
             >>> # reload scene & check "my_string"
             >>> _ = cmds.file(scene_path, open=True, force=True)
             >>> sphere = cmdx.encode(sphere_name)
             >>> str(sphere)
-            |nurbsSphere1
+            '|nurbsSphere1'
+            >>> if sphere["my_string"].name() != "my_string":
+            ...     print(scene_path)
+            ...     with open(scene_path) as f: print(f.read())
             >>> sphere["my_string"].name()
             'my_string'
             >>> sphere["my_string"].read()
