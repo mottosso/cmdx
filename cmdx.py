@@ -956,7 +956,7 @@ class Node(object):
 
         del self[key]
 
-    def dump(self, ignore_error=True):
+    def dump(self, ignore_error=True, preserve_order=False):
         """Return dictionary of all attributes
 
         Example:
@@ -971,7 +971,7 @@ class Node(object):
 
         """
 
-        attrs = {}
+        attrs = collections.OrderedDict() if preserve_order else {}
         count = self._fn.attributeCount()
         for index in range(count):
             obj = self._fn.attribute(index)
@@ -991,9 +991,9 @@ class Node(object):
 
         return attrs
 
-    def dumps(self, indent=4, sortKeys=True):
+    def dumps(self, indent=4, sort_keys=True, preserve_order=False):
         """Return a JSON compatible dictionary of all attributes"""
-        return json.dumps(self.dump(), indent=indent, sort_keys=sortKeys)
+        return json.dumps(self.dump(preserve_order), indent=indent, sort_keys=sort_keys)
 
     def type(self):
         """Return type name
