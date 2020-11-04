@@ -5136,6 +5136,7 @@ class String(_AbstractAttribute):
         -> don't pass the default to OpenMaya, instead set it during Node.addAttr()
 
         Test:
+            >>> import cmdx
             >>> # new scene with a sphere with "my_string" attribute
             >>> cmds.file(new=True, force=True)
             >>> sphere_name = cmds.sphere()[0]
