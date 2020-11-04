@@ -5137,7 +5137,7 @@ class String(_AbstractAttribute):
 
         Test:
             >>> import os
-            >>> os.environ["CMDX_SAFE_MODE"] = "1"  # disable caching (node/plug reuse)
+            >>> os.environ["CMDX_SAFE_MODE"] = "True"  # disable caching (node/plug reuse)
             >>> import cmdx
             >>> # new scene with a sphere with "my_string" attribute
             >>> _ = cmds.file(new=True, force=True)
