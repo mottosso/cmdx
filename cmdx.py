@@ -1022,10 +1022,20 @@ class Node(object):
 
         """
 
-        if isinstance(attr, _AbstractAttribute):
-            attr = attr.create()
+        attr_obj = attr.create() if isinstance(attr, _AbstractAttribute) else attr
+        self._fn.addAttribute(attr_obj)
 
-        self._fn.addAttribute(attr)
+        # workaround for string attribute default value, see String.default() for details
+        def setAttr(attr):
+            if isinstance(attr, String):
+                default = _AbstractAttribute.default(attr)
+                if default:
+                    self.findPlug(attr["name"]).setString(default)
+            elif isinstance(attr, Compound):
+                for child in attr["children"]:
+                    setAttr(child)
+        setAttr(attr)
+
 
     def hasAttr(self, attr):
         """Return whether or not `attr` exists
@@ -5119,9 +5129,11 @@ class String(_AbstractAttribute):
     Type = om.MFnData.kString
     Default = ""
 
+    # string attributes can't have default values (http://help.autodesk.com/cloudhelp/2020/ENU/Maya-Tech-Docs/Commands/addAttr.html#flagdefaultValue),
+    # or at least it isn't saved in scenes (https://github.com/mottosso/cmdx/issues/34)
+    # -> don't pass the default to OpenMaya, instead set it during Node.addAttr()
     def default(self, cls=None):
-        default = str(super(String, self).default(cls))
-        return om.MFnStringData().create(default)
+        return None
 
     def read(self, data):
         return data.inputValue(self["mobject"]).asString()
