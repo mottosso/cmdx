@@ -338,7 +338,11 @@ class Singleton(type):
     _instances = {}
 
     @withTiming()
-    def __call__(cls, mobject, exists=True, modifier=None):
+    def __call__(cls, mobject, exists=True, modifier=None):  # type: (Type, Union[om.MObject, str], bool, bool) -> Node
+        # string constructor -> use encode()
+        if isinstance(mobject, string_types):
+            return encode(mobject)
+
         handle = om.MObjectHandle(mobject)
         hsh = handle.hashCode()
         hx = "%x" % hsh
