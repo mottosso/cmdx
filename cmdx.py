@@ -5150,8 +5150,12 @@ class String(_AbstractAttribute):
             >>> 
             >>> # reload scene & check "my_string"
             >>> cmds.file(scene_path, open=True, force=True)
+            >>> print(sphere_name)
             >>> sphere = cmdx.encode(sphere_name)
-            >>> sphere["my_string"] == "foo"
+            >>> print(sphere)
+            >>> my_string = sphere["my_string"]
+            >>> print(my_string)
+            >>> my_string == "foo"
             True
         """
         return None
