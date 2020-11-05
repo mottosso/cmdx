@@ -7,6 +7,12 @@ from maya import standalone, cmds
 
 
 def main(fname=None):
+    """
+    Main function.
+
+    Args:
+        fname: (str): write your description
+    """
     standalone.initialize()
 
     blacklist = (

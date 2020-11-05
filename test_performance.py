@@ -24,6 +24,19 @@ def Compare(method,
             repeat=4,
             precision=1,
             quiet=True):
+    """
+    Run a task.
+
+    Args:
+        method: (str): write your description
+        task: (todo): write your description
+        func: (todo): write your description
+        setup: (todo): write your description
+        number: (int): write your description
+        repeat: (int): write your description
+        precision: (int): write your description
+        quiet: (todo): write your description
+    """
 
     setup = setup or (lambda: None)
 
@@ -57,6 +70,13 @@ def Compare(method,
 
 @contextlib.contextmanager
 def environment(key, value=None):
+    """
+    A context manager which environment variables in the context.
+
+    Args:
+        key: (str): write your description
+        value: (todo): write your description
+    """
     env = os.environ.copy()
     os.environ[key] = value or "1"
     try:
@@ -69,6 +89,12 @@ def environment(key, value=None):
 
 @contextlib.contextmanager
 def pop_environment(key):
+    """
+    A context manager that environment.
+
+    Args:
+        key: (str): write your description
+    """
     env = os.environ.copy()
     os.environ.pop(key, None)
     try:
@@ -80,6 +106,12 @@ def pop_environment(key):
 
 
 def New(setup=None):
+    """
+    Create a new setup. pysetup.
+
+    Args:
+        setup: (todo): write your description
+    """
     cmds.file(new=True, force=True)
     (setup or (lambda: None))()
 

@@ -163,6 +163,12 @@ texinfo_documents = [
 
 
 def setup(app):
+    """
+    Setup the stylesheet.
+
+    Args:
+        app: (todo): write your description
+    """
     app.add_stylesheet('css/cmdx.css')
     app.add_stylesheet('css/pygments.css')
 

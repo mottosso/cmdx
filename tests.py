@@ -23,11 +23,21 @@ __maya_version__ = int(cmds.about(version=True))
 
 
 def new_scene():
+    """
+    Create a new scene
+
+    Args:
+    """
     cmds.file(new=True, force=True)
 
 
 @contextlib.contextmanager
 def tempdir():
+    """
+    Create a temporary directory.
+
+    Args:
+    """
     tmp = tempfile.mkdtemp()
     try:
         yield tmp
@@ -37,6 +47,13 @@ def tempdir():
 
 @contextlib.contextmanager
 def environment(key, value=None):
+    """
+    A context manager for the environment variables in the environment.
+
+    Args:
+        key: (str): write your description
+        value: (todo): write your description
+    """
     env = os.environ.copy()
     os.environ[key] = value or "1"
     try:
@@ -50,6 +67,12 @@ def environment(key, value=None):
 
 @contextlib.contextmanager
 def pop_environment(key):
+    """
+    A context manager for context.
+
+    Args:
+        key: (str): write your description
+    """
     env = os.environ.copy()
     os.environ.pop(key)
     try:

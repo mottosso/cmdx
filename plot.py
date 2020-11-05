@@ -46,6 +46,19 @@ def Test(method,
          number=1000,
          repeat=5,
          precision=1):
+    """
+    Execute a task.
+
+    Args:
+        method: (str): write your description
+        task: (int): write your description
+        func: (todo): write your description
+        setup: (todo): write your description
+        teardown: (int): write your description
+        number: (int): write your description
+        repeat: (int): write your description
+        precision: (int): write your description
+    """
 
     results = list()
 
@@ -82,6 +95,12 @@ def Test(method,
 
 
 def New(setup=None):
+    """
+    Create a new setup. pysetup.
+
+    Args:
+        setup: (todo): write your description
+    """
     cmds.file(new=True, force=True)
     (setup or (lambda: None))()
 
@@ -192,6 +211,11 @@ root2 = cmdx.createNode("transform")
 child = cmdx.createNode("transform", parent=root1)
 
 def teardown():
+    """
+    Reverown command.
+
+    Args:
+    """
     cmds.parent("transform3", "transform1", r=1)
 
 melparent = 'parent -r "transform3" "transform2";'
@@ -237,6 +261,11 @@ node2 = cmdx.createNode("transform")
 
 
 def teardown():
+    """
+    Teardown command.
+
+    Args:
+    """
     cmds.disconnectAttr("transform1.tx", "transform2.tx")
 
 
@@ -249,6 +278,11 @@ Test("PyMEL", "connectAttr", lambda: pm.connectAttr("transform1.tx", "transform2
 New()
 
 def teardown():
+    """
+    Teardown command.
+
+    Args:
+    """
     cmds.deleteAttr("transform1.myAttr")
 
 
@@ -280,6 +314,13 @@ sys.modules["pkg_resources"] = type("Mock", (object,), {
 
 
 def stacked(data, dirname):
+    """
+    Stacked chart.
+
+    Args:
+        data: (array): write your description
+        dirname: (str): write your description
+    """
     data = deepcopy(data)
     tasks = sorted(data.keys())
 
@@ -317,6 +358,13 @@ def stacked(data, dirname):
 
 
 def horizontal(data, dirname):
+    """
+    Write chart chart.
+
+    Args:
+        data: (dict): write your description
+        dirname: (str): write your description
+    """
     data = deepcopy(data)
     order = ("PyMEL", "mel", "cmds", "cmdx")
 
@@ -337,6 +385,14 @@ def horizontal(data, dirname):
 
 
 def average(x, y, data):
+    """
+    Average the average
+
+    Args:
+        x: (todo): write your description
+        y: (todo): write your description
+        data: (dict): write your description
+    """
     data = deepcopy(data)
 
     times_faster = list()

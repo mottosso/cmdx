@@ -116,6 +116,13 @@ history = dict()
 
 class ModifierError(RuntimeError):
     def __init__(self, history):
+        """
+        Initialize task history.
+
+        Args:
+            self: (todo): write your description
+            history: (list): write your description
+        """
         tasklist = list()
         for task in history:
             cmd, args, kwargs = task
@@ -144,6 +151,12 @@ def withTiming(text="{func}() {time:.2f} ns"):
     """
 
     def timings_decorator(func):
+        """
+        Decorator for functions that the execution time.
+
+        Args:
+            func: (todo): write your description
+        """
         if not TIMINGS:
             # Do not wrap the function.
             # This yields zero cost to runtime performance
@@ -151,6 +164,11 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         @wraps(func)
         def func_wrapper(*args, **kwargs):
+            """
+            Decorator to log a function.
+
+            Args:
+            """
             t0 = time.clock()
 
             try:
@@ -177,6 +195,11 @@ def protected(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
+        """
+        Wraps a function.
+
+        Args:
+        """
         if args[0]._destroyed:
             raise ExistError("Cannot perform operation on deleted node")
         return func(*args, **kwargs)
@@ -192,6 +215,12 @@ def add_metaclass(metaclass):
     """
 
     def wrapper(cls):
+        """
+        Creates a metaclass class.
+
+        Args:
+            cls: (todo): write your description
+        """
         orig_vars = cls.__dict__.copy()
         slots = orig_vars.get('__slots__')
         if slots is not None:
@@ -254,11 +283,26 @@ class _Unit(int):
     """
 
     def __new__(cls, unit, enum):
+        """
+        Return a new : class :.
+
+        Args:
+            cls: (todo): write your description
+            unit: (str): write your description
+            enum: (int): write your description
+        """
         self = super(_Unit, cls).__new__(cls, enum)
         self._unit = unit
         return self
 
     def __call__(self, enum):
+        """
+        Calls the value of the call.
+
+        Args:
+            self: (todo): write your description
+            enum: (int): write your description
+        """
         return self._unit(enum, self)
 
 
@@ -339,6 +383,15 @@ class Singleton(type):
 
     @withTiming()
     def __call__(cls, mobject, exists=True, modifier=None):
+        """
+        Returns a callable instance.
+
+        Args:
+            cls: (todo): write your description
+            mobject: (todo): write your description
+            exists: (array): write your description
+            modifier: (todo): write your description
+        """
         handle = om.MObjectHandle(mobject)
         hsh = handle.hashCode()
         hx = "%x" % hsh
@@ -406,15 +459,34 @@ class Node(object):
             return str(self) == str(other)
 
     def __ne__(self, other):
+        """
+        Returns the difference between two strings.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         try:
             return self._mobject != other._mobject
         except AttributeError:
             return str(self) != str(other)
 
     def __str__(self):
+        """
+        Returns the name of this name.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.name(namespace=True)
 
     def __repr__(self):
+        """
+        Return a repr representation of this name.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.name(namespace=True)
 
     def __add__(self, other):
@@ -554,6 +626,13 @@ class Node(object):
         plug.write(value)
 
     def _onDestroyed(self, mobject):
+        """
+        Called when the mobject has been called.
+
+        Args:
+            self: (todo): write your description
+            mobject: (todo): write your description
+        """
         self._destroyed = True
 
         om.MMessage.removeCallbacks(self._state["callbacks"])
@@ -567,6 +646,15 @@ class Node(object):
         _data.pop(self.hex, None)
 
     def _onRemoved(self, mobject, modifier, _=None):
+        """
+        Called when a callback has been received.
+
+        Args:
+            self: (todo): write your description
+            mobject: (todo): write your description
+            modifier: (todo): write your description
+            _: (todo): write your description
+        """
         self._removed = True
 
         for callback in self.onRemoved:
@@ -576,6 +664,13 @@ class Node(object):
                 traceback.print_exc()
 
     def __delitem__(self, key):
+        """
+        Deletes an item from the cache.
+
+        Args:
+            self: (todo): write your description
+            key: (str): write your description
+        """
         self.deleteAttr(key)
 
     @withTiming()
@@ -658,6 +753,12 @@ class Node(object):
 
     @property
     def destroyed(self):
+        """
+        Destroy the current object.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._destroyed
 
     @property
@@ -685,6 +786,12 @@ class Node(object):
 
     @property
     def removed(self):
+        """
+        Returns a copy of this : class.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._removed
 
     @property
@@ -730,6 +837,12 @@ class Node(object):
 
     @property
     def typeName(self):
+        """
+        Returns the name of the function
+
+        Args:
+            self: (todo): write your description
+        """
         return self._fn.typeName
 
     def isA(self, type):
@@ -761,12 +874,31 @@ class Node(object):
         return False
 
     def lock(self, value=True):
+        """
+        Set the lock.
+
+        Args:
+            self: (todo): write your description
+            value: (todo): write your description
+        """
         self._fn.isLocked = value
 
     def isLocked(self):
+        """
+        Return true if this locked?
+
+        Args:
+            self: (todo): write your description
+        """
         return self._fn.isLocked
 
     def isReferenced(self):
+        """
+        Returns true if this file is an iterator.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._fn.isFromReferencedFile
 
     @property
@@ -778,6 +910,13 @@ class Node(object):
 
     @storable.setter
     def storable(self, value):
+        """
+        Sets the current value.
+
+        Args:
+            self: (todo): write your description
+            value: (str): write your description
+        """
 
         # The original function is a double negative
         self._fn.setDoNotWrite(not bool(value))
@@ -935,6 +1074,12 @@ class Node(object):
 
     # Alias
     def path(self):
+        """
+        Return the path of the path.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.name(namespace=True)
 
     shortestPath = path
@@ -1189,6 +1334,13 @@ class Node(object):
                              connections=connection), None)
 
     def rename(self, name):
+        """
+        Rename a node.
+
+        Args:
+            self: (todo): write your description
+            name: (str): write your description
+        """
         if not getattr(self._modifier, "isDone", True):
             return self._modifier.rename(self, name)
 
@@ -1243,12 +1395,31 @@ class DagNode(Node):
     _Fn = om.MFnDagNode
 
     def __str__(self):
+        """
+        Return the path of the path
+
+        Args:
+            self: (todo): write your description
+        """
         return self.path()
 
     def __repr__(self):
+        """
+        Return a repr of this path.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.path()
 
     def __init__(self, mobject, *args, **kwargs):
+        """
+        Initialize the mobject.
+
+        Args:
+            self: (todo): write your description
+            mobject: (todo): write your description
+        """
         super(DagNode, self).__init__(mobject, *args, **kwargs)
 
         # Convert self._tfn to om.MFnTransform(self.dagPath())
@@ -1554,15 +1725,54 @@ class DagNode(Node):
               filter=om.MFn.kTransform,
               query=None,
               contains=None):
+        """
+        Return the child.
+
+        Args:
+            self: (todo): write your description
+            type: (todo): write your description
+            filter: (todo): write your description
+            om: (todo): write your description
+            MFn: (todo): write your description
+            kTransform: (todo): write your description
+            query: (str): write your description
+            contains: (todo): write your description
+        """
         return next(self.children(type, filter, query, contains), None)
 
     def shapes(self, type=None, query=None):
+        """
+        Returns the shape of - shapes.
+
+        Args:
+            self: (todo): write your description
+            type: (todo): write your description
+            query: (str): write your description
+        """
         return self.children(type, kShape, query)
 
     def shape(self, type=None):
+        """
+        Returns a shape of the shape.
+
+        Args:
+            self: (todo): write your description
+            type: (todo): write your description
+        """
         return next(self.shapes(type), None)
 
     def siblings(self, type=None, filter=om.MFn.kTransform):
+        """
+        Yield all direct child nodes.
+
+        Args:
+            self: (todo): write your description
+            type: (str): write your description
+            filter: (str): write your description
+            om: (int): write your description
+            MFn: (int): write your description
+            kTransform: (todo): write your description
+        """
         parent = self.parent()
 
         if parent is not None:
@@ -1571,6 +1781,14 @@ class DagNode(Node):
                     yield child
 
     def sibling(self, type=None, filter=None):
+        """
+        Return a sibling of this node.
+
+        Args:
+            self: (todo): write your description
+            type: (str): write your description
+            filter: (str): write your description
+        """
         return next(self.siblings(type, filter), None)
 
     # Module-level expression; this isn't evaluated
@@ -1646,6 +1864,13 @@ class DagNode(Node):
             """
 
             def _descendents(node, children=None):
+                """
+                Descendents of the given node.
+
+                Args:
+                    node: (todo): write your description
+                    children: (str): write your description
+                """
                 children = children or list()
                 children.append(node)
                 for child in node.children(filter=None):
@@ -1735,15 +1960,45 @@ class DagNode(Node):
             raise TypeError("Unsupported clone target: %s" % self)
 
     def isLimited(self, typ):
+        """
+        Returns true if type is a type
+
+        Args:
+            self: (todo): write your description
+            typ: (str): write your description
+        """
         return self._tfn.isLimited(typ)
 
     def limitValue(self, typ):
+        """
+        Return the number of the given type.
+
+        Args:
+            self: (todo): write your description
+            typ: (todo): write your description
+        """
         return self._tfn.limitValue(typ)
 
     def enableLimit(self, typ, state):
+        """
+        Enable / disable a type.
+
+        Args:
+            self: (todo): write your description
+            typ: (todo): write your description
+            state: (todo): write your description
+        """
         return self._tfn.enableLimit(typ, state)
 
     def setLimit(self, typ, value):
+        """
+        Sets the value of the given type.
+
+        Args:
+            self: (todo): write your description
+            typ: (str): write your description
+            value: (todo): write your description
+        """
         return self._tfn.setLimit(typ, value)
 
     if ENABLE_PEP8:
@@ -1806,9 +2061,21 @@ class ObjectSet(Node):
 
     @protected
     def shortestPath(self):
+        """
+        Return the path of this path.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.name(namespace=True)
 
     def __iter__(self):
+        """
+        Iterate over all members.
+
+        Args:
+            self: (todo): write your description
+        """
         for member in self.members():
             yield member
 
@@ -1823,6 +2090,13 @@ class ObjectSet(Node):
         return self.update([member])
 
     def remove(self, members):
+        """
+        Removes a member from the selection.
+
+        Args:
+            self: (todo): write your description
+            members: (todo): write your description
+        """
         mobj = _encode1(self.name(namespace=True))
         selectionList = om1.MSelectionList()
 
@@ -1906,6 +2180,12 @@ class ObjectSet(Node):
         members = set()
 
         def recurse(objset):
+            """
+            Recurse through all members of objset.
+
+            Args:
+                objset: (todo): write your description
+            """
             for member in objset:
                 if member.isA(om.MFn.kSet):
                     recurse(member)
@@ -1925,6 +2205,13 @@ class ObjectSet(Node):
         return next(self.members(type), None)
 
     def members(self, type=None):
+        """
+        Yields the members of the node.
+
+        Args:
+            self: (todo): write your description
+            type: (todo): write your description
+        """
         op = operator.eq
         other = "typeId"
 
@@ -1944,10 +2231,29 @@ class ObjectSet(Node):
 class AnimCurve(Node):
     if __maya_version__ >= 2016:
         def __init__(self, mobj, exists=True, modifier=None):
+            """
+            Initialize mobj.
+
+            Args:
+                self: (todo): write your description
+                mobj: (todo): write your description
+                exists: (bool): write your description
+                modifier: (todo): write your description
+            """
             super(AnimCurve, self).__init__(mobj, exists, modifier)
             self._fna = oma.MFnAnimCurve(mobj)
 
         def key(self, time, value, interpolation=Linear):
+            """
+            Adds a key to the index.
+
+            Args:
+                self: (todo): write your description
+                time: (float): write your description
+                value: (todo): write your description
+                interpolation: (str): write your description
+                Linear: (todo): write your description
+            """
             time = Seconds(time)
             index = self._fna.find(time)
 
@@ -1957,6 +2263,16 @@ class AnimCurve(Node):
                 self._fna.addKey(time, value, interpolation, interpolation)
 
         def keys(self, times, values, interpolation=Linear):
+            """
+            Interpolate.
+
+            Args:
+                self: (todo): write your description
+                times: (list): write your description
+                values: (str): write your description
+                interpolation: (str): write your description
+                Linear: (todo): write your description
+            """
             times = map(lambda t: Seconds(t), times)
 
             try:
@@ -2057,6 +2373,13 @@ class Plug(object):
         return self.read() == other
 
     def __ne__(self, other):
+        """
+        Read the contents of the two files.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         if isinstance(other, Plug):
             other = other.read()
         return self.read() != other
@@ -2173,6 +2496,12 @@ class Plug(object):
         return str(self.read())
 
     def __repr__(self):
+        """
+        Return a repr of __repr__.
+
+        Args:
+            self: (todo): write your description
+        """
         return str(self.read())
 
     def __rshift__(self, other):
@@ -2346,23 +2675,54 @@ class Plug(object):
         self._modifier = modifier
 
     def plug(self):
+        """
+        Return the underlying : class associated with_plug.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._mplug
 
     @property
     def isArray(self):
+        """
+        : return : class : ~.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._mplug.isArray
 
     @property
     def arrayIndices(self):
+        """
+        Return an array of array array indices.
+
+        Args:
+            self: (todo): write your description
+        """
         if not self.isArray:
             raise TypeError('{} is not an array'.format(self.path()))
         return self._mplug.getExistingArrayAttributeIndices()
 
     @property
     def isCompound(self):
+        """
+        Returns whether this node is a compound.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._mplug.isCompound
 
     def next_available_index(self, start_index=0):
+        """
+        Returns the next available index.
+
+        Args:
+            self: (todo): write your description
+            start_index: (int): write your description
+        """
         # Assume a max of 10 million connections
         max_index = 1e7
 
@@ -2448,6 +2808,12 @@ class Plug(object):
             self.append(value)
 
     def count(self):
+        """
+        Return the number of elements in this collection.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._mplug.evaluateNumElements()
 
     def asDouble(self, time=None):
@@ -2514,16 +2880,39 @@ class Plug(object):
     asTransform = asTransformationMatrix
 
     def asEulerRotation(self, order=kXYZ, time=None):
+        """
+        Returns the euler as a euler
+
+        Args:
+            self: (todo): write your description
+            order: (todo): write your description
+            kXYZ: (todo): write your description
+            time: (float): write your description
+        """
         value = self.read(time=time)
         return om.MEulerRotation(value, order)
 
     asEuler = asEulerRotation
 
     def asQuaternion(self, time=None):
+        """
+        Reads the value to a given time.
+
+        Args:
+            self: (todo): write your description
+            time: (float): write your description
+        """
         value = self.read(time=time)
         value = Euler(value).asQuaternion()
 
     def asVector(self, time=None):
+        """
+        Return this vector as an array.
+
+        Args:
+            self: (todo): write your description
+            time: (float): write your description
+        """
         assert self.isArray or self.isCompound, "'%s' not an array" % self
         return Vector(self.read(time=time))
 
@@ -2534,6 +2923,12 @@ class Plug(object):
 
     @property
     def locked(self):
+        """
+        Return the lock object
+
+        Args:
+            self: (todo): write your description
+        """
         return self._mplug.isLocked
 
     @locked.setter
@@ -2551,9 +2946,21 @@ class Plug(object):
             cmds.setAttr(el.path(), lock=value)
 
     def lock(self):
+        """
+        Lock the lock.
+
+        Args:
+            self: (todo): write your description
+        """
         self.locked = True
 
     def unlock(self):
+        """
+        Unlock the lock.
+
+        Args:
+            self: (todo): write your description
+        """
         self.locked = False
 
     @property
@@ -2569,6 +2976,13 @@ class Plug(object):
 
     @channelBox.setter
     def channelBox(self, value):
+        """
+        Set the value to the given value.
+
+        Args:
+            self: (todo): write your description
+            value: (todo): write your description
+        """
         elements = (
             self
             if self.isArray or self.isCompound
@@ -2593,6 +3007,13 @@ class Plug(object):
 
     @keyable.setter
     def keyable(self, value):
+        """
+        Assign keyable keyable.
+
+        Args:
+            self: (todo): write your description
+            value: (str): write your description
+        """
         elements = (
             self
             if self.isArray or self.isCompound
@@ -2606,10 +3027,23 @@ class Plug(object):
 
     @property
     def hidden(self):
+        """
+        Return the hidden attribute.
+
+        Args:
+            self: (todo): write your description
+        """
         return om.MFnAttribute(self._mplug.attribute()).hidden
 
     @hidden.setter
     def hidden(self, value):
+        """
+        Set the hidden value.
+
+        Args:
+            self: (todo): write your description
+            value: (todo): write your description
+        """
         pass
 
     def hide(self):
@@ -2627,6 +3061,12 @@ class Plug(object):
         self.channelBox = False
 
     def lockAndHide(self):
+        """
+        Lock the thread.
+
+        Args:
+            self: (todo): write your description
+        """
         self.lock()
         self.hide()
 
@@ -2673,6 +3113,12 @@ class Plug(object):
 
     @property
     def editable(self):
+        """
+        Returns a : class of the : class : class :.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._mplug.isFreeToChange() == om.MPlug.kFreeToChange
 
     def type(self):
@@ -2830,6 +3276,13 @@ class Plug(object):
             raise
 
     def write(self, value):
+        """
+        Writes the value to the cache.
+
+        Args:
+            self: (todo): write your description
+            value: (str): write your description
+        """
         if not getattr(self._modifier, "isDone", True):
             return self._modifier.setAttr(self, value)
 
@@ -2845,6 +3298,14 @@ class Plug(object):
             raise
 
     def connect(self, other, force=True):
+        """
+        Connects to other connection.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+            force: (bool): write your description
+        """
         if not getattr(self._modifier, "isDone", True):
             return self._modifier.connect(self, other, force)
 
@@ -2993,6 +3454,13 @@ class Plug(object):
                                      unit=unit), None)
 
     def source(self, unit=None):
+        """
+        Returns a new : class :.
+
+        Args:
+            self: (todo): write your description
+            unit: (str): write your description
+        """
         cls = self.__class__
         plug = self._mplug.source()
         node = Node(plug.node())
@@ -3001,6 +3469,12 @@ class Plug(object):
             return cls(node, plug, unit)
 
     def node(self):
+        """
+        Returns the node as a node.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._node
 
     if ENABLE_PEP8:
@@ -3036,6 +3510,16 @@ class TransformationMatrix(om.MTransformationMatrix):
     """
 
     def __init__(self, matrix=None, translate=None, rotate=None, scale=None):
+        """
+        Initialize the matrix.
+
+        Args:
+            self: (todo): write your description
+            matrix: (array): write your description
+            translate: (list): write your description
+            rotate: (int): write your description
+            scale: (float): write your description
+        """
 
         # It doesn't like being handed `None`
         args = [matrix] if matrix is not None else []
@@ -3052,6 +3536,13 @@ class TransformationMatrix(om.MTransformationMatrix):
             self.setScale(scale)
 
     def __mul__(self, other):
+        """
+        Return a new quaternion.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         if isinstance(other, (tuple, list)):
             other = Vector(*other)
 
@@ -3074,17 +3565,43 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     @property
     def xAxis(self):
+        """
+        Return the quaternion of this vector.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.quaternion() * Vector(1, 0, 0)
 
     @property
     def yAxis(self):
+        """
+        Return the quaternion of this vector.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.quaternion() * Vector(0, 1, 0)
 
     @property
     def zAxis(self):
+        """
+        Return the quaternion of this quaternion.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.quaternion() * Vector(0, 0, 1)
 
     def translateBy(self, vec, space=None):
+        """
+        Return a copy of the rdd.
+
+        Args:
+            self: (todo): write your description
+            vec: (todo): write your description
+            space: (todo): write your description
+        """
         space = space or sTransform
         if isinstance(vec, (tuple, list)):
             vec = Vector(vec)
@@ -3125,6 +3642,14 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).translation(space)
 
     def setTranslation(self, trans, space=None):
+        """
+        Sets the transformation.
+
+        Args:
+            self: (todo): write your description
+            trans: (todo): write your description
+            space: (todo): write your description
+        """
         if isinstance(trans, Plug):
             trans = trans.as_vector()
 
@@ -3151,6 +3676,13 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setScale(seq, space)
 
     def rotation(self, asQuaternion=False):
+        """
+        Return the rotation matrix.
+
+        Args:
+            self: (todo): write your description
+            asQuaternion: (todo): write your description
+        """
         return super(TransformationMatrix, self).rotation(asQuaternion)
 
     def setRotation(self, rot):
@@ -3174,9 +3706,21 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setRotation(rot)
 
     def asMatrix(self):
+        """
+        Returns a copy of the matrix.
+
+        Args:
+            self: (todo): write your description
+        """
         return MatrixType(super(TransformationMatrix, self).asMatrix())
 
     def asMatrixInverse(self):
+        """
+        Return a copy of this matrix.
+
+        Args:
+            self: (todo): write your description
+        """
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
@@ -3244,15 +3788,42 @@ class MatrixType(om.MMatrix):
             )
 
     def __mul__(self, other):
+        """
+        Return a copy of this : class : class :. core.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         return type(self)(super(MatrixType, self).__mul__(other))
 
     def __div__(self, other):
+        """
+        Return a new array with the same type.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         return type(self)(super(MatrixType, self).__div__(other))
 
     def inverse(self):
+        """
+        Return the inverse of this type.
+
+        Args:
+            self: (todo): write your description
+        """
         return type(self)(super(MatrixType, self).inverse())
 
     def row(self, index):
+        """
+        Return the row at the given index.
+
+        Args:
+            self: (todo): write your description
+            index: (int): write your description
+        """
         values = tuple(self)
         return (
             values[index * 4 + 0],
@@ -3262,6 +3833,14 @@ class MatrixType(om.MMatrix):
         )
 
     def element(self, row, col):
+        """
+        Return the element at * row.
+
+        Args:
+            self: (todo): write your description
+            row: (todo): write your description
+            col: (todo): write your description
+        """
         values = tuple(self)
         return values[row * 4 + col % 4]
 
@@ -3287,6 +3866,13 @@ class Vector(om.MVector):
     """
 
     def __add__(self, value):
+        """
+        Adds a new vector to the current value.
+
+        Args:
+            self: (todo): write your description
+            value: (todo): write your description
+        """
         if isinstance(value, (int, float)):
             return type(self)(
                 self.x + value,
@@ -3297,6 +3883,13 @@ class Vector(om.MVector):
         return super(Vector, self).__add__(value)
 
     def __iadd__(self, value):
+        """
+        Adds an iadd value.
+
+        Args:
+            self: (todo): write your description
+            value: (todo): write your description
+        """
         if isinstance(value, (int, float)):
             return type(self)(
                 self.x + value,
@@ -3307,9 +3900,23 @@ class Vector(om.MVector):
         return super(Vector, self).__iadd__(value)
 
     def dot(self, value):
+        """
+        Compute dot product.
+
+        Args:
+            self: (todo): write your description
+            value: (str): write your description
+        """
         return super(Vector, self).__mul__(value)
 
     def cross(self, value):
+        """
+        Return the cross product.
+
+        Args:
+            self: (todo): write your description
+            value: (str): write your description
+        """
         return super(Vector, self).__xor__(value)
 
 
@@ -3326,6 +3933,12 @@ class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
 
     def volume(self):
+        """
+        The volume of the volume.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.width * self.height * self.depth
 
 
@@ -3341,6 +3954,13 @@ class Quaternion(om.MQuaternion):
     """
 
     def __mul__(self, other):
+        """
+        Return a new quaternion with another quaternion.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         if isinstance(other, (tuple, list)):
             other = Vector(*other)
 
@@ -3351,6 +3971,12 @@ class Quaternion(om.MQuaternion):
             return super(Quaternion, self).__mul__(other)
 
     def lengthSquared(self):
+        """
+        Returns the length of this vector
+
+        Args:
+            self: (todo): write your description
+        """
         return (
             self.x * self.x +
             self.y * self.y +
@@ -3359,9 +3985,22 @@ class Quaternion(om.MQuaternion):
         )
 
     def length(self):
+        """
+        Returns the length of this vector.
+
+        Args:
+            self: (todo): write your description
+        """
         return math.sqrt(self.lengthSquared())
 
     def isNormalised(self, tol=0.0001):
+        """
+        Returns true if tolised position.
+
+        Args:
+            self: (todo): write your description
+            tol: (float): write your description
+        """
         return abs(self.length() - 1.0) < tol
 
 
@@ -3396,9 +4035,21 @@ def twistSwingToQuaternion(ts):
 
 class EulerRotation(om.MEulerRotation):
     def asQuaternion(self):
+        """
+        Return the quaternion as a numpy array.
+
+        Args:
+            self: (todo): write your description
+        """
         return super(EulerRotation, self).asQuaternion()
 
     def asMatrix(self):
+        """
+        Return the matrix as a matrix.
+
+        Args:
+            self: (todo): write your description
+        """
         return super(EulerRotation, self).asMatrix()
 
     order = {
@@ -3469,9 +4120,22 @@ class CachedPlug(Plug):
     """Returned in place of an actual plug"""
 
     def __init__(self, value):
+        """
+        Initializes the value.
+
+        Args:
+            self: (todo): write your description
+            value: (todo): write your description
+        """
         self._value = value
 
     def read(self):
+        """
+        Read the value of the current value.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._value
 
 
@@ -4050,8 +4714,20 @@ def decode(node):
 
 
 def record_history(func):
+    """
+    Decorator to mark a record as as a record.
+
+    Args:
+        func: (todo): write your description
+    """
     @wraps(func)
     def decorator(self, *args, **kwargs):
+        """
+        Decorator to apply a function.
+
+        Args:
+            self: (todo): write your description
+        """
         _kwargs = kwargs.copy()
         _args = list(args)
 
@@ -4094,10 +4770,25 @@ class _BaseModifier(object):
     Type = om.MDGModifier
 
     def __enter__(self):
+        """
+        Enter the context manager.
+
+        Args:
+            self: (todo): write your description
+        """
         self.isContext = True
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
+        """
+        Called when an error.
+
+        Args:
+            self: (todo): write your description
+            exc_type: (todo): write your description
+            exc_value: (todo): write your description
+            tb: (todo): write your description
+        """
 
         # Support calling `doIt` during a context,
         # without polluting the undo queue.
@@ -4112,6 +4803,17 @@ class _BaseModifier(object):
                  debug=True,
                  atomic=True,
                  template=None):
+        """
+        Initialize the history.
+
+        Args:
+            self: (todo): write your description
+            undoable: (todo): write your description
+            interesting: (todo): write your description
+            debug: (bool): write your description
+            atomic: (todo): write your description
+            template: (str): write your description
+        """
         super(_BaseModifier, self).__init__()
         self.isDone = False
         self.isContext = False
@@ -4128,6 +4830,12 @@ class _BaseModifier(object):
         }
 
     def doIt(self):
+        """
+        Perform a previous state.
+
+        Args:
+            self: (todo): write your description
+        """
         if (not self.isContext) and self._opts["undoable"]:
             commit(self._modifier.undoIt, self._modifier.doIt)
 
@@ -4145,10 +4853,24 @@ class _BaseModifier(object):
         self.isDone = True
 
     def undoIt(self):
+        """
+        Undo the last transaction.
+
+        Args:
+            self: (todo): write your description
+        """
         self._modifier.undoIt()
 
     @record_history
     def createNode(self, type, name=None):
+        """
+        Create a new node.
+
+        Args:
+            self: (todo): write your description
+            type: (str): write your description
+            name: (str): write your description
+        """
         try:
             mobj = self._modifier.createNode(type)
         except TypeError:
@@ -4174,30 +4896,68 @@ class _BaseModifier(object):
 
     @record_history
     def deleteNode(self, node):
+        """
+        Deletes the given node.
+
+        Args:
+            self: (todo): write your description
+            node: (todo): write your description
+        """
         return self._modifier.deleteNode(node._mobject)
 
     delete = deleteNode
 
     @record_history
     def renameNode(self, node, name):
+        """
+        Rename a node
+
+        Args:
+            self: (todo): write your description
+            node: (todo): write your description
+            name: (str): write your description
+        """
         return self._modifier.renameNode(node._mobject, name)
 
     rename = renameNode
 
     @record_history
     def addAttr(self, node, plug):
+        """
+        Add a new attribute node.
+
+        Args:
+            self: (todo): write your description
+            node: (todo): write your description
+            plug: (todo): write your description
+        """
         if isinstance(plug, _AbstractAttribute):
             plug = plug.create()
         return self._modifier.addAttribute(node._mobject, plug)
 
     @record_history
     def deleteAttr(self, plug):
+        """
+        Removes the given attribute from the node.
+
+        Args:
+            self: (todo): write your description
+            plug: (todo): write your description
+        """
         node = plug.node()
         node.clear()
         return self._modifier.removeAttribute(node._mobject, plug._mplug.attribute())
 
     @record_history
     def setAttr(self, plug, value):
+        """
+        Set the attribute of the node.
+
+        Args:
+            self: (todo): write your description
+            plug: (todo): write your description
+            value: (todo): write your description
+        """
         if isinstance(value, Plug):
             value = value.read()
 
@@ -4207,10 +4967,26 @@ class _BaseModifier(object):
         _python_to_mod(value, plug, self._modifier)
 
     def resetAttr(self, plug):
+        """
+        Reset the progress bar.
+
+        Args:
+            self: (todo): write your description
+            plug: (todo): write your description
+        """
         self.setAttr(plug, plug.default)
 
     @record_history
     def connect(self, src, dst, force=True):
+        """
+        Connect to connect to the destination.
+
+        Args:
+            self: (todo): write your description
+            src: (str): write your description
+            dst: (todo): write your description
+            force: (bool): write your description
+        """
         if isinstance(src, Plug):
             src = src._mplug
 
@@ -4375,6 +5151,15 @@ class DagModifier(_BaseModifier):
 
     @record_history
     def createNode(self, type, name=None, parent=None):
+        """
+        Create a new type
+
+        Args:
+            self: (todo): write your description
+            type: (str): write your description
+            name: (str): write your description
+            parent: (todo): write your description
+        """
         parent = parent._mobject if parent else om.MObject.kNullObj
 
         try:
@@ -4395,6 +5180,14 @@ class DagModifier(_BaseModifier):
 
     @record_history
     def parent(self, node, parent=None):
+        """
+        Set the parent of a parent.
+
+        Args:
+            self: (todo): write your description
+            node: (todo): write your description
+            parent: (todo): write your description
+        """
         parent = parent._mobject if parent is not None else om.MObject.kNullObj
         self._modifier.reparentNode(node._mobject, parent)
 
@@ -4425,6 +5218,12 @@ class DGContext(om.MDGContext):
         self._previousContext = None
 
     def __enter__(self):
+        """
+        Make a context manager
+
+        Args:
+            self: (todo): write your description
+        """
         if __maya_version__ >= 2018:
             self._previousContext = self.makeCurrent()
             return self
@@ -4435,6 +5234,15 @@ class DGContext(om.MDGContext):
             )
 
     def __exit__(self, exc_type, exc_value, tb):
+        """
+        Called when an exception is raised.
+
+        Args:
+            self: (todo): write your description
+            exc_type: (todo): write your description
+            exc_value: (todo): write your description
+            tb: (todo): write your description
+        """
         if self._previousContext:
             self._previousContext.makeCurrent()
 
@@ -4443,10 +5251,20 @@ Context = DGContext
 
 
 def ls(*args, **kwargs):
+    """
+    List files.
+
+    Args:
+    """
     return map(encode, cmds.ls(*args, **kwargs))
 
 
 def selection(*args, **kwargs):
+    """
+    Return the given a list of the elements. ).
+
+    Args:
+    """
     return map(encode, cmds.ls(*args, selection=True, **kwargs))
 
 
@@ -4669,6 +5487,12 @@ def connectAttr(src, dst):
 
 
 def delete(*nodes):
+    """
+    Delete all the given nodes.
+
+    Args:
+        nodes: (list): write your description
+    """
 
     with DGModifier() as mod:
         for node in nodes:
@@ -4680,11 +5504,28 @@ def delete(*nodes):
 
 
 def rename(node, name):
+    """
+    Rename a node.
+
+    Args:
+        node: (todo): write your description
+        name: (str): write your description
+    """
     with DGModifier() as mod:
         mod.rename(node, name)
 
 
 def parent(children, parent, relative=True, absolute=False, safe=True):
+    """
+    Add a parent.
+
+    Args:
+        children: (str): write your description
+        parent: (todo): write your description
+        relative: (bool): write your description
+        absolute: (todo): write your description
+        safe: (bool): write your description
+    """
     assert isinstance(parent, DagNode), "parent must be DagNode"
 
     if not isinstance(children, (tuple, list)):
@@ -4696,6 +5537,12 @@ def parent(children, parent, relative=True, absolute=False, safe=True):
 
 
 def objExists(obj):
+    """
+    Returns true if a given object exists.
+
+    Args:
+        obj: (todo): write your description
+    """
     if isinstance(obj, (Node, Plug)):
         obj = obj.path()
 
@@ -4726,6 +5573,16 @@ kPeriodic = om1.MFnNurbsCurve.kPeriodic
 
 
 def editCurve(parent, points, degree=1, form=kOpen):
+    """
+    Edit a degree of - points.
+
+    Args:
+        parent: (todo): write your description
+        points: (array): write your description
+        degree: (int): write your description
+        form: (todo): write your description
+        kOpen: (todo): write your description
+    """
     assert isinstance(parent, DagNode), (
         "parent must be of type cmdx.DagNode"
     )
@@ -4751,10 +5608,20 @@ def editCurve(parent, points, degree=1, form=kOpen):
     mod.doIt()
 
     def undo():
+        """
+        Undo the last transaction
+
+        Args:
+        """
         mod.deleteNode(mobj)
         mod.doIt()
 
     def redo():
+        """
+        Undo changes
+
+        Args:
+        """
         mod.undoIt()
 
     commit(undo, redo)
@@ -4823,10 +5690,20 @@ def curve(parent, points, degree=1, form=kOpen):
     mod.doIt()
 
     def undo():
+        """
+        Undo the last transaction
+
+        Args:
+        """
         mod.deleteNode(mobj)
         mod.doIt()
 
     def redo():
+        """
+        Undo changes
+
+        Args:
+        """
         mod.undoIt()
 
     commit(undo, redo)
@@ -4957,6 +5834,13 @@ class _AbstractAttribute(dict):
     Help = ""
 
     def __eq__(self, other):
+        """
+        Determine if two values are equal.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         try:
             # Support Attribute -> Attribute comparison
             return self["name"] == other["name"]
@@ -4965,6 +5849,13 @@ class _AbstractAttribute(dict):
             return self["name"] == other
 
     def __ne__(self, other):
+        """
+        Returns true if the two values.
+
+        Args:
+            self: (todo): write your description
+            other: (todo): write your description
+        """
         try:
             return self["name"] != other["name"]
         except AttributeError:
@@ -5014,6 +5905,30 @@ class _AbstractAttribute(dict):
                  indexMatters=None,
                  connectable=True,
                  help=None):
+        """
+        Initialize a cache.
+
+        Args:
+            self: (todo): write your description
+            name: (str): write your description
+            default: (str): write your description
+            label: (str): write your description
+            writable: (bool): write your description
+            readable: (todo): write your description
+            cached: (todo): write your description
+            storable: (todo): write your description
+            keyable: (str): write your description
+            hidden: (todo): write your description
+            min: (int): write your description
+            max: (int): write your description
+            channelBox: (todo): write your description
+            affectsAppearance: (todo): write your description
+            affectsWorldSpace: (todo): write your description
+            array: (array): write your description
+            indexMatters: (todo): write your description
+            connectable: (todo): write your description
+            help: (todo): write your description
+        """
 
         args = locals().copy()
         args.pop("self")
@@ -5055,9 +5970,22 @@ class _AbstractAttribute(dict):
         return self.Default
 
     def type(self):
+        """
+        Returns the type of the type.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.Type
 
     def create(self, cls=None):
+        """
+        Creates a set of this class.
+
+        Args:
+            self: (todo): write your description
+            cls: (callable): write your description
+        """
         args = [
             arg
             for arg in (self["name"],
@@ -5104,6 +6032,13 @@ class _AbstractAttribute(dict):
         return self["mobject"]
 
     def read(self, data):
+        """
+        Read the data.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         pass
 
 
@@ -5115,6 +6050,16 @@ class Enum(_AbstractAttribute):
     Keyable = True
 
     def __init__(self, name, fields=None, default=0, label=None, **kwargs):
+        """
+        Initialize fields todo.
+
+        Args:
+            self: (todo): write your description
+            name: (str): write your description
+            fields: (dict): write your description
+            default: (str): write your description
+            label: (str): write your description
+        """
         super(Enum, self).__init__(name, default, label, **kwargs)
 
         self.update({
@@ -5122,6 +6067,13 @@ class Enum(_AbstractAttribute):
         })
 
     def create(self, cls=None):
+        """
+        Creates an instance of this class.
+
+        Args:
+            self: (int): write your description
+            cls: (callable): write your description
+        """
         attr = super(Enum, self).create(cls)
 
         for index, field in enumerate(self["fields"]):
@@ -5130,6 +6082,13 @@ class Enum(_AbstractAttribute):
         return attr
 
     def read(self, data):
+        """
+        Reads data from the input stream.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asShort()
 
 
@@ -5137,6 +6096,13 @@ class Divider(Enum):
     """Visual divider in channel box"""
 
     def __init__(self, label, **kwargs):
+        """
+        Initialize this class.
+
+        Args:
+            self: (todo): write your description
+            label: (str): write your description
+        """
         kwargs.pop("name", None)
         kwargs.pop("fields", None)
         kwargs.pop("label", None)
@@ -5149,10 +6115,24 @@ class String(_AbstractAttribute):
     Default = ""
 
     def default(self, cls=None):
+        """
+        Returns the default record
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         default = str(super(String, self).default(cls))
         return om.MFnStringData().create(default)
 
     def read(self, data):
+        """
+        Read data ascii bytes.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asString()
 
 
@@ -5174,9 +6154,23 @@ class Matrix(_AbstractAttribute):
     Hidden = False
 
     def default(self, cls=None):
+        """
+        Return the default value for this class.
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         return None
 
     def read(self, data):
+        """
+        Read data from the input string.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asMatrix()
 
 
@@ -5186,6 +6180,13 @@ class Long(_AbstractAttribute):
     Default = 0
 
     def read(self, data):
+        """
+        Reads the next to the input stream.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asLong()
 
 
@@ -5195,6 +6196,13 @@ class Double(_AbstractAttribute):
     Default = 0.0
 
     def read(self, data):
+        """
+        Reads the next to the input.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asDouble()
 
 
@@ -5204,6 +6212,13 @@ class Double3(_AbstractAttribute):
     Default = (0.0,) * 3
 
     def default(self, cls=None):
+        """
+        Return a list of this node.
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         if self["default"] is not None:
             default = self["default"]
 
@@ -5228,6 +6243,13 @@ class Double3(_AbstractAttribute):
         return children
 
     def read(self, data):
+        """
+        Reads the input value.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asDouble3()
 
 
@@ -5237,6 +6259,13 @@ class Boolean(_AbstractAttribute):
     Default = True
 
     def read(self, data):
+        """
+        Read the next byte string.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+        """
         return data.inputValue(self["mobject"]).asBool()
 
 
@@ -5251,6 +6280,13 @@ class AbstractUnit(_AbstractAttribute):
 
 class Angle(AbstractUnit):
     def default(self, cls=None):
+        """
+        Returns the default kRad
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         default = super(Angle, self).default(cls)
 
         # When no unit was explicitly passed, assume radians
@@ -5262,6 +6298,13 @@ class Angle(AbstractUnit):
 
 class Time(AbstractUnit):
     def default(self, cls=None):
+        """
+        Return the default value for this field.
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         default = super(Time, self).default(cls)
 
         # When no unit was explicitly passed, assume seconds
@@ -5273,6 +6316,13 @@ class Time(AbstractUnit):
 
 class Distance(AbstractUnit):
     def default(self, cls=None):
+        """
+        Returns the default value for this field.
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         default = super(Distance, self).default(cls)
 
         # When no unit was explicitly passed, assume centimeters
@@ -5287,6 +6337,14 @@ class Compound(_AbstractAttribute):
     Multi = None
 
     def __init__(self, name, children=None, **kwargs):
+        """
+        Initialize a child.
+
+        Args:
+            self: (todo): write your description
+            name: (str): write your description
+            children: (todo): write your description
+        """
         if not children and self.Multi:
             default = kwargs.pop("default", None)
             children, Type = self.Multi
@@ -5304,10 +6362,24 @@ class Compound(_AbstractAttribute):
         super(Compound, self).__init__(name, **kwargs)
 
     def default(self, cls=None):
+        """
+        Return the default value.
+
+        Args:
+            self: (todo): write your description
+            cls: (todo): write your description
+        """
         # Compound itself has no defaults, only it's children do
         pass
 
     def create(self, cls=None):
+        """
+        Create a new : class.
+
+        Args:
+            self: (int): write your description
+            cls: (callable): write your description
+        """
         mobj = super(Compound, self).create(cls)
         default = super(Compound, self).default(cls)
 
@@ -5506,6 +6578,11 @@ def install():
 
 
 def uninstall():
+    """
+    Uninstall the shared shared modules.
+
+    Args:
+    """
     if ENABLE_UNDO:
         # Plug-in may exist in undo queue and
         # therefore cannot be unloaded until flushed.
@@ -5524,11 +6601,22 @@ def uninstall():
 
 
 def maya_useNewAPI():
+    """
+    Return a default api key
+
+    Args:
+    """
     pass
 
 
 class _apiUndo(om.MPxCommand):
     def doIt(self, args):
+        """
+        Commit to the given command.
+
+        Args:
+            self: (todo): write your description
+        """
         self.undo = shared.undo
         self.redo = shared.redo
 
@@ -5537,17 +6625,41 @@ class _apiUndo(om.MPxCommand):
         shared.redo = None
 
     def undoIt(self):
+        """
+        Undo the previous transaction.
+
+        Args:
+            self: (todo): write your description
+        """
         shared.undos[self.undo]()
 
     def redoIt(self):
+        """
+        Redos to the user.
+
+        Args:
+            self: (todo): write your description
+        """
         shared.redos[self.redo]()
 
     def isUndoable(self):
+        """
+        Returns true if the object is a : class is true false otherwise.
+
+        Args:
+            self: (todo): write your description
+        """
         # Without this, the above undoIt and redoIt will not be called
         return True
 
 
 def initializePlugin(plugin):
+    """
+    Initialize the plugin.
+
+    Args:
+        plugin: (todo): write your description
+    """
     om.MFnPlugin(plugin).registerCommand(
         command,
         _apiUndo
@@ -5555,6 +6667,12 @@ def initializePlugin(plugin):
 
 
 def uninitializePlugin(plugin):
+    """
+    Uninitializes a plugin.
+
+    Args:
+        plugin: (todo): write your description
+    """
     om.MFnPlugin(plugin).deregisterCommand(command)
 
 
@@ -5609,6 +6727,12 @@ StartId = int(os.getenv("CMDX_BASETYPEID", "0x12b9c0"), 0)
 
 class MetaNode(type):
     def __init__(cls, *args, **kwargs):
+        """
+        Initialize a class.
+
+        Args:
+            cls: (todo): write your description
+        """
         assert isinstance(cls.name, str)
         assert isinstance(cls.defaults, dict)
         assert isinstance(cls.attributes, list)
@@ -5635,12 +6759,34 @@ class MetaNode(type):
         attributes = {attr["name"]: attr for attr in cls.attributes}
 
         def findAttribute(self, name):
+            """
+            Find an attribute with the given name.
+
+            Args:
+                self: (todo): write your description
+                name: (str): write your description
+            """
             return attributes.get(name)
 
         def findMObject(self, name):
+            """
+            Finds an object by name.
+
+            Args:
+                self: (todo): write your description
+                name: (str): write your description
+            """
             return attributes.get(name)["mobject"]
 
         def findPlug(self, node, name):
+            """
+            Finds a node by name.
+
+            Args:
+                self: (todo): write your description
+                node: (todo): write your description
+                name: (str): write your description
+            """
             try:
                 mobj = attributes.get(name)["mobject"]
                 return om.MPlug(node, mobj)
@@ -5683,6 +6829,12 @@ class DgNode(om.MPxNode):
 
     @classmethod
     def postInitialize(cls):
+        """
+        Called when postInitial to postInitial.
+
+        Args:
+            cls: (todo): write your description
+        """
         pass
 
 
@@ -5710,10 +6862,22 @@ class SurfaceShape(om.MPxSurfaceShape):
 
     @classmethod
     def postInitialize(cls):
+        """
+        Called when postInitial to postInitial.
+
+        Args:
+            cls: (todo): write your description
+        """
         pass
 
     @classmethod
     def uiCreator(cls):
+        """
+        Returns the current widget.
+
+        Args:
+            cls: (callable): write your description
+        """
         pass
 
 
@@ -5741,6 +6905,12 @@ class SurfaceShapeUI(omui.MPxSurfaceShapeUI):
 
     @classmethod
     def postInitialize(cls):
+        """
+        Called when postInitial to postInitial.
+
+        Args:
+            cls: (todo): write your description
+        """
         pass
 
 
@@ -5768,11 +6938,28 @@ class LocatorNode(omui.MPxLocatorNode):
 
     @classmethod
     def postInitialize(cls):
+        """
+        Called when postInitial to postInitial.
+
+        Args:
+            cls: (todo): write your description
+        """
         pass
 
 
 def initialize2(Plugin):
+    """
+    Initializes the plugin.
+
+    Args:
+        Plugin: (todo): write your description
+    """
     def _nodeInit():
+        """
+        Create an attribute node from a dst node.
+
+        Args:
+        """
         nameToAttr = {}
         for attr in Plugin.attributes:
             mattr = attr.create(Plugin)
@@ -5784,9 +6971,20 @@ def initialize2(Plugin):
             Plugin.attributeAffects(nameToAttr[src], nameToAttr[dst])
 
     def _nodeCreator():
+        """
+        Returns a function that returns the first node.
+
+        Args:
+        """
         return Plugin()
 
     def initializePlugin(obj):
+        """
+        Initializes the plugin.
+
+        Args:
+            obj: (todo): write your description
+        """
         version = ".".join(map(str, Plugin.version))
         plugin = om.MFnPlugin(obj, "Cmdx", version, "Any")
 
@@ -5829,7 +7027,19 @@ def initialize2(Plugin):
 
 
 def uninitialize2(Plugin):
+    """
+    Uninitialize an object
+
+    Args:
+        Plugin: (todo): write your description
+    """
     def uninitializePlugin(obj):
+        """
+        Uninitializes an object
+
+        Args:
+            obj: (todo): write your description
+        """
         om.MFnPlugin(obj).deregisterNode(Plugin.typeid)
 
     return uninitializePlugin
@@ -5845,14 +7055,36 @@ class MPxManipContainer1(ompx1.MPxManipContainer):
 
 
 def initializeManipulator1(Manipulator):
+    """
+    Initialize the mongulator.
+
+    Args:
+        Manipulator: (todo): write your description
+    """
     def _manipulatorCreator():
+        """
+        Return a new rtype ofipulator.
+
+        Args:
+        """
         return ompx1.asMPxPtr(Manipulator())
 
     def _manipulatorInit():
+        """
+        Manage the database.
+
+        Args:
+        """
         ompx1.MPxManipContainer.addToManipConnectTable(Manipulator.ownerid)
         ompx1.MPxManipContainer.initialize()
 
     def initializePlugin(obj):
+        """
+        Initialize the plugin.
+
+        Args:
+            obj: (todo): write your description
+        """
         version = ".".join(map(str, Manipulator.version))
         plugin = ompx1.MFnPlugin(obj, "Cmdx", version, "Any")
 
@@ -5877,7 +7109,19 @@ def initializeManipulator1(Manipulator):
 
 
 def uninitializeManipulator1(Manipulator):
+    """
+    Uninitializesipulator.
+
+    Args:
+        Manipulator: (todo): write your description
+    """
     def uninitializePlugin(obj):
+        """
+        Uninitializes an object.
+
+        Args:
+            obj: (todo): write your description
+        """
         ompx1.MFnPlugin(obj).deregisterNode(Manipulator.typeid)
 
     return uninitializePlugin
@@ -5905,6 +7149,17 @@ class Callback(object):
     log = logging.getLogger("cmdx.Callback")
 
     def __init__(self, name, installer, args, api=2, help="", parent=None):
+        """
+        Initialize a user.
+
+        Args:
+            self: (todo): write your description
+            name: (str): write your description
+            installer: (todo): write your description
+            api: (str): write your description
+            help: (todo): write your description
+            parent: (todo): write your description
+        """
         self._id = None
         self._args = args
         self._name = name
@@ -5919,18 +7174,48 @@ class Callback(object):
         }[api]
 
     def __del__(self):
+        """
+        Deactivates this object.
+
+        Args:
+            self: (todo): write your description
+        """
         self.deactivate()
 
     def name(self):
+        """
+        The name of the name
+
+        Args:
+            self: (todo): write your description
+        """
         return self._name
 
     def help(self):
+        """
+        Returns the help string.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._help
 
     def is_active(self):
+        """
+        : return : true if_active is active.
+
+        Args:
+            self: (todo): write your description
+        """
         return self._id is not None
 
     def activate(self):
+        """
+        Activates this virtual server.
+
+        Args:
+            self: (todo): write your description
+        """
         self.log.debug("Activating callback '%s'.." % self._name)
 
         if self.is_active():
@@ -5940,6 +7225,12 @@ class Callback(object):
         self._id = self._installer(*self._args)
 
     def deactivate(self):
+        """
+        Deactivate this partition.
+
+        Args:
+            self: (todo): write your description
+        """
         self.log.debug("Deactivating callback '%s'.." % self._name)
 
         if self.is_active():
@@ -5952,10 +7243,25 @@ class CallbackGroup(list):
     """Multiple callbacks rolled into one"""
 
     def __init__(self, name, callbacks, parent=None):
+        """
+        Initialize a callbacks.
+
+        Args:
+            self: (todo): write your description
+            name: (str): write your description
+            callbacks: (list): write your description
+            parent: (todo): write your description
+        """
         self._name = name
         self[:] = callbacks
 
     def name(self):
+        """
+        The name of the name
+
+        Args:
+            self: (todo): write your description
+        """
         return self._name
 
     def add(self, name, installer, args, api=2):
@@ -5964,10 +7270,22 @@ class CallbackGroup(list):
         self.append(callback)
 
     def activate(self):
+        """
+        Activates the callback.
+
+        Args:
+            self: (todo): write your description
+        """
         for callback in self._callbacks:
             callback.activate()
 
     def deactivate(self):
+        """
+        Deactivate all callbacks.
+
+        Args:
+            self: (todo): write your description
+        """
         for callback in self._callbacks:
             callback.deactivate()
 
@@ -5980,15 +7298,44 @@ class CallbackGroup(list):
 
 class Cache(object):
     def __init__(self):
+        """
+        Initialize the internal state.
+
+        Args:
+            self: (todo): write your description
+        """
         self._values = {}
 
     def clear(self, node=None):
+        """
+        Clears the node.
+
+        Args:
+            self: (todo): write your description
+            node: (todo): write your description
+        """
         pass
 
     def read(self, node, attr, time):
+        """
+        Reads the specified node.
+
+        Args:
+            self: (todo): write your description
+            node: (str): write your description
+            attr: (dict): write your description
+            time: (str): write your description
+        """
         pass
 
     def transform(self, node):
+        """
+        Transform a node.
+
+        Args:
+            self: (array): write your description
+            node: (todo): write your description
+        """
         pass
 
 # Licensed under the Apache License, Version 2.0 (the "License");
