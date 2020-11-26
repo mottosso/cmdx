@@ -3861,6 +3861,18 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
+def exists(path):
+    """Return whether any node at `path` exists"""
+
+    selectionList = om.MSelectionList()
+
+    try:
+        selectionList.add(path)
+    except RuntimeError:
+        return False
+    return True
+
+
 def encode(path):
     """Convert relative or absolute `path` to cmdx Node
 
