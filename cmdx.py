@@ -4162,6 +4162,11 @@ class _BaseModifier(object):
                 self.undoIt()
 
             raise ModifierError(self._history)
+        else:
+
+            # Facilitate multiple calls to doIt, whereby only
+            # the latest, actually-performed actions are reported
+            self._history[:] = []
 
         self.isDone = True
 
