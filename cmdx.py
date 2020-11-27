@@ -4428,6 +4428,12 @@ class DagModifier(_BaseModifier):
         create_node = createNode
 
 
+# Convenience functions
+def connect(a, b):
+    with DagModifier() as mod:
+        mod.connect(a, b)
+
+
 class DGContext(om.MDGContext):
 
     def __init__(self, time=None, unit=None):
