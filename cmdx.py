@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
 
+# Hack for static typing analysis:
+# the test below only passes in the IDE (eg VsCode); Maya doesn't know or care about typing.
+MYPY = False
+if MYPY:
+    from typing import *
+    # fake-declare some Python2-only types to fix Pylance analyzer false positives (Pylance is Python3-only)
+    basestring = unicode = str
+    long = int
+    buffer = bytearray
+    file = object
+del MYPY
+
 import os
 import sys
 import json
@@ -3119,7 +3131,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return super(TransformationMatrix, self).rotatePivot(space)
 
-    def translation(self, space=None):
+    def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return super(TransformationMatrix, self).translation(space)
@@ -3173,10 +3185,10 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         return super(TransformationMatrix, self).setRotation(rot)
 
-    def asMatrix(self):
+    def asMatrix(self):  # type: () -> om.MMatrix
         return MatrixType(super(TransformationMatrix, self).asMatrix())
 
-    def asMatrixInverse(self):
+    def asMatrixInverse(self):  # type: () -> om.MMatrix
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
@@ -3866,7 +3878,7 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
-def encode(path):
+def encode(path):  # type: (str) -> Node
     """Convert relative or absolute `path` to cmdx Node
 
     Fastest conversion from absolute path to Node
