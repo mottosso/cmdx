@@ -493,7 +493,7 @@ TypeError: listConnections() got an unexpected keyword argument 'source'
 
 The reason for this limitation is because the functions `cmds`
 
-- Submit an [issue](issues) or [pull-request](#fork) with commands you miss
+- Submit an [issue](issues) or [pull-request](#fork) with commands you miss.
 
 <br>
 
@@ -622,6 +622,7 @@ def my_undo():
     node["ty"].disconnect()
 
 node["translateX"] = 5
+node["tx"] >> node["ty"]
 cmdx.commit(my_undo)
 ```
 
@@ -1202,7 +1203,7 @@ import cmdx
 
 class MyNode(cmdx.DgNode):
     name = "myNode"
-    typeid = om.MTypeId(0x85005)
+    typeid = cmdx.TypeId(0x85005)
 
 initializePlugin2 = cmdx.initialize2(MyNode)
 uninitializePlugin2 = cmdx.uninitialize2(MyNode)
@@ -1229,7 +1230,7 @@ cmds.createNode("myNode")
 
 **Keep in mind**
 
-- Don't forget to `cmdx.unloadPlugin` before loading it anew
+- Don't forget to `cmds.unloadPlugin` before loading it anew
 - Every Maya node **requires** a *globally unique* "TypeId"
 - You can register your own series of IDs for free, [here](https://mayaid.autodesk.io/)
 - Try **not to undo** the creation of your custom node, as you will be unable to unload it without restarting Maya
@@ -1527,10 +1528,10 @@ For example.
 import cmdx
 
 with cmdx.DagModifier() as mod:
-    node1 = mod.createNode("transform")
-    node2 = mod.createNode("transform", parent=node1)
-    mod.connect(node1 + ".translate", node2 + ".translate")
-    mod.setAttr(node1 + ".rotate", (1, 2, 3))
+    parent = mod.createNode("transform", name="MyParent")
+    child = mod.createNode("transform", parent=parent)
+    mod.setAttr(parent + ".translate", (1, 2, 3))
+    mod.connect(parent + ".rotate", child + ".rotate")
 ```
 
 Now when calling `undo`, the above lines will be undone as you'd expect.
@@ -1542,7 +1543,7 @@ with cmdx.DagModifier() as mod:
     parent = mod.createNode("transform", name="MyParent")
     child = mod.createNode("transform", parent=parent)
     parent["translate"] = (1, 2, 3)
-    parent["rotate"] >> parent["rotate"]
+    parent["rotate"] >> child["rotate"]
 ```
 
 And PEP8.
@@ -1552,13 +1553,13 @@ with cmdx.DagModifier() as mod:
     parent = mod.create_node("transform", name="MyParent")
     child = mod.create_node("transform", parent=parent)
     parent["translate"] = (1, 2, 3)
-    parent["rotate"] >> parent["rotate"]
+    parent["rotate"] >> child["rotate"]
 ```
 
 Name templates look like this.
 
 ```python
-with cmdx.DagModifier(template="myName_{type}"):
+with cmdx.DagModifier(template="myName_{type}") as mod:
   node = mod.createNode("transform")
 
 assert node.name() == "myName_transform"

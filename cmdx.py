@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
 
+# Hack for static typing analysis:
+# the test below only passes in the IDE (eg VsCode); Maya doesn't know or care about typing.
+MYPY = False
+if MYPY:
+    from typing import *
+    # fake-declare some Python2-only types to fix Pylance analyzer false positives (Pylance is Python3-only)
+    basestring = unicode = str
+    long = int
+    buffer = bytearray
+    file = object
+del MYPY
+
 import os
 import sys
 import json
@@ -16,7 +28,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.7"
+__version__ = "0.4.8"
 
 PY3 = sys.version_info[0] == 3
 
@@ -512,7 +524,7 @@ class Node(object):
             key, unit = key
 
             # Convert value to the given unit
-            if isinstance(value, (list, tuple)):
+            if isinstance(value, (list, tuple, om.MVector)):
                 value = list(unit(v) for v in value)
             else:
                 value = unit(value)
@@ -956,7 +968,7 @@ class Node(object):
 
         del self[key]
 
-    def dump(self, ignore_error=True):
+    def dump(self, ignore_error=True, preserve_order=False):
         """Return dictionary of all attributes
 
         Example:
@@ -971,7 +983,7 @@ class Node(object):
 
         """
 
-        attrs = {}
+        attrs = collections.OrderedDict() if preserve_order else {}
         count = self._fn.attributeCount()
         for index in range(count):
             obj = self._fn.attribute(index)
@@ -991,9 +1003,9 @@ class Node(object):
 
         return attrs
 
-    def dumps(self, indent=4, sortKeys=True):
+    def dumps(self, indent=4, sort_keys=True, preserve_order=False):
         """Return a JSON compatible dictionary of all attributes"""
-        return json.dumps(self.dump(), indent=indent, sort_keys=sortKeys)
+        return json.dumps(self.dump(preserve_order), indent=indent, sort_keys=sort_keys)
 
     def type(self):
         """Return type name
@@ -1021,6 +1033,11 @@ class Node(object):
             True
 
         """
+
+        if isinstance(attr, str):
+            node, attr = attr.rsplit(".", 1)
+            node = encode(node)
+            attr = node[attr]
 
         if isinstance(attr, _AbstractAttribute):
             attr = attr.create()
@@ -3128,7 +3145,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return super(TransformationMatrix, self).rotatePivot(space)
 
-    def translation(self, space=None):
+    def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return super(TransformationMatrix, self).translation(space)
@@ -3182,10 +3199,10 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         return super(TransformationMatrix, self).setRotation(rot)
 
-    def asMatrix(self):
+    def asMatrix(self):  # type: () -> om.MMatrix
         return MatrixType(super(TransformationMatrix, self).asMatrix())
 
-    def asMatrixInverse(self):
+    def asMatrixInverse(self):  # type: () -> om.MMatrix
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
@@ -3887,7 +3904,7 @@ def exists(path):
     return True
 
 
-def encode(path):
+def encode(path):  # type: (str) -> Node
     """Convert relative or absolute `path` to cmdx Node
 
     Fastest conversion from absolute path to Node
@@ -4546,6 +4563,11 @@ def setAttr(attr, value, type=None):
 
     """
 
+    if isinstance(attr, str):
+        node, attr = attr.rsplit(".", 1)
+        node = encode(node)
+        attr = node[attr]
+
     attr.write(value)
 
 
@@ -4621,15 +4643,19 @@ def listRelatives(node,
         >>> child = createNode("transform", parent=parent)
         >>> listRelatives(child, parent=True) == [parent]
         True
+        >>> listRelatives(str(child), parent=True) == [str(parent)]
+        True
 
     """
+
+    if isinstance(node, str):
+        node = encode(node)
 
     if not isinstance(node, DagNode):
         return None
 
     elif allDescendents:
         return list(node.descendents(type=type))
-
     elif shapes:
         return list(node.shapes(type=type))
 
@@ -4678,12 +4704,27 @@ def connectAttr(src, dst):
 
     """
 
+    if isinstance(src, str):
+        node, src = src.rsplit(".", 1)
+        node = encode(node)
+        src = node[src]
+
+    if isinstance(dst, str):
+        node, dst = dst.rsplit(".", 1)
+        node = encode(node)
+        dst = node[dst]
+
     src.connect(dst)
 
 
 def delete(*nodes):
+
     with DGModifier() as mod:
         for node in nodes:
+            if isinstance(node, str):
+                node, node = node.rsplit(".", 1)
+                node = encode(node)
+                node = node[node]
             mod.delete(node)
 
 
