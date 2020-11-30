@@ -5254,11 +5254,44 @@ class Distance(AbstractUnit):
 
 
 class Compound(_AbstractAttribute):
+    """One or more nested attributes
+    
+    Examples:
+        >>> _ = cmds.file(new=True, force=True)
+        >>> node = createNode("transform")
+        >>> node["compoundAttr"] = Compound(children=[
+        ...     Double("child1", default=1.0),
+        ...     Double("child2", default=5.0)
+        ... ])
+        ...
+        >>> node["compoundAttr"]["child1"].read()
+        1.0
+        >>> node["compoundAttr"]["child2"].read()
+        5.0
+        
+        # Also supports nested attributes
+        >>> node.addAttr(
+        ...     Compound("parent", children=[
+        ...         Compound("child", children=[
+        ...             Double("age", default=33),
+        ...             Double("height", default=1.87)
+        ...         ])
+        ...     ])
+        ... )
+        ...
+        >>> node["parent"]["child"]["age"].read()
+        33.0
+        >>> node["parent"]["child"]["height"].read()
+        1.87
+
+    """
+
     Multi = None
 
     def __init__(self, name, children=None, **kwargs):
         # see https://github.com/mottosso/cmdx/issues/5#issuecomment-717330454
         self.Fn = om.MFnCompoundAttribute()
+
         if not children and self.Multi:
             default = kwargs.pop("default", None)
             children, Type = self.Multi
