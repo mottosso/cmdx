@@ -1349,6 +1349,19 @@ class DagNode(Node):
         """Set visibility to True"""
         self["visibility"] = True
 
+    def childCount(self, type=None):
+        """Return number of children of a given optional type
+
+        Compared to `MFnDagNode.childCount`, this function actually returns
+        children, not shapes, along with filtering by an optional type.
+
+        Arguments:
+            type (str): Same as to .children(type=)
+
+        """
+
+        return len(list(self.children(type=type)))
+
     def addChild(self, child, index=Last, safe=True):
         """Add `child` to self
 
@@ -1761,6 +1774,7 @@ class DagNode(Node):
     if ENABLE_PEP8:
         shortest_path = shortestPath
         add_child = addChild
+        child_count = childCount
         dag_path = dagPath
         map_from = mapFrom
         map_to = mapTo
@@ -3878,6 +3892,18 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
+def exists(path):
+    """Return whether any node at `path` exists"""
+
+    selectionList = om.MSelectionList()
+
+    try:
+        selectionList.add(path)
+    except RuntimeError:
+        return False
+    return True
+
+
 def encode(path):  # type: (str) -> Node
     """Convert relative or absolute `path` to cmdx Node
 
@@ -4153,6 +4179,11 @@ class _BaseModifier(object):
                 self.undoIt()
 
             raise ModifierError(self._history)
+        else:
+
+            # Facilitate multiple calls to doIt, whereby only
+            # the latest, actually-performed actions are reported
+            self._history[:] = []
 
         self.isDone = True
 
@@ -4412,6 +4443,12 @@ class DagModifier(_BaseModifier):
 
     if ENABLE_PEP8:
         create_node = createNode
+
+
+# Convenience functions
+def connect(a, b):
+    with DagModifier() as mod:
+        mod.connect(a, b)
 
 
 class DGContext(om.MDGContext):
