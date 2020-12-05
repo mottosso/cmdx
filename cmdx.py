@@ -4280,6 +4280,32 @@ class _BaseModifier(object):
 
     @record_history
     def connect(self, src, dst, force=True):
+        """Connect one attribute to another, with undo
+
+        Examples:
+            >>> tm = createNode("transform")
+            >>> with DagModifier() as mod:
+            ...   mod.connect(tm["rx"], tm["ry"])
+            ...
+            >>> tx = createNode("animCurveTL")
+            >>> tx.keys(times=[1, 2, 3], values=[0.0, 1.0, 0.0])
+
+            >>> # Connect without undo
+            >>> tm["tx"] << tx["output"]
+            >>> tm["tx"].connection() is tx
+            True
+            >>> # Automatically disconnects any connected attribute
+            >>> with DagModifier() as mod:
+            ...     mod.connect(tm["sx"], tm["tx"])
+            ...
+            >>> tm["tx"].connection() is tm
+            True
+            >>> cmds.undo()
+            >>> tm["tx"].connection() is tx
+            True
+
+        """
+
         if isinstance(src, Plug):
             src = src._mplug
 
@@ -4288,23 +4314,22 @@ class _BaseModifier(object):
 
         if force:
             # Disconnect any plug connected to `other`
-            self.disconnect(dst)
+            disconnected = False
 
-            # Connecting after disconnecting breaks undo,
-            # unless we do it first.
-            self._modifier.doIt()
+            for plug in dst.connectedTo(True, False):
+                self.disconnect(a=plug, b=dst, destination=False)
+                disconnected = True
+
+            if disconnected:
+                # Connecting after disconnecting breaks undo,
+                # unless we do it first.
+                self.doIt()
 
         self._modifier.connect(src, dst)
 
     @record_history
     def disconnect(self, a, b=None, source=True, destination=True):
         """Disconnect `a` from `b`
-
-        Arguments:
-            a (Plug): Starting point of a connection
-            b (Plug, optional): End point of a connection, defaults to all
-            source (bool, optional): Disconnect b, if it is a source
-            destination (bool, optional): Disconnect b, if it is a destination
 
         Normally, Maya only performs a disconnect if the
         connection is incoming. Bidirectional
@@ -4321,6 +4346,15 @@ class _BaseModifier(object):
         |  nodeA   o---->o  nodeB  |
         |__________|     |_________|
 
+        Arguments:
+            a (Plug): Starting point of a connection
+            b (Plug, optional): End point of a connection, defaults to all
+            source (bool, optional): Disconnect b, if it is a source
+            destination (bool, optional): Disconnect b, if it is a destination
+
+        Returns:
+            count (int): Number of disconnected attributes
+
         """
 
         if isinstance(a, Plug):
@@ -4329,22 +4363,30 @@ class _BaseModifier(object):
         if isinstance(b, Plug):
             b = b._mplug
 
+        count = 0
+
         if b is None:
             # Disconnect any plug connected to `other`
             if source:
                 for plug in a.connectedTo(True, False):
                     self._modifier.disconnect(plug, a)
+                    count += 1
 
             if destination:
                 for plug in a.connectedTo(False, True):
                     self._modifier.disconnect(a, plug)
+                    count += 1
 
         else:
             if source:
                 self._modifier.disconnect(a, b)
+                count += 1
 
             if destination:
                 self._modifier.disconnect(b, a)
+                count += 1
+
+        return count
 
     if ENABLE_PEP8:
         do_it = doIt
