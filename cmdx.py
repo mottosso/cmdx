@@ -4280,32 +4280,31 @@ class _BaseModifier(object):
 
     @record_history
     def connect(self, src, dst, force=True):
-        if __maya_version__ >= 2016:
-            """Connect one attribute to another, with undo
+        """Connect one attribute to another, with undo
 
-            Examples:
-                >>> tm = createNode("transform")
-                >>> with DagModifier() as mod:
-                ...   mod.connect(tm["rx"], tm["ry"])
-                ...
-                >>> tx = createNode("animCurveTL")
-                >>> tx.keys(times=[1, 2, 3], values=[0.0, 1.0, 0.0])
+        Examples:
+            >>> tm = createNode("transform")
+            >>> with DagModifier() as mod:
+            ...   mod.connect(tm["rx"], tm["ry"])
+            ...
+            >>> tx = createNode("animCurveTL")
 
-                >>> # Connect without undo
-                >>> tm["tx"] << tx["output"]
-                >>> tm["tx"].connection() is tx
-                True
-                >>> # Automatically disconnects any connected attribute
-                >>> with DagModifier() as mod:
-                ...     mod.connect(tm["sx"], tm["tx"])
-                ...
-                >>> tm["tx"].connection() is tm
-                True
-                >>> cmds.undo()
-                >>> tm["tx"].connection() is tx
-                True
+            # Connect without undo
+            >>> tm["tx"] << tx["output"]
+            >>> tm["tx"].connection() is tx
+            True
 
-            """
+            # Automatically disconnects any connected attribute
+            >>> with DagModifier() as mod:
+            ...     mod.connect(tm["sx"], tm["tx"])
+            ...
+            >>> tm["tx"].connection() is tm
+            True
+            >>> cmds.undo() if ENABLE_UNDO else DoNothing
+            >>> tm["tx"].connection() is tx
+            True
+
+        """
 
         if isinstance(src, Plug):
             src = src._mplug
@@ -4318,7 +4317,7 @@ class _BaseModifier(object):
             disconnected = False
 
             for plug in dst.connectedTo(True, False):
-                self.disconnect(a=plug, b=dst, destination=False)
+                self.disconnect(a=plug, b=dst)
                 disconnected = True
 
             if disconnected:
@@ -4347,11 +4346,59 @@ class _BaseModifier(object):
         |  nodeA   o---->o  nodeB  |
         |__________|     |_________|
 
+        Examples:
+            >>> tm1 = createNode("transform", name="tm1")
+            >>> tm2 = createNode("transform", name="tm2")
+            >>> tm3 = createNode("transform", name="tm3")
+
+           # Disconnects of unconnected attributes are ignored
+            >>> with DagModifier() as mod:
+            ...    _ = mod.disconnect(tm1["rx"], tm1["ry"])
+            ...    _ = mod.disconnect(tm1["rx"], tm1["rz"])
+            ...    _ = mod.disconnect(tm1["rx"], tm1["sy"])
+            ...    _ = mod.disconnect(tm1["rx"], tm1["ty"])
+            ...
+
+            # This doesn't throw an error
+            >>> cmds.undo() if ENABLE_UNDO else DoNothing
+
+            # Disconnect either source or destination, only
+            >>> a, b = tm1["tx"], tm2["ty"]
+            >>> a << b
+            >>> a.connection() is tm2
+            True
+
+            # b is a source, not a destination, so this does nothing
+            >>> a.disconnect(b, source=False, destination=True)
+            >>> a.connection() is tm2
+            True
+
+            # This on the other hand..
+            >>> a.disconnect(b, source=True, destination=False)
+            >>> a.connection() is tm2
+            False
+            >>> a.connection() is None
+            True
+
+            # Default is to disconnect both
+            >>> tm1["tx"] >> tm2["tx"]
+            >>> tm2["tx"] >> tm3["tx"]
+            >>> tm1["tx"].connection() is tm2
+            True
+            >>> tm3["tx"].connection() is tm2
+            True
+            >>> tm2["tx"].disconnect()
+            >>> tm1["tx"].connection() is tm2
+            False
+            >>> tm3["tx"].connection() is tm2
+            False
+
         Arguments:
             a (Plug): Starting point of a connection
             b (Plug, optional): End point of a connection, defaults to all
             source (bool, optional): Disconnect b, if it is a source
-            destination (bool, optional): Disconnect b, if it is a destination
+            destination (bool, optional): Disconnect b, if it
+                is a destination
 
         Returns:
             count (int): Number of disconnected attributes
@@ -4365,26 +4412,25 @@ class _BaseModifier(object):
             b = b._mplug
 
         count = 0
+        incoming = (True, False)
+        outgoing = (False, True)
 
-        if b is None:
-            # Disconnect any plug connected to `other`
-            if source:
-                for plug in a.connectedTo(True, False):
-                    self._modifier.disconnect(plug, a)
-                    count += 1
+        if source:
+            for other in a.connectedTo(*incoming):
 
-            if destination:
-                for plug in a.connectedTo(False, True):
-                    self._modifier.disconnect(a, plug)
-                    count += 1
+                # Limit disconnects to the attribute provided
+                if b is not None and other != b:
+                    continue
 
-        else:
-            if source:
-                self._modifier.disconnect(a, b)
+                self._modifier.disconnect(other, a)
                 count += 1
 
-            if destination:
-                self._modifier.disconnect(b, a)
+        if destination:
+            for other in a.connectedTo(*outgoing):
+                if b is not None and other != b:
+                    continue
+
+                self._modifier.disconnect(a, other)
                 count += 1
 
         return count
