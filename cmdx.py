@@ -4280,31 +4280,32 @@ class _BaseModifier(object):
 
     @record_history
     def connect(self, src, dst, force=True):
-        """Connect one attribute to another, with undo
+        if __maya_version__ >= 2016:
+            """Connect one attribute to another, with undo
 
-        Examples:
-            >>> tm = createNode("transform")
-            >>> with DagModifier() as mod:
-            ...   mod.connect(tm["rx"], tm["ry"])
-            ...
-            >>> tx = createNode("animCurveTL")
-            >>> tx.keys(times=[1, 2, 3], values=[0.0, 1.0, 0.0])
+            Examples:
+                >>> tm = createNode("transform")
+                >>> with DagModifier() as mod:
+                ...   mod.connect(tm["rx"], tm["ry"])
+                ...
+                >>> tx = createNode("animCurveTL")
+                >>> tx.keys(times=[1, 2, 3], values=[0.0, 1.0, 0.0])
 
-            >>> # Connect without undo
-            >>> tm["tx"] << tx["output"]
-            >>> tm["tx"].connection() is tx
-            True
-            >>> # Automatically disconnects any connected attribute
-            >>> with DagModifier() as mod:
-            ...     mod.connect(tm["sx"], tm["tx"])
-            ...
-            >>> tm["tx"].connection() is tm
-            True
-            >>> cmds.undo()
-            >>> tm["tx"].connection() is tx
-            True
+                >>> # Connect without undo
+                >>> tm["tx"] << tx["output"]
+                >>> tm["tx"].connection() is tx
+                True
+                >>> # Automatically disconnects any connected attribute
+                >>> with DagModifier() as mod:
+                ...     mod.connect(tm["sx"], tm["tx"])
+                ...
+                >>> tm["tx"].connection() is tm
+                True
+                >>> cmds.undo()
+                >>> tm["tx"].connection() is tx
+                True
 
-        """
+            """
 
         if isinstance(src, Plug):
             src = src._mplug
