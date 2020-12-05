@@ -4262,8 +4262,11 @@ class _BaseModifier(object):
 
         if force:
             # Disconnect any plug connected to `other`
-            for plug in dst.connectedTo(True, False):
-                self.disconnect(plug, dst)
+            self.disconnect(dst)
+
+            # Connecting after disconnecting breaks undo,
+            # unless we do it first.
+            self._modifier.doIt()
 
         self._modifier.connect(src, dst)
 
