@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# Hack for static typing analysis:
-# the test below only passes in the IDE (eg VsCode); Maya doesn't know or care about typing.
-MYPY = False
-if MYPY:
-    from typing import *
-    # fake-declare some Python2-only types to fix Pylance analyzer false positives (Pylance is Python3-only)
-    basestring = unicode = str
-    long = int
-    buffer = bytearray
-    file = object
-del MYPY
-
 import os
 import sys
 import json
@@ -28,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.9"
+__version__ = "0.4.10"
 
 PY3 = sys.version_info[0] == 3
 
@@ -72,6 +60,21 @@ except (AttributeError, ValueError):
 
 if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
+
+# Hack for static typing analysis
+#
+# the test below only passes in the IDE such as VSCode
+# Maya doesn't know or care about the `typing` library
+MYPY = False
+if MYPY:
+    from typing import *
+    # Fake-declare some Python2-only types to fix Pylance
+    # analyzer false positives (Pylance is Python3-only)
+    basestring = unicode = str
+    long = int
+    buffer = bytearray
+    file = object
+del MYPY
 
 self = sys.modules[__name__]
 self.installed = False
@@ -282,7 +285,13 @@ AngularSeconds = _Unit(om.MAngle, om.MAngle.kAngSeconds)
 
 
 def AngleUiUnit():
-    """Unlike other angle units, this can be modified by the user at run-time"""
+    """Dynamic angle UI unit
+
+    Unlike other angle units, this can be modified by the user at run-time
+    hence it needs to be a function rather than a variable.
+
+    """
+
     return _Unit(om.MAngle, om.MAngle.uiUnit())
 
 
@@ -298,7 +307,13 @@ Yards = _Unit(om.MDistance, om.MDistance.kYards)
 
 
 def DistanceUiUnit():
-    """Unlike other distance units, this can be modified by the user at run-time"""
+    """Dynamic distance UI unit
+
+    Unlike other distance units, this can be modified by the user at run-time
+    hence it needs to be a function rather than a variable.
+
+    """
+
     return _Unit(om.MDistance, om.MDistance.uiUnit())
 
 
@@ -1005,7 +1020,11 @@ class Node(object):
 
     def dumps(self, indent=4, sort_keys=True, preserve_order=False):
         """Return a JSON compatible dictionary of all attributes"""
-        return json.dumps(self.dump(preserve_order), indent=indent, sort_keys=sort_keys)
+        return json.dumps(
+            self.dump(preserve_order),
+            indent=indent,
+            sort_keys=sort_keys
+        )
 
     def type(self):
         """Return type name
@@ -2730,14 +2749,17 @@ class Plug(object):
             k = om.MFnNumericAttribute(attr).numericType()
             if k == om.MFnNumericData.kBoolean:
                 return Boolean
-            elif k in (om.MFnNumericData.kLong, om.MFnNumericData.kInt):
+            elif k in (om.MFnNumericData.kLong,
+                       om.MFnNumericData.kInt):
                 return Long
             elif k == om.MFnNumericData.kDouble:
                 return Double
 
-        elif k in (om.MFn.kDoubleAngleAttribute, om.MFn.kFloatAngleAttribute):
+        elif k in (om.MFn.kDoubleAngleAttribute,
+                   om.MFn.kFloatAngleAttribute):
             return Angle
-        elif k in (om.MFn.kDoubleLinearAttribute, om.MFn.kFloatLinearAttribute):
+        elif k in (om.MFn.kDoubleLinearAttribute,
+                   om.MFn.kFloatLinearAttribute):
             return Distance
         elif k == om.MFn.kTimeAttribute:
             return Time
@@ -2762,7 +2784,8 @@ class Plug(object):
 
         elif k == om.MFn.kCompoundAttribute:
             return Compound
-        elif k in (om.Mfn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute):
+        elif k in (om.Mfn.kMatrixAttribute,
+                   om.MFn.kFloatMatrixAttribute):
             return Matrix
         elif k == om.MFn.kMessageAttribute:
             return Message
@@ -4237,7 +4260,10 @@ class _BaseModifier(object):
     def deleteAttr(self, plug):
         node = plug.node()
         node.clear()
-        return self._modifier.removeAttribute(node._mobject, plug._mplug.attribute())
+
+        return self._modifier.removeAttribute(
+            node._mobject, plug._mplug.attribute()
+        )
 
     @record_history
     def setAttr(self, plug, value):
@@ -4482,13 +4508,14 @@ class DGContext(om.MDGContext):
             return self
         else:
             cmds.error(
-                "'%s' does not support context manager functionality for Maya 2017 "
-                "and below" % self.__class__.__name__
+                "'%s' does not support context manager functionality "
+                "for Maya 2017  and below" % self.__class__.__name__
             )
 
     def __exit__(self, exc_type, exc_value, tb):
         if self._previousContext:
             self._previousContext.makeCurrent()
+
 
 # Alias
 Context = DGContext
@@ -5192,7 +5219,10 @@ class Divider(Enum):
         kwargs.pop("name", None)
         kwargs.pop("fields", None)
         kwargs.pop("label", None)
-        super(Divider, self).__init__(label, fields=(label,), label=" ", **kwargs)
+
+        super(Divider, self).__init__(
+            label, fields=(label,), label=" ", **kwargs
+        )
 
 
 class String(_AbstractAttribute):
@@ -5336,7 +5366,7 @@ class Distance(AbstractUnit):
 
 class Compound(_AbstractAttribute):
     """One or more nested attributes
-    
+
     Examples:
         >>> _ = cmds.file(new=True, force=True)
         >>> node = createNode("transform")
@@ -5349,7 +5379,7 @@ class Compound(_AbstractAttribute):
         1.0
         >>> node["compoundAttr"]["child2"].read()
         5.0
-        
+
         # Also supports nested attributes
         >>> node.addAttr(
         ...     Compound("parent", children=[
