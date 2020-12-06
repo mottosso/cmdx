@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# Hack for static typing analysis:
-# the test below only passes in the IDE (eg VsCode); Maya doesn't know or care about typing.
-MYPY = False
-if MYPY:
-    from typing import *
-    # fake-declare some Python2-only types to fix Pylance analyzer false positives (Pylance is Python3-only)
-    basestring = unicode = str
-    long = int
-    buffer = bytearray
-    file = object
-del MYPY
-
 import os
 import sys
 import json
@@ -28,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.9"
+__version__ = "0.4.10"
 
 PY3 = sys.version_info[0] == 3
 
@@ -72,6 +60,21 @@ except (AttributeError, ValueError):
 
 if not IGNORE_VERSION:
     assert __maya_version__ >= 2015, "Requires Maya 2015 or newer"
+
+# Hack for static typing analysis
+#
+# the test below only passes in the IDE such as VSCode
+# Maya doesn't know or care about the `typing` library
+MYPY = False
+if MYPY:
+    from typing import *
+    # Fake-declare some Python2-only types to fix Pylance
+    # analyzer false positives (Pylance is Python3-only)
+    basestring = unicode = str
+    long = int
+    buffer = bytearray
+    file = object
+del MYPY
 
 self = sys.modules[__name__]
 self.installed = False
@@ -282,7 +285,13 @@ AngularSeconds = _Unit(om.MAngle, om.MAngle.kAngSeconds)
 
 
 def AngleUiUnit():
-    """Unlike other angle units, this can be modified by the user at run-time"""
+    """Dynamic angle UI unit
+
+    Unlike other angle units, this can be modified by the user at run-time
+    hence it needs to be a function rather than a variable.
+
+    """
+
     return _Unit(om.MAngle, om.MAngle.uiUnit())
 
 
@@ -298,7 +307,13 @@ Yards = _Unit(om.MDistance, om.MDistance.kYards)
 
 
 def DistanceUiUnit():
-    """Unlike other distance units, this can be modified by the user at run-time"""
+    """Dynamic distance UI unit
+
+    Unlike other distance units, this can be modified by the user at run-time
+    hence it needs to be a function rather than a variable.
+
+    """
+
     return _Unit(om.MDistance, om.MDistance.uiUnit())
 
 
@@ -1005,7 +1020,11 @@ class Node(object):
 
     def dumps(self, indent=4, sort_keys=True, preserve_order=False):
         """Return a JSON compatible dictionary of all attributes"""
-        return json.dumps(self.dump(preserve_order), indent=indent, sort_keys=sort_keys)
+        return json.dumps(
+            self.dump(preserve_order),
+            indent=indent,
+            sort_keys=sort_keys
+        )
 
     def type(self):
         """Return type name
@@ -2730,14 +2749,17 @@ class Plug(object):
             k = om.MFnNumericAttribute(attr).numericType()
             if k == om.MFnNumericData.kBoolean:
                 return Boolean
-            elif k in (om.MFnNumericData.kLong, om.MFnNumericData.kInt):
+            elif k in (om.MFnNumericData.kLong,
+                       om.MFnNumericData.kInt):
                 return Long
             elif k == om.MFnNumericData.kDouble:
                 return Double
 
-        elif k in (om.MFn.kDoubleAngleAttribute, om.MFn.kFloatAngleAttribute):
+        elif k in (om.MFn.kDoubleAngleAttribute,
+                   om.MFn.kFloatAngleAttribute):
             return Angle
-        elif k in (om.MFn.kDoubleLinearAttribute, om.MFn.kFloatLinearAttribute):
+        elif k in (om.MFn.kDoubleLinearAttribute,
+                   om.MFn.kFloatLinearAttribute):
             return Distance
         elif k == om.MFn.kTimeAttribute:
             return Time
@@ -2762,7 +2784,8 @@ class Plug(object):
 
         elif k == om.MFn.kCompoundAttribute:
             return Compound
-        elif k in (om.Mfn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute):
+        elif k in (om.Mfn.kMatrixAttribute,
+                   om.MFn.kFloatMatrixAttribute):
             return Matrix
         elif k == om.MFn.kMessageAttribute:
             return Message
@@ -4237,7 +4260,10 @@ class _BaseModifier(object):
     def deleteAttr(self, plug):
         node = plug.node()
         node.clear()
-        return self._modifier.removeAttribute(node._mobject, plug._mplug.attribute())
+
+        return self._modifier.removeAttribute(
+            node._mobject, plug._mplug.attribute()
+        )
 
     @record_history
     def setAttr(self, plug, value):
@@ -4254,6 +4280,32 @@ class _BaseModifier(object):
 
     @record_history
     def connect(self, src, dst, force=True):
+        """Connect one attribute to another, with undo
+
+        Examples:
+            >>> tm = createNode("transform")
+            >>> with DagModifier() as mod:
+            ...   mod.connect(tm["rx"], tm["ry"])
+            ...
+            >>> tx = createNode("animCurveTL")
+
+            # Connect without undo
+            >>> tm["tx"] << tx["output"]
+            >>> tm["tx"].connection() is tx
+            True
+
+            # Automatically disconnects any connected attribute
+            >>> with DagModifier() as mod:
+            ...     mod.connect(tm["sx"], tm["tx"])
+            ...
+            >>> tm["tx"].connection() is tm
+            True
+            >>> cmds.undo() if ENABLE_UNDO else DoNothing
+            >>> tm["tx"].connection() is tx
+            True
+
+        """
+
         if isinstance(src, Plug):
             src = src._mplug
 
@@ -4262,20 +4314,22 @@ class _BaseModifier(object):
 
         if force:
             # Disconnect any plug connected to `other`
+            disconnected = False
+
             for plug in dst.connectedTo(True, False):
-                self.disconnect(plug, dst)
+                self.disconnect(a=plug, b=dst)
+                disconnected = True
+
+            if disconnected:
+                # Connecting after disconnecting breaks undo,
+                # unless we do it first.
+                self.doIt()
 
         self._modifier.connect(src, dst)
 
     @record_history
     def disconnect(self, a, b=None, source=True, destination=True):
         """Disconnect `a` from `b`
-
-        Arguments:
-            a (Plug): Starting point of a connection
-            b (Plug, optional): End point of a connection, defaults to all
-            source (bool, optional): Disconnect b, if it is a source
-            destination (bool, optional): Disconnect b, if it is a destination
 
         Normally, Maya only performs a disconnect if the
         connection is incoming. Bidirectional
@@ -4292,6 +4346,63 @@ class _BaseModifier(object):
         |  nodeA   o---->o  nodeB  |
         |__________|     |_________|
 
+        Examples:
+            >>> tm1 = createNode("transform", name="tm1")
+            >>> tm2 = createNode("transform", name="tm2")
+            >>> tm3 = createNode("transform", name="tm3")
+
+           # Disconnects of unconnected attributes are ignored
+            >>> with DagModifier() as mod:
+            ...    _ = mod.disconnect(tm1["rx"], tm1["ry"])
+            ...    _ = mod.disconnect(tm1["rx"], tm1["rz"])
+            ...    _ = mod.disconnect(tm1["rx"], tm1["sy"])
+            ...    _ = mod.disconnect(tm1["rx"], tm1["ty"])
+            ...
+
+            # This doesn't throw an error
+            >>> cmds.undo() if ENABLE_UNDO else DoNothing
+
+            # Disconnect either source or destination, only
+            >>> a, b = tm1["tx"], tm2["ty"]
+            >>> a << b
+            >>> a.connection() is tm2
+            True
+
+            # b is a source, not a destination, so this does nothing
+            >>> a.disconnect(b, source=False, destination=True)
+            >>> a.connection() is tm2
+            True
+
+            # This on the other hand..
+            >>> a.disconnect(b, source=True, destination=False)
+            >>> a.connection() is tm2
+            False
+            >>> a.connection() is None
+            True
+
+            # Default is to disconnect both
+            >>> tm1["tx"] >> tm2["tx"]
+            >>> tm2["tx"] >> tm3["tx"]
+            >>> tm1["tx"].connection() is tm2
+            True
+            >>> tm3["tx"].connection() is tm2
+            True
+            >>> tm2["tx"].disconnect()
+            >>> tm1["tx"].connection() is tm2
+            False
+            >>> tm3["tx"].connection() is tm2
+            False
+
+        Arguments:
+            a (Plug): Starting point of a connection
+            b (Plug, optional): End point of a connection, defaults to all
+            source (bool, optional): Disconnect b, if it is a source
+            destination (bool, optional): Disconnect b, if it
+                is a destination
+
+        Returns:
+            count (int): Number of disconnected attributes
+
         """
 
         if isinstance(a, Plug):
@@ -4300,22 +4411,29 @@ class _BaseModifier(object):
         if isinstance(b, Plug):
             b = b._mplug
 
-        if b is None:
-            # Disconnect any plug connected to `other`
-            if source:
-                for plug in a.connectedTo(True, False):
-                    self._modifier.disconnect(plug, a)
+        count = 0
+        incoming = (True, False)
+        outgoing = (False, True)
 
-            if destination:
-                for plug in a.connectedTo(False, True):
-                    self._modifier.disconnect(a, plug)
+        if source:
+            for other in a.connectedTo(*incoming):
 
-        else:
-            if source:
-                self._modifier.disconnect(a, b)
+                # Limit disconnects to the attribute provided
+                if b is not None and other != b:
+                    continue
 
-            if destination:
-                self._modifier.disconnect(b, a)
+                self._modifier.disconnect(other, a)
+                count += 1
+
+        if destination:
+            for other in a.connectedTo(*outgoing):
+                if b is not None and other != b:
+                    continue
+
+                self._modifier.disconnect(a, other)
+                count += 1
+
+        return count
 
     if ENABLE_PEP8:
         do_it = doIt
@@ -4479,13 +4597,14 @@ class DGContext(om.MDGContext):
             return self
         else:
             cmds.error(
-                "'%s' does not support context manager functionality for Maya 2017 "
-                "and below" % self.__class__.__name__
+                "'%s' does not support context manager functionality "
+                "for Maya 2017  and below" % self.__class__.__name__
             )
 
     def __exit__(self, exc_type, exc_value, tb):
         if self._previousContext:
             self._previousContext.makeCurrent()
+
 
 # Alias
 Context = DGContext
@@ -5189,7 +5308,10 @@ class Divider(Enum):
         kwargs.pop("name", None)
         kwargs.pop("fields", None)
         kwargs.pop("label", None)
-        super(Divider, self).__init__(label, fields=(label,), label=" ", **kwargs)
+
+        super(Divider, self).__init__(
+            label, fields=(label,), label=" ", **kwargs
+        )
 
 
 class String(_AbstractAttribute):
@@ -5333,7 +5455,7 @@ class Distance(AbstractUnit):
 
 class Compound(_AbstractAttribute):
     """One or more nested attributes
-    
+
     Examples:
         >>> _ = cmds.file(new=True, force=True)
         >>> node = createNode("transform")
@@ -5346,7 +5468,7 @@ class Compound(_AbstractAttribute):
         1.0
         >>> node["compoundAttr"]["child2"].read()
         5.0
-        
+
         # Also supports nested attributes
         >>> node.addAttr(
         ...     Compound("parent", children=[
