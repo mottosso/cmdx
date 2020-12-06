@@ -850,7 +850,7 @@ class Node(object):
             >>> plug1 = node.findPlug("translateX")
             >>> isinstance(plug1, om.MPlug)
             True
-            >>> plug1 is node.findPlug("translateX")
+            >>> plug1 is node.findPlug("translateX", safe=False)
             True
             >>> plug1 is node.findPlug("translateX", cached=True)
             True
