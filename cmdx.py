@@ -811,7 +811,7 @@ class Node(object):
 
     # Module-level branch; evaluated on import
     @withTiming("findPlug() reuse {time:.4f} ns")
-    def findPlug(self, name, cached=False):
+    def findPlug(self, name, cached=False, safe=True):
         """Cache previously found plugs, for performance
 
         Cost: 4.9 microseconds/call
@@ -837,7 +837,7 @@ class Node(object):
                 means it will run Maya's findPlug() and cache
                 the result.
             safe (bool, optional): Always find the plug through
-                Maya's API, defaults to False. This will not perform
+                Maya's API, defaults to True. This will not perform
                 any caching and is intended for use during debugging
                 to spot whether caching is causing trouble.
 
@@ -850,20 +850,24 @@ class Node(object):
             >>> plug1 = node.findPlug("translateX")
             >>> isinstance(plug1, om.MPlug)
             True
-            >>> plug1 is node.findPlug("translateX")
+            >>> plug1 is node.findPlug("translateX", safe=False)
             True
             >>> plug1 is node.findPlug("translateX", cached=True)
             True
 
         """
 
-        try:
-            existing = self._state["plugs"][name]
-            Stats.PlugReuseCount += 1
-            return existing
-        except KeyError:
-            if cached:
-                raise KeyError("'%s' not cached" % name)
+        if cached or not safe:
+            try:
+                existing = self._state["plugs"][name]
+                Stats.PlugReuseCount += 1
+                return existing
+
+            except KeyError:
+                # The user explicitly asked for a cached attribute,
+                # if this is not the case we must tell them about it
+                if cached:
+                    raise KeyError("'%s' not cached" % name)
 
         plug = self._fn.findPlug(name, False)
         self._state["plugs"][name] = plug
@@ -2535,7 +2539,7 @@ class Plug(object):
         else:
             obj = self._mplug.asMObject()
 
-        return om.MFnMatrixData(obj).matrix()
+        return MatrixType(om.MFnMatrixData(obj).matrix())
 
     def asTransformationMatrix(self, time=None):
         """Return plug as TransformationMatrix
@@ -3222,10 +3226,10 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         return super(TransformationMatrix, self).setRotation(rot)
 
-    def asMatrix(self):  # type: () -> om.MMatrix
+    def asMatrix(self):  # type: () -> MatrixType
         return MatrixType(super(TransformationMatrix, self).asMatrix())
 
-    def asMatrixInverse(self):  # type: () -> om.MMatrix
+    def asMatrixInverse(self):  # type: () -> MatrixType
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
     # A more intuitive alternative
@@ -3448,7 +3452,7 @@ class EulerRotation(om.MEulerRotation):
         return super(EulerRotation, self).asQuaternion()
 
     def asMatrix(self):
-        return super(EulerRotation, self).asMatrix()
+        return MatrixType(super(EulerRotation, self).asMatrix())
 
     order = {
         'xyz': kXYZ,
