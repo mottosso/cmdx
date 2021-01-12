@@ -4671,6 +4671,11 @@ def connect(a, b):
         mod.connect(a, b)
 
 
+def currentTime():
+    """Return current time in MTime format"""
+    return oma.MAnimControl.currentTime()
+
+
 class DGContext(om.MDGContext):
     """Context for evaluating the Maya DG
 
@@ -4679,16 +4684,6 @@ class DGContext(om.MDGContext):
 
     Arguments:
         time (float, om.MTime, optional): Time at which to evaluate context
-
-    Example:
-        >>> tm = createNode("transform")
-        >>> tm["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
-        >>> with DGContext(1, UiUnit()):
-        ...     assert tm["tx"].read() == 0.0
-        ...
-        >>> with DGContext(5, UiUnit()):
-        ...     assert tm["tx"].read() == 1.0
-        ...
 
     """
 
@@ -4704,12 +4699,21 @@ class DGContext(om.MDGContext):
         super(DGContext, self).__init__(*args)
         self._previous_context = None
 
-    # Context manager support in Maya 2018 and above
     if __maya_version__ >= 2018:
         def __enter__(self):
-            if self.getTime() == oma.MAnimControl.currentTime():
-                # No context needed
-                return
+            """Support for use as a context manager
+
+            Example:
+                >>> tm = createNode("transform")
+                >>> tm["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> with DGContext(1, UiUnit()):
+                ...     assert tm["tx"].read() == 0.0
+                ...
+                >>> with DGContext(5, UiUnit()):
+                ...     assert tm["tx"].read() == 1.0
+                ...
+
+            """
 
             self._previous_context = self.makeCurrent()
             return self
@@ -4998,6 +5002,7 @@ list_relatives = listRelatives
 list_connections = listConnections
 connect_attr = connectAttr
 obj_exists = objExists
+current_time = currentTime
 
 # Speciality functions
 
