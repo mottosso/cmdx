@@ -7,8 +7,9 @@ import time
 import math
 import types
 import logging
-import traceback
 import operator
+import traceback
+import contextlib
 import collections
 from functools import wraps
 
@@ -16,7 +17,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.10"
+__version__ = "0.4.11"
 
 PY3 = sys.version_info[0] == 3
 
@@ -1062,6 +1063,18 @@ class Node(object):
             node = encode(node)
             attr = node[attr]
 
+        if isinstance(attr, String):
+            # Strings are broken in the Python 2.0 API
+            if not getattr(self._modifier, "isDone", True):
+                self._modifier.doIt()
+
+            return cmds.addAttr(
+                self.path(),
+                longName=attr["name"],
+                shortName=attr["name"],
+                dataType="string"
+            )
+
         if isinstance(attr, _AbstractAttribute):
             attr = attr.create()
 
@@ -1997,7 +2010,9 @@ class AnimCurve(Node):
             self._fna = oma.MFnAnimCurve(mobj)
 
         def key(self, time, value, interpolation=Linear):
-            time = Seconds(time)
+            if isinstance(time, (float, int)):
+                time = Seconds(time)
+
             index = self._fna.find(time)
 
             if index:
@@ -2006,7 +2021,10 @@ class AnimCurve(Node):
                 self._fna.addKey(time, value, interpolation, interpolation)
 
         def keys(self, times, values, interpolation=Linear):
-            times = map(lambda t: Seconds(t), times)
+            times = map(
+                lambda t: Seconds(t) if isinstance(t, (float, int)) else t,
+                times
+            )
 
             try:
                 self._fna.addKeys(times, values)
@@ -2859,6 +2877,7 @@ class Plug(object):
             1.0
 
         """
+
         unit = unit if unit is not None else self._unit
         context = None if time is None else DGContext(time=time)
 
@@ -2882,7 +2901,28 @@ class Plug(object):
             log.error("'%s': failed to read attribute" % self.path())
             raise
 
+    def animate(self, values):
+        """Treat values as time:value pairs and animate this attribute
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> node = createNode("transform")
+            >>> node["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+            >>> node["rx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+            >>> node["sx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+            >>> node["v"] = {1: True, 5: False, 10: True}
+
+        """
+
+        times, values = map(UiUnit(), values.keys()), values.values()
+        anim = createNode(_find_curve_type(self))
+        anim.keys(times, values)
+        anim["output"] >> self
+
     def write(self, value):
+        if isinstance(value, dict):
+            return self.animate(value)
+
         if not getattr(self._modifier, "isDone", True):
             return self._modifier.setAttr(self, value)
 
@@ -3848,6 +3888,47 @@ def _python_to_plug(value, plug):
         raise TypeError("Unsupported Python type '%s'" % value.__class__)
 
 
+def _find_curve_type(plug):
+    """Find which type of curve to associate with a given `plug`
+
+    For example, translate channels have a linear curve type,
+    whereas rotate channels have an angular one.
+
+    """
+
+    attr = plug._mplug.attribute()
+    type = attr.apiType()
+
+    if type in (om.MFn.kDoubleLinearAttribute,
+                om.MFn.kFloatLinearAttribute):
+        return "animCurveTL"
+
+    elif type in (om.MFn.kDoubleAngleAttribute,
+                  om.MFn.kFloatAngleAttribute):
+        return "animCurveTA"
+
+    elif type == om.MFn.kNumericAttribute:
+        innerType = om.MFnNumericAttribute(attr).numericType()
+
+        if innerType == om.MFnNumericData.kBoolean:
+            return "animCurveTU"
+
+        elif innerType in (om.MFnNumericData.kShort,
+                           om.MFnNumericData.kInt,
+                           om.MFnNumericData.kLong,
+                           om.MFnNumericData.kByte,
+                           om.MFnNumericData.kFloat,
+                           om.MFnNumericData.kDouble,
+                           om.MFnNumericData.kAddr):
+            return "animCurveTL"
+
+    elif type == om.MFn.kTimeAttribute:
+        return "animCurveTT"
+
+    # Unitless, could be anything
+    return "animCurveTU"
+
+
 def _python_to_mod(value, plug, mod):
     """Convert `value` into a suitable equivalent for om.MDGModifier
 
@@ -3857,6 +3938,23 @@ def _python_to_mod(value, plug, mod):
         mod (om.MDGModifier): Modifier to use for writing it
 
     """
+
+    if isinstance(value, dict):
+        times, values = map(UiUnit(), value.keys()), value.values()
+        curve_typ = _find_curve_type(plug)
+
+        if isinstance(mod, DGModifier):
+            anim = mod.createNode(curve_typ)
+
+        else:
+            # The DagModifier can't create DG nodes
+            with DGModifier() as dgmod:
+                anim = dgmod.createNode(curve_typ)
+
+        anim.keys(times, values)
+        mod.connect(anim["output"]._mplug, plug._mplug)
+
+        return True
 
     mplug = plug._mplug
 
@@ -4574,40 +4672,51 @@ def connect(a, b):
 
 
 class DGContext(om.MDGContext):
+    """Context for evaluating the Maya DG
+
+    Extension of MDGContext to also accept time as a float. In Maya 2018
+    and above DGContext can also be used as a context manager.
+
+    Arguments:
+        time (float, om.MTime, optional): Time at which to evaluate context
+
+    Example:
+        >>> tm = createNode("transform")
+        >>> tm["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+        >>> with DGContext(1, UiUnit()):
+        ...     assert tm["tx"].read() == 0.0
+        ...
+        >>> with DGContext(5, UiUnit()):
+        ...     assert tm["tx"].read() == 1.0
+        ...
+
+    """
 
     def __init__(self, time=None, unit=None):
-        """Context for evaluating the Maya DG
-
-        Extension of MDGContext to also accept time as a float. In Maya 2018
-        and above DGContext can also be used as a context manager.
-
-        Arguments:
-            time (float, om.MTime, optional): Time at which to evaluate context
-
-        """
+        args = []
 
         if time is not None:
             if not isinstance(time, TimeType):
                 unit = unit or Seconds
                 time = unit(time)
-            super(DGContext, self).__init__(time)
-        else:
-            super(DGContext, self).__init__()
-        self._previousContext = None
+            args += [time]
 
-    def __enter__(self):
-        if __maya_version__ >= 2018:
-            self._previousContext = self.makeCurrent()
+        super(DGContext, self).__init__(*args)
+        self._previous_context = None
+
+    # Context manager support in Maya 2018 and above
+    if __maya_version__ >= 2018:
+        def __enter__(self):
+            if self.getTime() == oma.MAnimControl.currentTime():
+                # No context needed
+                return
+
+            self._previous_context = self.makeCurrent()
             return self
-        else:
-            cmds.error(
-                "'%s' does not support context manager functionality "
-                "for Maya 2017  and below" % self.__class__.__name__
-            )
 
-    def __exit__(self, exc_type, exc_value, tb):
-        if self._previousContext:
-            self._previousContext.makeCurrent()
+        def __exit__(self, exc_type, exc_value, tb):
+            if self._previous_context:
+                self._previous_context.makeCurrent()
 
 
 # Alias
@@ -5187,6 +5296,8 @@ class _AbstractAttribute(dict):
                  connectable=True,
                  help=None):
 
+        self.Fn = type(self).Fn()
+
         args = locals().copy()
         args.pop("self")
 
@@ -5280,7 +5391,7 @@ class _AbstractAttribute(dict):
 
 
 class Enum(_AbstractAttribute):
-    Fn = om.MFnEnumAttribute()
+    Fn = om.MFnEnumAttribute
     Type = None
     Default = 0
 
@@ -5319,7 +5430,7 @@ class Divider(Enum):
 
 
 class String(_AbstractAttribute):
-    Fn = om.MFnTypedAttribute()
+    Fn = om.MFnTypedAttribute
     Type = om.MFnData.kString
     Default = ""
 
@@ -5332,14 +5443,14 @@ class String(_AbstractAttribute):
 
 
 class Message(_AbstractAttribute):
-    Fn = om.MFnMessageAttribute()
+    Fn = om.MFnMessageAttribute
     Type = None
     Default = None
     Storable = False
 
 
 class Matrix(_AbstractAttribute):
-    Fn = om.MFnMatrixAttribute()
+    Fn = om.MFnMatrixAttribute
 
     Default = (0.0,) * 4 * 4  # Identity matrix
 
@@ -5356,7 +5467,7 @@ class Matrix(_AbstractAttribute):
 
 
 class Long(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kLong
     Default = 0
 
@@ -5365,7 +5476,7 @@ class Long(_AbstractAttribute):
 
 
 class Double(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kDouble
     Default = 0.0
 
@@ -5374,7 +5485,7 @@ class Double(_AbstractAttribute):
 
 
 class Double3(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = None
     Default = (0.0,) * 3
 
@@ -5407,7 +5518,7 @@ class Double3(_AbstractAttribute):
 
 
 class Boolean(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kBoolean
     Default = True
 
@@ -5416,7 +5527,7 @@ class Boolean(_AbstractAttribute):
 
 
 class AbstractUnit(_AbstractAttribute):
-    Fn = om.MFnUnitAttribute()
+    Fn = om.MFnUnitAttribute
     Default = 0.0
     Min = None
     Max = None
@@ -5490,12 +5601,10 @@ class Compound(_AbstractAttribute):
 
     """
 
+    Fn = om.MFnCompoundAttribute
     Multi = None
 
     def __init__(self, name, children=None, **kwargs):
-        # see https://github.com/mottosso/cmdx/issues/5#issuecomment-717330454
-        self.Fn = om.MFnCompoundAttribute()
-
         if not children and self.Multi:
             default = kwargs.pop("default", None)
             children, Type = self.Multi
