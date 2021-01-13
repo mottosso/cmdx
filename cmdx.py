@@ -3938,6 +3938,20 @@ def _python_to_mod(value, plug, mod):
         plug (Plug): Plug within which to write value
         mod (om.MDGModifier): Modifier to use for writing it
 
+    Example:
+        >>> mod = DagModifier()
+        >>> node = mod.createNode("transform")
+        >>> mod.set_attr(node["tx"], 5.0)
+        >>> mod.doIt()
+        >>> int(node["tx"].read())
+        5
+
+        # Support for applying a single value across compound children
+        >>> mod.set_attr(node["translate"], 10)
+        >>> mod.doIt()
+        >>> int(node["ty"].read())
+        10
+
     """
 
     if isinstance(value, dict) and __maya_version__ > 2015:
