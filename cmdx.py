@@ -3959,6 +3959,9 @@ def _python_to_mod(value, plug, mod):
 
     mplug = plug._mplug
 
+    if plug.isCompound and isinstance(value, (int, float)):
+        value = [value] * mplug.numChildren()
+
     if isinstance(value, (tuple, list)):
         for index, value in enumerate(value):
 
