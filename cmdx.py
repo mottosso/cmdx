@@ -2902,7 +2902,7 @@ class Plug(object):
             raise
 
     if __maya_version__ > 2015:
-        def animate(self, values):
+        def animate(self, values, interpolation=None):
             """Treat values as time:value pairs and animate this attribute
 
             Example:
@@ -2913,11 +2913,17 @@ class Plug(object):
                 >>> node["sx"] = {1: 0.0, 5: 1.0, 10: 0.0}
                 >>> node["v"] = {1: True, 5: False, 10: True}
 
+                # Direct function call
+                >>> node["ry"].animate({1: 0.0, 5: 1.0, 10: 0.0})
+
+                # Interpolation
+                >>> node["rz"].animate({1: 0.0, 5: 1.0, 10: 0.0}, Smooth)
+
             """
 
             times, values = map(UiUnit(), values.keys()), values.values()
             anim = createNode(_find_curve_type(self))
-            anim.keys(times, values)
+            anim.keys(times, values, interpolation=Linear)
             anim["output"] >> self
 
     def write(self, value):

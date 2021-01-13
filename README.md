@@ -849,6 +849,41 @@ assert node["tx"] == 10
 
 Using `cmdx.Cached` is a lot faster than recomputing the value, sometimes by several orders of magnitude depending on the type of value being queried.
 
+#### Animation
+
+Assigning a dictionary to any numerical attribute turns those values into animation, with an appropriate curve type.
+
+```py
+node = createNode("transform")
+node["translateX"] = {1: 0.0, 5: 1.0, 10: 0.0}      # animCurveTL
+node["rotateX"] = {1: 0.0, 5: 1.0, 10: 0.0}         # animCurveTA
+node["scaleX"] = {1: 0.0, 5: 1.0, 10: 0.0}          # animCurveTL
+node["visibility"] = {1: True, 5: False, 10: True}  # animCurveTU
+
+# Alternatively
+node["v"].animate({1: False, 5: True, 10: False})
+```
+
+Where the `key` is the frame number (can be fractional) and `value` is the value at that frame. Interpolation is `cmdx.Linear` per default, but can be customised with..
+
+```py
+node["rotateX"].animate({1: 0.0, 5: 1.0, 10: 0.0}, cmdx.Smooth)
+```
+
+Currently available options:
+
+- `cmdx.Stepped`
+- `cmdx.Linear`
+- `cmdx.Smooth`
+
+Animation is *undoable* if used with a modifier.
+
+```py
+with cmdx.DagModifier() as mod:
+    node = mod.createNode("transform")
+    node["tx"] = {1: 0.0, 2: 5.0}
+```
+
 #### Time
 
 The `time` argument of `cmdx.getAttr` enables a query to yield results relative a specific point in time. The `time` argument of `Plug.read` offers this same convenience, only faster.
@@ -859,8 +894,7 @@ from maya import cmds
 node = cmdx.createNode("transform")
 
 # Make some animation
-tx = cmdx.create_node("animCurveTL")
-tx.keys(times=[1, 50, 100], values=[0.0, 10.0, 0.0], interpolation=cmdx.Linear)
+node["tx"] = {1: 0.0, 50: 10.0, 100: 0.0}
 
 # Query it
 node = cmdx.create_node("transform")
