@@ -2901,26 +2901,27 @@ class Plug(object):
             log.error("'%s': failed to read attribute" % self.path())
             raise
 
-    def animate(self, values):
-        """Treat values as time:value pairs and animate this attribute
+    if __maya_version__ > 2015:
+        def animate(self, values):
+            """Treat values as time:value pairs and animate this attribute
 
-        Example:
-            >>> _ = cmds.file(new=True, force=True)
-            >>> node = createNode("transform")
-            >>> node["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
-            >>> node["rx"] = {1: 0.0, 5: 1.0, 10: 0.0}
-            >>> node["sx"] = {1: 0.0, 5: 1.0, 10: 0.0}
-            >>> node["v"] = {1: True, 5: False, 10: True}
+            Example:
+                >>> _ = cmds.file(new=True, force=True)
+                >>> node = createNode("transform")
+                >>> node["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> node["rx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> node["sx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> node["v"] = {1: True, 5: False, 10: True}
 
-        """
+            """
 
-        times, values = map(UiUnit(), values.keys()), values.values()
-        anim = createNode(_find_curve_type(self))
-        anim.keys(times, values)
-        anim["output"] >> self
+            times, values = map(UiUnit(), values.keys()), values.values()
+            anim = createNode(_find_curve_type(self))
+            anim.keys(times, values)
+            anim["output"] >> self
 
     def write(self, value):
-        if isinstance(value, dict):
+        if isinstance(value, dict) and __maya_version__ > 2015:
             return self.animate(value)
 
         if not getattr(self._modifier, "isDone", True):
@@ -3939,7 +3940,7 @@ def _python_to_mod(value, plug, mod):
 
     """
 
-    if isinstance(value, dict):
+    if isinstance(value, dict) and __maya_version__ > 2015:
         times, values = map(UiUnit(), value.keys()), value.values()
         curve_typ = _find_curve_type(plug)
 
