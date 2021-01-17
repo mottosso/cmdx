@@ -1063,22 +1063,18 @@ class Node(object):
             node = encode(node)
             attr = node[attr]
 
-        if isinstance(attr, String):
-            # Strings are broken in the Python 2.0 API
-            if not getattr(self._modifier, "isDone", True):
-                self._modifier.doIt()
+        mobj = attr
 
-            return cmds.addAttr(
-                self.path(),
-                longName=attr["name"],
-                shortName=attr["name"],
-                dataType="string"
-            )
+        if isinstance(mobj, _AbstractAttribute):
+            mobj = attr.create()
 
-        if isinstance(attr, _AbstractAttribute):
-            attr = attr.create()
+        self._fn.addAttribute(mobj)
 
-        self._fn.addAttribute(attr)
+        # These don't natively support defaults by Maya
+        # They aren't being saved with the file, unless
+        # we explicitly set it after creation.
+        if isinstance(attr, String) and attr["default"]:
+            self[attr["name"]] = attr["default"]
 
     def hasAttr(self, attr):
         """Return whether or not `attr` exists
@@ -4377,10 +4373,16 @@ class _BaseModifier(object):
     rename = renameNode
 
     @record_history
-    def addAttr(self, node, plug):
-        if isinstance(plug, _AbstractAttribute):
-            plug = plug.create()
-        return self._modifier.addAttribute(node._mobject, plug)
+    def addAttr(self, node, attr):
+        mobj = attr
+
+        if isinstance(attr, _AbstractAttribute):
+            mobj = attr.create()
+
+        self._modifier.addAttribute(node._mobject, mobj)
+
+        if isinstance(attr, String) and attr["default"]:
+            log.warning("Strings don't support default values with modifier")
 
     @record_history
     def deleteAttr(self, plug):
