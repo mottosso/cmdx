@@ -5880,8 +5880,12 @@ def install():
     tempdir = tempfile.gettempdir()
     tempfname = os.path.join(tempdir, unique_plugin)
 
-    # Rename ourselves..
-    shutil.copy(__file__, tempfname)
+    # We can't know whether we're a .pyc or .py file,
+    # but we need to copy the .py file *only*
+    fname = os.path.splitext(__file__)[0] + ".py"
+
+    # Copy *and overwrite*
+    shutil.copy(fname, tempfname)
 
     # Now we're guaranteed to not interfere
     # with other versions of cmdx. Win!
