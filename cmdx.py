@@ -9,7 +9,6 @@ import types
 import logging
 import operator
 import traceback
-import contextlib
 import collections
 from functools import wraps
 
@@ -5792,11 +5791,11 @@ unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
-unique_name = "cmdx_%s_shared" % __version__.replace(".", "_")
-if unique_name not in sys.modules:
-    sys.modules[unique_name] = types.ModuleType(unique_name)
+unique_shared = "cmdx_%s_shared" % __version__.replace(".", "_")
+if unique_shared not in sys.modules:
+    sys.modules[unique_shared] = types.ModuleType(unique_shared)
 
-shared = sys.modules[unique_name]
+shared = sys.modules[unique_shared]
 shared.undo = None
 shared.redo = None
 shared.undos = {}
@@ -5875,18 +5874,14 @@ def install():
 
     """
 
+    import shutil
     import tempfile
 
     tempdir = tempfile.gettempdir()
     tempfname = os.path.join(tempdir, unique_plugin)
 
-    # Write out ourselves..
-    with open(__file__) as f:
-        thisfile = f.read()
-
-    # ..to this transient Python module
-    with open(tempfname, "w") as f:
-        f.write(thisfile)
+    # Rename ourselves..
+    shutil.copy(__file__, tempfname)
 
     # Now we're guaranteed to not interfere
     # with other versions of cmdx. Win!
@@ -5906,9 +5901,9 @@ def uninstall():
         shared.redo = None
         shared.undos.clear()
         shared.redos.clear()
-        sys.modules.pop(name, None)
+        sys.modules.pop(unique_shared, None)
 
-        cmds.unloadPlugin(plugin)
+        cmds.unloadPlugin(unique_plugin)
 
     self.installed = False
 
@@ -5938,7 +5933,6 @@ class _apiUndo(om.MPxCommand):
 
 
 def initializePlugin(plugin):
-    print("Registering %s @ %s" % (unique_command, _apiUndo))
     om.MFnPlugin(plugin).registerCommand(
         unique_command,
         _apiUndo
