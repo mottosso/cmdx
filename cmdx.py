@@ -5785,15 +5785,11 @@ Distance4Attribute = Distance4
 
 
 # Support for multiple co-existing versions of apiundo.
-# NOTE: This is important for vendoring, as otherwise a vendored apiundo
-# could register e.g. cmds.apiUndo() first, causing a newer version
-# to inadvertently use this older command (or worse yet, throwing an
-# error when trying to register it again).
-command = "_cmdxApiUndo_%s" % __version__.replace(".", "_")
+command = "__cmdxUndo"
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
-name = "_cmdxShared_"
+name = "__cmdxShared"
 if name not in sys.modules:
     sys.modules[name] = types.ModuleType(name)
 
@@ -5884,6 +5880,8 @@ class _apiUndo(om.MPxCommand):
         # Facilitate the above precautionary measure
         shared.undo = None
         shared.redo = None
+
+        print("Yeppppppppppppppp ------------")
 
     def undoIt(self):
         shared.undos[self.undo]()
