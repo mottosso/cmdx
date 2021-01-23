@@ -7,8 +7,8 @@ import time
 import math
 import types
 import logging
-import traceback
 import operator
+import traceback
 import collections
 from functools import wraps
 
@@ -16,7 +16,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.10"
+__version__ = "0.4.11"
 
 PY3 = sys.version_info[0] == 3
 
@@ -1062,10 +1062,18 @@ class Node(object):
             node = encode(node)
             attr = node[attr]
 
-        if isinstance(attr, _AbstractAttribute):
-            attr = attr.create()
+        mobj = attr
 
-        self._fn.addAttribute(attr)
+        if isinstance(mobj, _AbstractAttribute):
+            mobj = attr.create()
+
+        self._fn.addAttribute(mobj)
+
+        # These don't natively support defaults by Maya
+        # They aren't being saved with the file, unless
+        # we explicitly set it after creation.
+        if isinstance(attr, String) and attr["default"]:
+            self[attr["name"]] = attr["default"]
 
     def hasAttr(self, attr):
         """Return whether or not `attr` exists
@@ -1997,7 +2005,9 @@ class AnimCurve(Node):
             self._fna = oma.MFnAnimCurve(mobj)
 
         def key(self, time, value, interpolation=Linear):
-            time = Seconds(time)
+            if isinstance(time, (float, int)):
+                time = Seconds(time)
+
             index = self._fna.find(time)
 
             if index:
@@ -2006,7 +2016,10 @@ class AnimCurve(Node):
                 self._fna.addKey(time, value, interpolation, interpolation)
 
         def keys(self, times, values, interpolation=Linear):
-            times = map(lambda t: Seconds(t), times)
+            times = map(
+                lambda t: Seconds(t) if isinstance(t, (float, int)) else t,
+                times
+            )
 
             try:
                 self._fna.addKeys(times, values)
@@ -2859,6 +2872,7 @@ class Plug(object):
             1.0
 
         """
+
         unit = unit if unit is not None else self._unit
         context = None if time is None else DGContext(time=time)
 
@@ -2882,7 +2896,35 @@ class Plug(object):
             log.error("'%s': failed to read attribute" % self.path())
             raise
 
+    if __maya_version__ > 2015:
+        def animate(self, values, interpolation=None):
+            """Treat values as time:value pairs and animate this attribute
+
+            Example:
+                >>> _ = cmds.file(new=True, force=True)
+                >>> node = createNode("transform")
+                >>> node["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> node["rx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> node["sx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> node["v"] = {1: True, 5: False, 10: True}
+
+                # Direct function call
+                >>> node["ry"].animate({1: 0.0, 5: 1.0, 10: 0.0})
+
+                # Interpolation
+                >>> node["rz"].animate({1: 0.0, 5: 1.0, 10: 0.0}, Smooth)
+
+            """
+
+            times, values = map(UiUnit(), values.keys()), values.values()
+            anim = createNode(_find_curve_type(self))
+            anim.keys(times, values, interpolation=Linear)
+            anim["output"] >> self
+
     def write(self, value):
+        if isinstance(value, dict) and __maya_version__ > 2015:
+            return self.animate(value)
+
         if not getattr(self._modifier, "isDone", True):
             return self._modifier.setAttr(self, value)
 
@@ -3848,6 +3890,47 @@ def _python_to_plug(value, plug):
         raise TypeError("Unsupported Python type '%s'" % value.__class__)
 
 
+def _find_curve_type(plug):
+    """Find which type of curve to associate with a given `plug`
+
+    For example, translate channels have a linear curve type,
+    whereas rotate channels have an angular one.
+
+    """
+
+    attr = plug._mplug.attribute()
+    type = attr.apiType()
+
+    if type in (om.MFn.kDoubleLinearAttribute,
+                om.MFn.kFloatLinearAttribute):
+        return "animCurveTL"
+
+    elif type in (om.MFn.kDoubleAngleAttribute,
+                  om.MFn.kFloatAngleAttribute):
+        return "animCurveTA"
+
+    elif type == om.MFn.kNumericAttribute:
+        innerType = om.MFnNumericAttribute(attr).numericType()
+
+        if innerType == om.MFnNumericData.kBoolean:
+            return "animCurveTU"
+
+        elif innerType in (om.MFnNumericData.kShort,
+                           om.MFnNumericData.kInt,
+                           om.MFnNumericData.kLong,
+                           om.MFnNumericData.kByte,
+                           om.MFnNumericData.kFloat,
+                           om.MFnNumericData.kDouble,
+                           om.MFnNumericData.kAddr):
+            return "animCurveTL"
+
+    elif type == om.MFn.kTimeAttribute:
+        return "animCurveTT"
+
+    # Unitless, could be anything
+    return "animCurveTU"
+
+
 def _python_to_mod(value, plug, mod):
     """Convert `value` into a suitable equivalent for om.MDGModifier
 
@@ -3856,9 +3939,43 @@ def _python_to_mod(value, plug, mod):
         plug (Plug): Plug within which to write value
         mod (om.MDGModifier): Modifier to use for writing it
 
+    Example:
+        >>> mod = DagModifier()
+        >>> node = mod.createNode("transform")
+        >>> mod.set_attr(node["tx"], 5.0)
+        >>> mod.doIt()
+        >>> int(node["tx"].read())
+        5
+
+        # Support for applying a single value across compound children
+        >>> mod.set_attr(node["translate"], 10)
+        >>> mod.doIt()
+        >>> int(node["ty"].read())
+        10
+
     """
 
+    if isinstance(value, dict) and __maya_version__ > 2015:
+        times, values = map(UiUnit(), value.keys()), value.values()
+        curve_typ = _find_curve_type(plug)
+
+        if isinstance(mod, DGModifier):
+            anim = mod.createNode(curve_typ)
+
+        else:
+            # The DagModifier can't create DG nodes
+            with DGModifier() as dgmod:
+                anim = dgmod.createNode(curve_typ)
+
+        anim.keys(times, values)
+        mod.connect(anim["output"]._mplug, plug._mplug)
+
+        return True
+
     mplug = plug._mplug
+
+    if plug.isCompound and isinstance(value, (int, float)):
+        value = [value] * mplug.numChildren()
 
     if isinstance(value, (tuple, list)):
         for index, value in enumerate(value):
@@ -4255,10 +4372,16 @@ class _BaseModifier(object):
     rename = renameNode
 
     @record_history
-    def addAttr(self, node, plug):
-        if isinstance(plug, _AbstractAttribute):
-            plug = plug.create()
-        return self._modifier.addAttribute(node._mobject, plug)
+    def addAttr(self, node, attr):
+        mobj = attr
+
+        if isinstance(attr, _AbstractAttribute):
+            mobj = attr.create()
+
+        self._modifier.addAttribute(node._mobject, mobj)
+
+        if isinstance(attr, String) and attr["default"]:
+            log.warning("Strings don't support default values with modifier")
 
     @record_history
     def deleteAttr(self, plug):
@@ -4573,41 +4696,56 @@ def connect(a, b):
         mod.connect(a, b)
 
 
+def currentTime():
+    """Return current time in MTime format"""
+    return oma.MAnimControl.currentTime()
+
+
 class DGContext(om.MDGContext):
+    """Context for evaluating the Maya DG
+
+    Extension of MDGContext to also accept time as a float. In Maya 2018
+    and above DGContext can also be used as a context manager.
+
+    Arguments:
+        time (float, om.MTime, optional): Time at which to evaluate context
+
+    """
 
     def __init__(self, time=None, unit=None):
-        """Context for evaluating the Maya DG
-
-        Extension of MDGContext to also accept time as a float. In Maya 2018
-        and above DGContext can also be used as a context manager.
-
-        Arguments:
-            time (float, om.MTime, optional): Time at which to evaluate context
-
-        """
+        args = []
 
         if time is not None:
             if not isinstance(time, TimeType):
                 unit = unit or Seconds
                 time = unit(time)
-            super(DGContext, self).__init__(time)
-        else:
-            super(DGContext, self).__init__()
-        self._previousContext = None
+            args += [time]
 
-    def __enter__(self):
-        if __maya_version__ >= 2018:
-            self._previousContext = self.makeCurrent()
+        super(DGContext, self).__init__(*args)
+        self._previous_context = None
+
+    if __maya_version__ >= 2018:
+        def __enter__(self):
+            """Support for use as a context manager
+
+            Example:
+                >>> tm = createNode("transform")
+                >>> tm["tx"] = {1: 0.0, 5: 1.0, 10: 0.0}
+                >>> with DGContext(1, UiUnit()):
+                ...     assert tm["tx"].read() == 0.0
+                ...
+                >>> with DGContext(5, UiUnit()):
+                ...     assert tm["tx"].read() == 1.0
+                ...
+
+            """
+
+            self._previous_context = self.makeCurrent()
             return self
-        else:
-            cmds.error(
-                "'%s' does not support context manager functionality "
-                "for Maya 2017  and below" % self.__class__.__name__
-            )
 
-    def __exit__(self, exc_type, exc_value, tb):
-        if self._previousContext:
-            self._previousContext.makeCurrent()
+        def __exit__(self, exc_type, exc_value, tb):
+            if self._previous_context:
+                self._previous_context.makeCurrent()
 
 
 # Alias
@@ -4889,6 +5027,7 @@ list_relatives = listRelatives
 list_connections = listConnections
 connect_attr = connectAttr
 obj_exists = objExists
+current_time = currentTime
 
 # Speciality functions
 
@@ -5187,6 +5326,8 @@ class _AbstractAttribute(dict):
                  connectable=True,
                  help=None):
 
+        self.Fn = type(self).Fn()
+
         args = locals().copy()
         args.pop("self")
 
@@ -5280,7 +5421,7 @@ class _AbstractAttribute(dict):
 
 
 class Enum(_AbstractAttribute):
-    Fn = om.MFnEnumAttribute()
+    Fn = om.MFnEnumAttribute
     Type = None
     Default = 0
 
@@ -5319,7 +5460,7 @@ class Divider(Enum):
 
 
 class String(_AbstractAttribute):
-    Fn = om.MFnTypedAttribute()
+    Fn = om.MFnTypedAttribute
     Type = om.MFnData.kString
     Default = ""
 
@@ -5332,14 +5473,14 @@ class String(_AbstractAttribute):
 
 
 class Message(_AbstractAttribute):
-    Fn = om.MFnMessageAttribute()
+    Fn = om.MFnMessageAttribute
     Type = None
     Default = None
     Storable = False
 
 
 class Matrix(_AbstractAttribute):
-    Fn = om.MFnMatrixAttribute()
+    Fn = om.MFnMatrixAttribute
 
     Default = (0.0,) * 4 * 4  # Identity matrix
 
@@ -5356,7 +5497,7 @@ class Matrix(_AbstractAttribute):
 
 
 class Long(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kLong
     Default = 0
 
@@ -5365,7 +5506,7 @@ class Long(_AbstractAttribute):
 
 
 class Double(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kDouble
     Default = 0.0
 
@@ -5374,7 +5515,7 @@ class Double(_AbstractAttribute):
 
 
 class Double3(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = None
     Default = (0.0,) * 3
 
@@ -5407,7 +5548,7 @@ class Double3(_AbstractAttribute):
 
 
 class Boolean(_AbstractAttribute):
-    Fn = om.MFnNumericAttribute()
+    Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kBoolean
     Default = True
 
@@ -5416,7 +5557,7 @@ class Boolean(_AbstractAttribute):
 
 
 class AbstractUnit(_AbstractAttribute):
-    Fn = om.MFnUnitAttribute()
+    Fn = om.MFnUnitAttribute
     Default = 0.0
     Min = None
     Max = None
@@ -5490,12 +5631,10 @@ class Compound(_AbstractAttribute):
 
     """
 
+    Fn = om.MFnCompoundAttribute
     Multi = None
 
     def __init__(self, name, children=None, **kwargs):
-        # see https://github.com/mottosso/cmdx/issues/5#issuecomment-717330454
-        self.Fn = om.MFnCompoundAttribute()
-
         if not children and self.Multi:
             default = kwargs.pop("default", None)
             children, Type = self.Multi
@@ -5644,20 +5783,19 @@ Distance4Attribute = Distance4
 # --------------------------------------------------------
 
 
+# E.g. ragdoll.vendor.cmdx => ragdoll_vendor_cmdx_plugin.py
+unique_plugin = "cmdx_%s_plugin.py" % __version__.replace(".", "_")
+
 # Support for multiple co-existing versions of apiundo.
-# NOTE: This is important for vendoring, as otherwise a vendored apiundo
-# could register e.g. cmds.apiUndo() first, causing a newer version
-# to inadvertently use this older command (or worse yet, throwing an
-# error when trying to register it again).
-command = "_cmdxApiUndo_%s" % __version__.replace(".", "_")
+unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
-name = "_cmdxShared_"
-if name not in sys.modules:
-    sys.modules[name] = types.ModuleType(name)
+unique_shared = "cmdx_%s_shared" % __version__.replace(".", "_")
+if unique_shared not in sys.modules:
+    sys.modules[unique_shared] = types.ModuleType(unique_shared)
 
-shared = sys.modules[name]
+shared = sys.modules[unique_shared]
 shared.undo = None
 shared.redo = None
 shared.undos = {}
@@ -5676,7 +5814,7 @@ def commit(undo, redo=lambda: None):
     if not ENABLE_UNDO:
         return
 
-    if not hasattr(cmds, command):
+    if not hasattr(cmds, unique_command):
         install()
 
     # Precautionary measure.
@@ -5698,18 +5836,60 @@ def commit(undo, redo=lambda: None):
     shared.redos[shared.redo] = redo
 
     # Let Maya know that something is undoable
-    getattr(cmds, command)()
+    getattr(cmds, unique_command)()
 
 
 def install():
-    """Load this shared as a plug-in
+    """Load this module as a plug-in
 
-    Call this prior to using the shared
+    Inception time! :)
+
+    In order to facilitate undo, we need a custom command registered
+    with Maya's native plug-in system. To do that, we need a dedicated
+    file. We *could* register ourselves as that file, but what we need
+    is a unique instance of said command per distribution of cmdx.
+
+    Per distribution? Yes, because cmdx.py can be vendored with any
+    library, and we don't want cmdx.py from one vendor to interfere
+    with one from another.
+
+    Maya uses (pollutes) global memory in two ways that
+    matter to us here.
+
+    1. Plug-ins are referenced by name, not path. So there can only be
+        one "cmdx.py" for example. That's why we can't load this module
+        as-is but must instead write a new file somewhere, with a name
+        unique to this particular distribution.
+    2. Commands are referenced via the native `cmds` module, and there can
+        only be 1 command of any given name. So we can't just register e.g.
+        `cmdxUndo` if we want to support multiple versions of cmdx being
+        registered at once. Instead, we'll generate a unique name per
+        distribution of cmdx, like the plug-in itself.
+
+    We can't leverage things like sys.modules[__name__] or even
+    the __name__ variable, because the way Maya loads Python modules
+    as plug-ins is to copy/paste the text itself and call that. So there
+    *is* no __name__. Instead, we'll rely on each version being unique
+    and consistent.
 
     """
 
-    if ENABLE_UNDO:
-        cmds.loadPlugin(__file__, quiet=True)
+    import shutil
+    import tempfile
+
+    tempdir = tempfile.gettempdir()
+    tempfname = os.path.join(tempdir, unique_plugin)
+
+    # We can't know whether we're a .pyc or .py file,
+    # but we need to copy the .py file *only*
+    fname = os.path.splitext(__file__)[0] + ".py"
+
+    # Copy *and overwrite*
+    shutil.copy(fname, tempfname)
+
+    # Now we're guaranteed to not interfere
+    # with other versions of cmdx. Win!
+    cmds.loadPlugin(tempfname, quiet=True)
 
     self.installed = True
 
@@ -5725,9 +5905,9 @@ def uninstall():
         shared.redo = None
         shared.undos.clear()
         shared.redos.clear()
-        sys.modules.pop(name, None)
+        sys.modules.pop(unique_shared, None)
 
-        cmds.unloadPlugin(os.path.basename(__file__))
+        cmds.unloadPlugin(unique_plugin)
 
     self.installed = False
 
@@ -5758,13 +5938,13 @@ class _apiUndo(om.MPxCommand):
 
 def initializePlugin(plugin):
     om.MFnPlugin(plugin).registerCommand(
-        command,
+        unique_command,
         _apiUndo
     )
 
 
 def uninitializePlugin(plugin):
-    om.MFnPlugin(plugin).deregisterCommand(command)
+    om.MFnPlugin(plugin).deregisterCommand(unique_command)
 
 
 # --------------------------------------------------------
