@@ -48,7 +48,7 @@ jobs:
     container: $[ variables['containerImage'] ]
     steps:
       - script: |
-          wget https://bootstrap.pypa.io/get-pip.py
+          wget https://bootstrap.pypa.io/2.7/get-pip.py
           mayapy get-pip.py --user
           mayapy -m pip install --user \
             nose \
