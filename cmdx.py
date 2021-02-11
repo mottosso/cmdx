@@ -10,6 +10,7 @@ import logging
 import operator
 import traceback
 import collections
+import contextlib
 from functools import wraps
 
 from maya import cmds
@@ -183,6 +184,15 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         return func_wrapper
     return timings_decorator
+
+
+@contextlib.contextmanager
+def _undo_chunk(name):
+    try:
+        cmds.undoInfo(chunkName=name, openChunk=True)
+        yield
+    finally:
+        cmds.undoInfo(chunkName=name, closeChunk=True)
 
 
 def protected(func):
@@ -381,9 +391,13 @@ class Singleton(type):
                 node._removed = False
                 return node
 
-        # It didn't exist, let's create one
+        # It hasn't been instantiated before, let's do that.
         # But first, make sure we instantiate the right type
-        if mobject.hasFn(om.MFn.kDagNode):
+        if mobject.hasFn(om.MFn.kDagContainer):
+            sup = ContainerNode
+        elif mobject.hasFn(om.MFn.kContainer):
+            sup = ContainerNode
+        elif mobject.hasFn(om.MFn.kDagNode):
             sup = DagNode
         elif mobject.hasFn(om.MFn.kSet):
             sup = ObjectSet
@@ -1253,6 +1267,77 @@ class Node(object):
         has_attr = hasAttr
         delete_attr = deleteAttr
         shortest_path = shortestPath
+
+
+class ContainerNode(Node):
+    """A.k.a. "asset"
+
+    These are special. Published names aren't your average plug. They can't
+    be found via the MFnDependencyNode.findPlug call. Instead, they are
+    so-called "published names" and reside elsewhere.
+
+    This class wraps that interface to align with regular attribute access,
+    for an as-transparent-as-possible experience.
+
+    Examples:
+        >>> from maya import cmds
+        >>> _ = cmds.file(new=True, force=True)
+
+        # Establish a published plug
+        >>> con = cmds.container(name="myContainer")
+        >>> con = encode(con)
+        >>> con.isA(kDagNode)
+        False
+        >>> isinstance(con, ContainerNode)
+        True
+
+        >>> from maya import cmds
+        >>> _ = cmds.file(new=True, force=True)
+
+        # Establish a published plug
+        >>> node = cmds.createNode("transform")
+        >>> con = cmds.container(name="myContainer",
+        ...                      addNode=[node],
+        ...                      type="dagContainer")
+        >>> plug = cmds.container(con,
+        ...                       edit=True,
+        ...                       publishName="inputTranslate")
+        >>> binding = ("%s.tx" % node, plug)
+        >>> _ = cmds.container(con, edit=True, bindAttr=binding)
+
+        # Query and connect that published plug
+        >>> source = createNode("transform")
+        >>> con = encode(con)
+        >>> con.isA(kDagNode)
+        True
+        >>> isinstance(con, ContainerNode)
+        True
+        >>> source["tx"] >> con[plug]
+        >>> source["tx"] = 5.0
+        >>> con["inputTranslate"].read()
+        5.0
+
+    """
+
+    _Fn = om.MFnContainerNode
+
+    def __getitem__(self, key):
+        try:
+            return super(ContainerNode, self).__getitem__(key)
+        except ExistError:
+            pass
+
+        # It may be a published name rather than a traditional attribute
+        mplugs, keys = self._fn.getPublishedPlugs()
+
+        if key not in keys:
+            raise ExistError(
+                "'%s' was not an attribute, nor a "
+                "published name for this container" % key
+            )
+
+        mplug = mplugs[keys.index(key)]
+        return Plug(self, mplug, unit=None, key=key, modifier=self._modifier)
 
 
 class DagNode(Node):
@@ -2594,6 +2679,43 @@ class Plug(object):
         """Return whether or not this attribute is connected (to anything)"""
         return self.connection() is not None
 
+    def lock(self):
+        """Convenience function for plug.locked = True
+
+        Examples:
+            # Static attributes work just fine
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["translateX"].locked
+            False
+            >>> node1["translateX"].locked = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["translateX"].locked
+            True
+
+            # Dynamic attributes work too
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["dynamicAttr"] = Double()
+            >>> node1["dynamicAttr"].locked
+            False
+            >>> node1["dynamicAttr"].locked = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["dynamicAttr"].locked
+            True
+
+        """
+
+        self.locked = True
+
+    def unlock(self):
+        """Convenience function for plug.locked = False"""
+        self.locked = False
+
     @property
     def locked(self):
         return self._mplug.isLocked
@@ -2601,22 +2723,52 @@ class Plug(object):
     @locked.setter
     def locked(self, value):
         """Lock attribute"""
+
         elements = (
             self
             if self.isArray or self.isCompound
             else [self]
         )
 
-        # Use setAttr in place of MPlug.isKeyable = False, as that
-        # doesn't persist the scene on save if the attribute is dynamic.
         for el in elements:
-            cmds.setAttr(el.path(), lock=value)
+            # Use setAttr in place of MPlug.isLocked = False, as that
+            # doesn't persist the scene on save if the attribute is dynamic.
+            if el._mplug.isDynamic:
+                cmds.setAttr(el.path(), lock=value)
 
-    def lock(self):
-        self.locked = True
+            else:
+                el._mplug.isLocked = value
 
-    def unlock(self):
-        self.locked = False
+    def _channelBoxTest(self, value=None):
+        """@properties aren't tested
+
+        Examples:
+            # Static attributes work just fine
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["translateX"].channelBox
+            False
+            >>> node1["translateX"].channelBox = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["translateX"].channelBox
+            True
+
+            # Dynamic attributes work too
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["dynamicAttr"] = Double()
+            >>> node1["dynamicAttr"].channelBox
+            False
+            >>> node1["dynamicAttr"].channelBox = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["dynamicAttr"].channelBox
+            True
+
+        """
 
     @property
     def channelBox(self):
@@ -2631,16 +2783,52 @@ class Plug(object):
 
     @channelBox.setter
     def channelBox(self, value):
+        """Make a non-keyable attribute visible in the channel box"""
+
         elements = (
             self
             if self.isArray or self.isCompound
             else [self]
         )
 
-        # Use setAttr in place of MPlug.isChannelBox = False, as that
-        # doesn't persist the scene on save if the attribute is dynamic.
         for el in elements:
-            cmds.setAttr(el.path(), keyable=value, channelBox=value)
+            if el._mplug.isDynamic:
+                # Use setAttr as isChannelBox doesn't
+                # persist on scene save for dynamic attributes.
+                cmds.setAttr(el.path(), keyable=value, channelBox=value)
+            else:
+                el._mplug.isChannelBox = value
+
+    def _keyableTest(self, value=None):
+        """@properties aren't tested
+
+        Examples:
+            # Static attributes work just fine
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["translateX"].keyable
+            True
+            >>> node1["translateX"].keyable = False
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["translateX"].keyable
+            False
+
+            # Dynamic attributes work too
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["dynamicAttr"] = Double(keyable=True)
+            >>> node1["dynamicAttr"].keyable
+            True
+            >>> node1["dynamicAttr"].keyable = False
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["dynamicAttr"].keyable
+            False
+
+        """
 
     @property
     def keyable(self):
@@ -2661,10 +2849,13 @@ class Plug(object):
             else [self]
         )
 
-        # Use setAttr in place of MPlug.isKeyable = False, as that
-        # doesn't persist the scene on save if the attribute is dynamic.
         for el in elements:
-            cmds.setAttr(el.path(), keyable=value)
+            if el._mplug.isDynamic:
+                # Use setAttr as isKeyable doesn't
+                # persist on scene save for dynamic attributes.
+                cmds.setAttr(el.path(), keyable=value)
+            else:
+                el._mplug.isKeyable = value
 
     @property
     def hidden(self):
@@ -3205,6 +3396,11 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         return super(TransformationMatrix, self).rotateBy(rot, space)
 
+    def scale(self, space=None):
+        """Make space into an optional argument"""
+        space = space or sTransform
+        return Vector(super(TransformationMatrix, self).scale(space))
+
     def quaternion(self):
         """Return transformation matrix as a Quaternion"""
         return Quaternion(self.rotation(asQuaternion=True))
@@ -3212,12 +3408,12 @@ class TransformationMatrix(om.MTransformationMatrix):
     def rotatePivot(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
-        return super(TransformationMatrix, self).rotatePivot(space)
+        return Vector(super(TransformationMatrix, self).rotatePivot(space))
 
     def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
         space = space or sTransform
-        return super(TransformationMatrix, self).translation(space)
+        return Vector(super(TransformationMatrix, self).translation(space))
 
     def setTranslation(self, trans, space=None):
         if isinstance(trans, Plug):
@@ -3273,11 +3469,6 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     def asMatrixInverse(self):  # type: () -> MatrixType
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
-
-    # A more intuitive alternative
-    translate = translateBy
-    rotate = rotateBy
-    scale = scaleBy
 
     if ENABLE_PEP8:
         x_axis = xAxis
@@ -3411,6 +3602,26 @@ class Vector(om.MVector):
 # Alias, it can't take anything other than values
 # and yet it isn't explicit in its name.
 Vector3 = Vector
+
+
+def multiply_vectors(vec1, vec2):
+    """Piecewise multiplication of two vectors"""
+
+    return Vector(
+        vec1[0] * vec2[0],
+        vec1[1] * vec2[1],
+        vec1[2] * vec2[2]
+    )
+
+
+def divide_vectors(vec1, vec2):
+    """Piecewise division of two vectors"""
+
+    return Vector(
+        vec1[0] / vec2[0],
+        vec1[1] / vec2[1],
+        vec1[2] / vec2[2]
+    )
 
 
 class Point(om.MPoint):
@@ -4309,12 +4520,31 @@ class _BaseModifier(object):
             "template": template,
         }
 
+        # Extras
+        self._lockAttrs = []
+        self._keyableAttrs = []
+
+    @record_history
+    def lockAttr(self, plug, value=True):
+        assert isinstance(plug, (Plug, om.MPlug)), "%s was not a plug" % plug
+        self._lockAttrs.append((plug, value))
+
+    @record_history
+    def keyableAttr(self, plug, value=True):
+        assert isinstance(plug, (Plug, om.MPlug)), "%s was not a plug" % plug
+        self._keyableAttrs.append((plug, value))
+
     def doIt(self):
         if (not self.isContext) and self._opts["undoable"]:
             commit(self._modifier.undoIt, self._modifier.doIt)
 
         try:
             self._modifier.doIt()
+
+            # Do these last, they manage undo on their own
+            with _undo_chunk("lockAttrs"):
+                self._doLockAttrs()
+                self._doKeyableAttrs()
 
         except RuntimeError:
 
@@ -4323,8 +4553,8 @@ class _BaseModifier(object):
                 self.undoIt()
 
             raise ModifierError(self._history)
-        else:
 
+        else:
             # Facilitate multiple calls to doIt, whereby only
             # the latest, actually-performed actions are reported
             self._history[:] = []
@@ -4333,6 +4563,22 @@ class _BaseModifier(object):
 
     def undoIt(self):
         self._modifier.undoIt()
+
+    def _doLockAttrs(self):
+        while self._lockAttrs:
+            plug, value = self._lockAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.setAttr(el.path(), lock=value)
+
+    def _doKeyableAttrs(self):
+        while self._keyableAttrs:
+            plug, value = self._keyableAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.setAttr(el.path(), keyable=value)
 
     @record_history
     def createNode(self, type, name=None):
@@ -4572,6 +4818,8 @@ class _BaseModifier(object):
         set_attr = setAttr
         delete_attr = deleteAttr
         reset_attr = resetAttr
+        lock_attr = lockAttr
+        keyable_attr = keyableAttr
 
 
 class DGModifier(_BaseModifier):
@@ -6379,6 +6627,27 @@ class Cache(object):
 
     def transform(self, node):
         pass
+
+
+# Testing utilities
+def _new():
+    cmds.file(new=True, force=True)
+
+
+def _tempfile():
+    import tempfile
+    dirname = tempfile.gettempdir()
+    return os.path.join(dirname, "test.ma")
+
+
+def _save():
+    cmds.file(rename=_tempfile())
+    cmds.file(save=True, type="mayaAscii")
+
+
+def _load():
+    cmds.file(_tempfile(), open=True, force=True)
+
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
