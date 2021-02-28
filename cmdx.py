@@ -113,6 +113,7 @@ AngleType = om.MAngle
 ColorType = om.MColor
 
 ExistError = type("ExistError", (RuntimeError,), {})
+LockedError = type("LockedError", (ValueError,), {})
 DoNothing = None
 
 # Reusable objects, for performance
@@ -2514,7 +2515,7 @@ class Plug(object):
         max_index = 1e7
 
         while start_index < max_index:
-            if not self[start_index].connected:
+            if self[start_index].connection() is None:
                 return start_index
             start_index += 1
 
@@ -2676,8 +2677,22 @@ class Plug(object):
 
     @property
     def connected(self):
-        """Return whether or not this attribute is connected (to anything)"""
-        return self.connection() is not None
+        """Return whether or not this attribute has an input connection
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node["tx"] >> node["ty"]
+
+            # ty is connected, tx is not
+            >>> node["tx"].connected
+            False
+
+            >>> node["ty"].connected
+            True
+
+        """
+
+        return self.connection(destination=False) is not None
 
     def lock(self):
         """Convenience function for plug.locked = True
@@ -4685,6 +4700,20 @@ class _BaseModifier(object):
         if isinstance(dst, Plug):
             dst = dst._mplug
 
+        assert isinstance(src, om.MPlug), "%s must be of type MPlug" % src
+        assert isinstance(dst, om.MPlug), "%s must be of type MPlug" % dst
+
+        if dst.isLocked:
+            # Modifier can't perform this connect, but wouldn't
+            # tell you about it until you `doIt()`. Bad.
+            path = dst.partialName(
+                includeNodeName=False,
+                useLongNames=True,
+                useFullAttributePath=False
+            )
+
+            raise LockedError("Channel locked, cannot connect '%s'" % path)
+
         if force:
             # Disconnect any plug connected to `other`
             disconnected = False
@@ -4699,6 +4728,45 @@ class _BaseModifier(object):
                 self.doIt()
 
         self._modifier.connect(src, dst)
+
+    def tryConnect(self, src, dst):
+        """Connect and ignore failure
+
+        Convenience method to improve readability of your code.
+
+        Returns:
+            success (bool): Whether or not the connection succeeded
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node["translateY"].lock()
+            >>> with DGModifier() as mod:
+            ...     mod.connect(node["tx"], node["ty"])
+            ...
+            Traceback (most recent call last):
+            ...
+            LockedError: Channel locked, cannot connect 'translateY'
+
+            # Now let's tryConnect
+            >>> with DGModifier() as mod:
+            ...    success = mod.tryConnect(node["tx"], node["ty"])
+            ...
+            >>> success
+            False
+
+        """
+
+        try:
+            self.connect(src, dst)
+
+        except LockedError:
+            return False
+
+        except Exception:
+            return False
+
+        else:
+            return True
 
     @record_history
     def disconnect(self, a, b=None, source=True, destination=True):
@@ -4820,6 +4888,7 @@ class _BaseModifier(object):
         reset_attr = resetAttr
         lock_attr = lockAttr
         keyable_attr = keyableAttr
+        try_connect = tryConnect
 
 
 class DGModifier(_BaseModifier):
@@ -4936,6 +5005,13 @@ class DagModifier(_BaseModifier):
 
     if ENABLE_PEP8:
         create_node = createNode
+
+
+class HashableTime(om.MTime):
+    """Use time in a dictionary"""
+
+    def __hash__(self):
+        return hash(self.value)
 
 
 # Convenience functions
