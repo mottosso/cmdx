@@ -1531,6 +1531,45 @@ class DagNode(Node):
         plug = self["worldMatrix"][0] if space == sWorld else self["matrix"]
         return TransformationMatrix(plug.asMatrix(time))
 
+    def translation(self, space=sObject, time=None):
+        """Convenience method for transform(space).translation()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translateX"] = 5.0
+            >>> node.translation().x
+            5.0
+
+        """
+
+        return self.transform(space, time).translation()
+
+    def rotation(self, space=sObject, time=None):
+        """Convenience method for transform(space).rotation()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["rotateX"] = radians(90)
+            >>> degrees(node.rotation().x)
+            90.0
+
+        """
+
+        return self.transform(space, time).rotation()
+
+    def scale(self, space=sObject, time=None):
+        """Convenience method for transform(space).scale()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["scaleX"] = 5.0
+            >>> node.scale().x
+            5.0
+
+        """
+
+        return self.transform(space, time).scale()
+
     def mapFrom(self, other, time=None):
         """Return TransformationMatrix of `other` relative self
 
@@ -1595,6 +1634,30 @@ class DagNode(Node):
 
         if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
+
+    def lineage(self, type=None):
+        """Yield parents all the way up a hierarchy
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = createNode("transform", name="a")
+            >>> b = createNode("transform", name="b", parent=a)
+            >>> c = createNode("transform", name="c", parent=b)
+            >>> d = createNode("transform", name="d", parent=c)
+            >>> lineage = d.lineage()
+            >>> next(lineage) == c
+            True
+            >>> next(lineage) == b
+            True
+            >>> next(lineage) == a
+            True
+
+        """
+
+        parent = self.parent(type)
+        while parent is not None:
+            yield parent
+            parent = parent.parent(type)
 
     def children(self,
                  type=None,
@@ -2899,6 +2962,25 @@ class Plug(object):
         self.hide()
 
     @property
+    def niceName(self):
+        """The nice name of this plug, visible in e.g. Channel Box
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> assert node["translateY"].niceName == "Translate Y"
+            >>> node["translateY"].niceName = "New Name"
+            >>> assert node["translateY"].niceName == "New Name"
+
+        """
+        # No way of retrieving this information via the API?
+        return cmds.attributeName(self.path(), nice=True)
+
+    @niceName.setter
+    def niceName(self, value):
+        fn = om.MFnAttribute(self._mplug.attribute())
+        fn.setNiceNameOverride(value)
+
+    @property
     def default(self):
         """Return default value of plug"""
         return _plug_to_default(self._mplug)
@@ -3643,6 +3725,10 @@ class Point(om.MPoint):
     """Maya's MPoint"""
 
 
+class Color(om.MColor):
+    """Maya's MColor"""
+
+
 class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
 
@@ -4249,6 +4335,10 @@ def _python_to_mod(value, plug, mod):
     elif isinstance(value, om.MTime):
         mod.newPlugValueMTime(mplug, value)
 
+    elif isinstance(value, om.MMatrix):
+        obj = om.MFnMatrixData().create(value)
+        mod.newPlugValue(mplug, obj)
+
     elif isinstance(value, om.MEulerRotation):
         for index, value in enumerate(value):
             value = om.MAngle(value, om.MAngle.kRadians)
@@ -4538,6 +4628,7 @@ class _BaseModifier(object):
         # Extras
         self._lockAttrs = []
         self._keyableAttrs = []
+        self._niceNames = []
 
     @record_history
     def lockAttr(self, plug, value=True):
@@ -4548,6 +4639,16 @@ class _BaseModifier(object):
     def keyableAttr(self, plug, value=True):
         assert isinstance(plug, (Plug, om.MPlug)), "%s was not a plug" % plug
         self._keyableAttrs.append((plug, value))
+
+    def setKeyable(self, plug, value=True):
+        return self.keyableAttr(plug, value)
+
+    def setLocked(self, plug, value=True):
+        return self.lockAttr(plug, value)
+
+    def setNiceName(self, plug, value):
+        assert isinstance(plug, (Plug, om.MPlug)), "%s was not a plug" % plug
+        self._niceNames.append((plug, value))
 
     def doIt(self):
         if (not self.isContext) and self._opts["undoable"]:
@@ -4560,6 +4661,7 @@ class _BaseModifier(object):
             with _undo_chunk("lockAttrs"):
                 self._doLockAttrs()
                 self._doKeyableAttrs()
+                self._doNiceNames()
 
         except RuntimeError:
 
@@ -4594,6 +4696,25 @@ class _BaseModifier(object):
 
             for el in elements:
                 cmds.setAttr(el.path(), keyable=value)
+
+    def _doNiceNames(self):
+        """Apply all of the new nice names
+
+        Examples:
+            >>> with _BaseModifier() as mod:
+            ...     node = mod.createNode("reverse")
+            ...     mod.setNiceName(node["inputX"], "Test")
+            ...
+            >>> assert node["inputX"].niceName == "Test"
+
+        """
+
+        while self._niceNames:
+            plug, value = self._niceNames.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                el.niceName = value
 
     @record_history
     def createNode(self, type, name=None):
@@ -4889,6 +5010,9 @@ class _BaseModifier(object):
         lock_attr = lockAttr
         keyable_attr = keyableAttr
         try_connect = tryConnect
+        set_keyable = setKeyable
+        set_locked = setLocked
+        set_nice_name = setNiceName
 
 
 class DGModifier(_BaseModifier):
