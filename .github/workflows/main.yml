@@ -18,18 +18,18 @@ jobs:
     strategy:
       matrix:
         maya2015:
-          containerImage: mottosso/maya:2015sp6
+          containerImage: 'mottosso/maya:2015sp6'
         maya2016:
-          containerImage: mottosso/maya:2016sp1
+          containerImage: 'mottosso/maya:2016sp1'
         maya2017:
-          containerImage: mottosso/maya:2017
+          containerImage: 'mottosso/maya:2017'
         maya2018:
-          containerImage: mottosso/maya:2018
+          containerImage: 'mottosso/maya:2018'
         maya2019:
-          containerImage: mottosso/maya:2019
+          containerImage: 'mottosso/maya:2019'
         maya2020:
-          containerImage: mottosso/maya:2020
-    container: $[ variables['containerImage'] ]
+          containerImage: 'mottosso/maya:2020'
+    container: matrix.containerImage
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
