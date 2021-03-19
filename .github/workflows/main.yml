@@ -7,18 +7,11 @@ on:
   pull_request:
     branches: [ master ]
 
-  # Exclude these
-  paths:
-  - '!docs/*'
-  - '!.gitignore'
-  - '!LICENSE.txt'
-  - '!README.md'
-
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  - job: Maya
+  maya:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
