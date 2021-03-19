@@ -62,7 +62,3 @@ jobs:
       - run: |
           mayapy build_docs.py
         displayName: "Build docs"
-
-      - publish: $(System.DefaultWorkingDirectory)/build/html
-        artifact: docs
-        condition: and(succeeded(), eq(variables['containerImage'], 'mottosso/maya:2020'))
