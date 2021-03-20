@@ -1280,44 +1280,6 @@ class ContainerNode(Node):
     This class wraps that interface to align with regular attribute access,
     for an as-transparent-as-possible experience.
 
-    Examples:
-        >>> from maya import cmds
-        >>> _ = cmds.file(new=True, force=True)
-
-        # Establish a published plug
-        >>> con = cmds.container(name="myContainer")
-        >>> con = encode(con)
-        >>> con.isA(kDagNode)
-        False
-        >>> isinstance(con, ContainerNode)
-        True
-
-        >>> from maya import cmds
-        >>> _ = cmds.file(new=True, force=True)
-
-        # Establish a published plug
-        >>> node = cmds.createNode("transform")
-        >>> con = cmds.container(name="myContainer",
-        ...                      addNode=[node],
-        ...                      type="dagContainer")
-        >>> plug = cmds.container(con,
-        ...                       edit=True,
-        ...                       publishName="inputTranslate")
-        >>> binding = ("%s.tx" % node, plug)
-        >>> _ = cmds.container(con, edit=True, bindAttr=binding)
-
-        # Query and connect that published plug
-        >>> source = createNode("transform")
-        >>> con = encode(con)
-        >>> con.isA(kDagNode)
-        True
-        >>> isinstance(con, ContainerNode)
-        True
-        >>> source["tx"] >> con[plug]
-        >>> source["tx"] = 5.0
-        >>> con["inputTranslate"].read()
-        5.0
-
     """
 
     _Fn = om.MFnContainerNode
@@ -1550,7 +1512,7 @@ class DagNode(Node):
         Example:
             >>> node = createNode("transform")
             >>> node["rotateX"] = radians(90)
-            >>> degrees(node.rotation().x)
+            >>> round(degrees(node.rotation().x), 1)
             90.0
 
         """
@@ -4997,7 +4959,44 @@ class _BaseModifier(object):
 
     @record_history
     def deleteNode(self, node):
-        return self._modifier.deleteNode(node._mobject, includeParents=False)
+        """Delete a node
+
+        Examples:
+            >>> _new()
+            >>> with DGModifier() as mod:
+            ...   node = mod.createNode("multMatrix", name="specialName")
+            ...
+            >>> "specialName" in cmds.ls()
+            True
+            >>> with DGModifier() as mod:
+            ...   mod.deleteNode(node)
+            ...
+            >>> "specialName" in cmds.ls()
+            False
+
+            # It does not automatically delete empty parent transforms
+            >>> with DagModifier() as mod:
+            ...   transform = mod.createNode("transform",
+            ...                              name="specialTransform")
+            ...   shape = mod.createNode("mesh",
+            ...                          name="specialShape",
+            ...                          parent=transform)
+            ...
+            >>> "specialTransform" in cmds.ls()
+            True
+            >>> "specialShape" in cmds.ls()
+            True
+            >>> with DGModifier() as mod:
+            ...   mod.deleteNode(shape)
+            ...
+            >>> "specialTransform" in cmds.ls()
+            True
+            >>> "specialShape" in cmds.ls()
+            False
+
+        """
+
+        self._modifier.deleteNode(node._mobject)
 
     @record_history
     def renameNode(self, node, name):
@@ -5664,17 +5663,44 @@ def createNode(type, name=None, parent=None):
         >>> node = createNode("transform")  # Type as string
         >>> node = createNode(tTransform)  # Type as ID
 
+        # Shape without transform automatically creates transform
+        >>> node = createNode("mesh")
+        >>> node.isA(kTransform)
+        True
+
+        # DG nodes are also OK
+        >>> node = createNode("multMatrix")
+
+        # Parenting is A-OK
+        >>> parent = createNode("transform")
+        >>> child = createNode("transform", parent=parent)
+        >>> child.parent() == parent
+        True
+
+        # Custom name is OK
+        >>> specialName = createNode("transform", name="specialName")
+        >>> specialName.name() == "specialName"
+        True
+
     """
 
+    kwargs = {}
+    fn = GlobalDependencyNode
+
+    if name:
+        kwargs["name"] = name
+
+    if parent:
+        kwargs["parent"] = parent._mobject
+        fn = GlobalDagNode
+
     try:
-        with DagModifier(undoable=False) as mod:
-            node = mod.createNode(type, name=name, parent=parent)
+        mobj = fn.create(type, **kwargs)
+    except RuntimeError as e:
+        log.debug(str(e))
+        raise TypeError("Unrecognized node type '%s'" % type)
 
-    except TypeError:
-        with DGModifier(undoable=False) as mod:
-            node = mod.createNode(type, name=name)
-
-    return node
+    return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None, time=None):
