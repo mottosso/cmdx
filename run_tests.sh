@@ -5,4 +5,4 @@ docker run \
 	--workdir /workspace \
 	--entrypoint mayapy \
 	cmdx \
-	-u _runtests.py
+	-u ./run_tests.py
