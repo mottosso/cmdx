@@ -2969,6 +2969,10 @@ class Plug(object):
         self.lock()
         self.hide()
 
+    def attribute(self):
+        """Return the attribute MObject of this plug"""
+        return self._mplug.attribute()
+
     @property
     def niceName(self):
         """The nice name of this plug, visible in e.g. Channel Box
@@ -5256,6 +5260,18 @@ class _BaseModifier(object):
 
         """
 
+        if isinstance(srcNode, Node):
+            srcNode = srcNode.object()
+
+        if isinstance(dstNode, Node):
+            dstNode = dstNode.object()
+
+        if isinstance(srcAttr, Plug):
+            srcAttr = srcAttr.attribute()
+
+        if isinstance(dstAttr, Plug):
+            dstAttr = dstAttr.attribute()
+
         assert isinstance(srcNode, om.MObject)
         assert isinstance(srcAttr, om.MObject)
         assert isinstance(dstNode, om.MObject)
@@ -6130,6 +6146,12 @@ def last(iterator, default=None):
 # --------------------------------------------------------
 
 
+# Disconnect behaviors
+kNothing = om.MFnAttribute.kNothing
+kReset = om.MFnAttribute.kReset
+kDelete = om.MFnAttribute.kDelete
+
+
 class _AbstractAttribute(dict):
     Fn = None
     Type = None
@@ -6149,6 +6171,13 @@ class _AbstractAttribute(dict):
     ChannelBox = False
     AffectsAppearance = False
     AffectsWorldSpace = False
+
+    # What should happen when an attribute is disconnected?
+    # kNothing | leave the attribute set to its last known value
+    # kReset   | reset the attribute to its default value
+    # kDelete  | delete the element of the array that was connected
+    #          | (only relevant for array attributes)
+    DisconnectBehavior = kNothing
 
     Help = ""
 
@@ -6209,10 +6238,13 @@ class _AbstractAttribute(dict):
                  array=False,
                  indexMatters=None,
                  connectable=True,
+                 disconnectBehavior=kNothing,
                  help=None):
 
         self.Fn = type(self).Fn()
 
+        # To avoid repeating the long list of arguments above,
+        # store all arguments to this function using "locals"
         args = locals().copy()
         args.pop("self")
 
@@ -6284,6 +6316,7 @@ class _AbstractAttribute(dict):
         self.Fn.channelBox = self["channelBox"]
         self.Fn.affectsAppearance = self["affectsAppearance"]
         self.Fn.affectsWorldSpace = self["affectsWorldSpace"]
+        self.Fn.disconnectBehavior = self["disconnectBehavior"]
         self.Fn.array = self["array"]
 
         if self["indexMatters"] is False:
