@@ -16,25 +16,32 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+
+      # Without this, all containers stop if any fail
+      # That's bad, we want to know whether it's only one
+      # or if it happens to multiples or all.
+      fail-fast: false
+
       matrix:
-        maya2015:
-          containerImage: 'mottosso/maya:2015sp6'
-        maya2016:
-          containerImage: 'mottosso/maya:2016sp1'
-        maya2017:
-          containerImage: 'mottosso/maya:2017'
-        maya2018:
-          containerImage: 'mottosso/maya:2018'
-        maya2019:
-          containerImage: 'mottosso/maya:2019'
-        maya2020:
-          containerImage: 'mottosso/maya:2020'
-    container: matrix.containerImage
+        containerImage: [
+          "mottosso/maya:2015sp6",
+          "mottosso/maya:2016sp1",
+          "mottosso/maya:2017",
+          "mottosso/maya:2018",
+          "mottosso/maya:2019",
+          "mottosso/maya:2020"
+        ]
+
+    container: ${{ matrix.containerImage }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - run: |
-          wget https://bootstrap.pypa.io/2.7/get-pip.py
+      - name: Checkout code
+        uses: actions/checkout@v1
+
+      - name: pip install
+        run: |
+          wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
           mayapy get-pip.py --user
           mayapy -m pip install --user \
             nose \
@@ -43,22 +50,24 @@ jobs:
             flaky \
             sphinx \
             sphinxcontrib-napoleon
-        displayName: "pip install"
 
         # Since 2019, this sucker throws an unnecessary warning if not declared
-      - run: |
+      - name: Environment
+        run: |
           export XDG_RUNTIME_DIR=/var/tmp/runtime-root
-        displayName: "Environment"
 
-      - run: |
+      - name: Unittests
+        run: |
+          pwd
+          ls
           mayapy --version
           mayapy run_tests.py
-        displayName: "Unittests"
 
-      - run: |
+      - name: Test docs
+        run: |
           mayapy build_livedocs.py && mayapy test_docs.py
-        displayName: "Test docs"
 
-      - run: |
+      - name: Build docs
+        run: |
           mayapy build_docs.py
-        displayName: "Build docs"
+
