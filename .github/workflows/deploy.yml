@@ -1,0 +1,36 @@
+name: cmdx-deploy
+
+on:
+  push:
+    tags:
+    - '*'
+
+jobs:
+  deploy:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+        architecture: 'x64'
+
+      steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: "$(python.version)"
+          displayName: "Use Python $(python.version)"
+
+        - name: Deploy
+          run: |
+            pip install wheel twine
+            python setup.py sdist bdist_wheel
+            echo [distutils] > ~/.pypirc
+            echo index-servers=pypi >> ~/.pypirc
+            echo [pypi] >> ~/.pypirc
+            echo username=$PYPI_USERNAME >> ~/.pypirc
+            echo password=$PYPI_PASSWORD >> ~/.pypirc
+            twine upload dist/*
+
+          env:
+            PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+            PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}

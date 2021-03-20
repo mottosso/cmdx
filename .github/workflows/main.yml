@@ -1,4 +1,4 @@
-name: cmdx-ci
+name: cmdx-test
 
 on:
   push:
@@ -70,4 +70,3 @@ jobs:
       - name: Build docs
         run: |
           mayapy build_docs.py
-
