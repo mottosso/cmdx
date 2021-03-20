@@ -1270,37 +1270,41 @@ class Node(object):
         shortest_path = shortestPath
 
 
-class ContainerNode(Node):
-    """A.k.a. "asset"
+if __maya_version__ >= 2017:
+    class ContainerNode(Node):
+        """A.k.a. "asset"
 
-    These are special. Published names aren't your average plug. They can't
-    be found via the MFnDependencyNode.findPlug call. Instead, they are
-    so-called "published names" and reside elsewhere.
+        These are special. Published names aren't your average plug. They can't
+        be found via the MFnDependencyNode.findPlug call. Instead, they are
+        so-called "published names" and reside elsewhere.
 
-    This class wraps that interface to align with regular attribute access,
-    for an as-transparent-as-possible experience.
+        This class wraps that interface to align with regular attribute access,
+        for an as-transparent-as-possible experience.
 
-    """
+        """
 
-    _Fn = om.MFnContainerNode
+        _Fn = om.MFnContainerNode
 
-    def __getitem__(self, key):
-        try:
-            return super(ContainerNode, self).__getitem__(key)
-        except ExistError:
-            pass
+        def __getitem__(self, key):
+            try:
+                return super(ContainerNode, self).__getitem__(key)
+            except ExistError:
+                pass
 
-        # It may be a published name rather than a traditional attribute
-        mplugs, keys = self._fn.getPublishedPlugs()
+            # It may be a published name rather than a traditional attribute
+            mplugs, keys = self._fn.getPublishedPlugs()
 
-        if key not in keys:
-            raise ExistError(
-                "'%s' was not an attribute, nor a "
-                "published name for this container" % key
-            )
+            if key not in keys:
+                raise ExistError(
+                    "'%s' was not an attribute, nor a "
+                    "published name for this container" % key
+                )
 
-        mplug = mplugs[keys.index(key)]
-        return Plug(self, mplug, unit=None, key=key, modifier=self._modifier)
+            mplug = mplugs[keys.index(key)]
+            return Plug(self, mplug,
+                        unit=None,
+                        key=key,
+                        modifier=self._modifier)
 
 
 class DagNode(Node):
