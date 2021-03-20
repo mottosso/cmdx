@@ -1,15 +1,14 @@
-FROM mottosso/maya:2017
+FROM mottosso/maya:2020
 
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-	mayapy get-pip.py && \
-	mayapy -m pip install \
-		nose \
-		nose-exclude \
-		coverage \
-		sphinx \
-		six \
-		sphinxcontrib-napoleon \
-		python-coveralls
+RUN wget https://bootstrap.pypa.io/pip/2.7/get-pip.py && \
+  mayapy get-pip.py --user && \
+  mayapy -m pip install --user \
+    nose \
+    nose-exclude \
+    coverage \
+    flaky \
+    sphinx \
+    sphinxcontrib-napoleon
 
 # Avoid creation of auxilliary files
 ENV PYTHONDONTWRITEBYTECODE=1

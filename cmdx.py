@@ -10,13 +10,14 @@ import logging
 import operator
 import traceback
 import collections
+import contextlib
 from functools import wraps
 
 from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.4.11"
+__version__ = "0.5.0"
 
 PY3 = sys.version_info[0] == 3
 
@@ -112,6 +113,7 @@ AngleType = om.MAngle
 ColorType = om.MColor
 
 ExistError = type("ExistError", (RuntimeError,), {})
+LockedError = type("LockedError", (ValueError,), {})
 DoNothing = None
 
 # Reusable objects, for performance
@@ -183,6 +185,15 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         return func_wrapper
     return timings_decorator
+
+
+@contextlib.contextmanager
+def _undo_chunk(name):
+    try:
+        cmds.undoInfo(chunkName=name, openChunk=True)
+        yield
+    finally:
+        cmds.undoInfo(chunkName=name, closeChunk=True)
 
 
 def protected(func):
@@ -381,9 +392,13 @@ class Singleton(type):
                 node._removed = False
                 return node
 
-        # It didn't exist, let's create one
+        # It hasn't been instantiated before, let's do that.
         # But first, make sure we instantiate the right type
-        if mobject.hasFn(om.MFn.kDagNode):
+        if mobject.hasFn(om.MFn.kDagContainer):
+            sup = ContainerNode
+        elif mobject.hasFn(om.MFn.kContainer):
+            sup = ContainerNode
+        elif mobject.hasFn(om.MFn.kDagNode):
             sup = DagNode
         elif mobject.hasFn(om.MFn.kSet):
             sup = ObjectSet
@@ -1255,6 +1270,43 @@ class Node(object):
         shortest_path = shortestPath
 
 
+if __maya_version__ >= 2017:
+    class ContainerNode(Node):
+        """A.k.a. "asset"
+
+        These are special. Published names aren't your average plug. They can't
+        be found via the MFnDependencyNode.findPlug call. Instead, they are
+        so-called "published names" and reside elsewhere.
+
+        This class wraps that interface to align with regular attribute access,
+        for an as-transparent-as-possible experience.
+
+        """
+
+        _Fn = om.MFnContainerNode
+
+        def __getitem__(self, key):
+            try:
+                return super(ContainerNode, self).__getitem__(key)
+            except ExistError:
+                pass
+
+            # It may be a published name rather than a traditional attribute
+            mplugs, keys = self._fn.getPublishedPlugs()
+
+            if key not in keys:
+                raise ExistError(
+                    "'%s' was not an attribute, nor a "
+                    "published name for this container" % key
+                )
+
+            mplug = mplugs[keys.index(key)]
+            return Plug(self, mplug,
+                        unit=None,
+                        key=key,
+                        modifier=self._modifier)
+
+
 class DagNode(Node):
     """A Maya DAG node
 
@@ -1445,6 +1497,45 @@ class DagNode(Node):
         plug = self["worldMatrix"][0] if space == sWorld else self["matrix"]
         return TransformationMatrix(plug.asMatrix(time))
 
+    def translation(self, space=sObject, time=None):
+        """Convenience method for transform(space).translation()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["translateX"] = 5.0
+            >>> node.translation().x
+            5.0
+
+        """
+
+        return self.transform(space, time).translation()
+
+    def rotation(self, space=sObject, time=None):
+        """Convenience method for transform(space).rotation()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["rotateX"] = radians(90)
+            >>> round(degrees(node.rotation().x), 1)
+            90.0
+
+        """
+
+        return self.transform(space, time).rotation()
+
+    def scale(self, space=sObject, time=None):
+        """Convenience method for transform(space).scale()
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["scaleX"] = 5.0
+            >>> node.scale().x
+            5.0
+
+        """
+
+        return self.transform(space, time).scale()
+
     def mapFrom(self, other, time=None):
         """Return TransformationMatrix of `other` relative self
 
@@ -1509,6 +1600,30 @@ class DagNode(Node):
 
         if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
+
+    def lineage(self, type=None):
+        """Yield parents all the way up a hierarchy
+
+        Example:
+            >>> _ = cmds.file(new=True, force=True)
+            >>> a = createNode("transform", name="a")
+            >>> b = createNode("transform", name="b", parent=a)
+            >>> c = createNode("transform", name="c", parent=b)
+            >>> d = createNode("transform", name="d", parent=c)
+            >>> lineage = d.lineage()
+            >>> next(lineage) == c
+            True
+            >>> next(lineage) == b
+            True
+            >>> next(lineage) == a
+            True
+
+        """
+
+        parent = self.parent(type)
+        while parent is not None:
+            yield parent
+            parent = parent.parent(type)
 
     def children(self,
                  type=None,
@@ -2388,6 +2503,10 @@ class Plug(object):
 
         self[index].write(value)
 
+    def __hash__(self):
+        """Support storing in set() and as key in dict()"""
+        return hash(self.path())
+
     def __init__(self, node, mplug, unit=None, key=None, modifier=None):
         """A Maya plug
 
@@ -2429,7 +2548,7 @@ class Plug(object):
         max_index = 1e7
 
         while start_index < max_index:
-            if not self[start_index].connected:
+            if self[start_index].connection() is None:
                 return start_index
             start_index += 1
 
@@ -2591,8 +2710,59 @@ class Plug(object):
 
     @property
     def connected(self):
-        """Return whether or not this attribute is connected (to anything)"""
-        return self.connection() is not None
+        """Return whether or not this attribute has an input connection
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node["tx"] >> node["ty"]
+
+            # ty is connected, tx is not
+            >>> node["tx"].connected
+            False
+
+            >>> node["ty"].connected
+            True
+
+        """
+
+        return self.connection(destination=False) is not None
+
+    def lock(self):
+        """Convenience function for plug.locked = True
+
+        Examples:
+            # Static attributes work just fine
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["translateX"].locked
+            False
+            >>> node1["translateX"].locked = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["translateX"].locked
+            True
+
+            # Dynamic attributes work too
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["dynamicAttr"] = Double()
+            >>> node1["dynamicAttr"].locked
+            False
+            >>> node1["dynamicAttr"].locked = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["dynamicAttr"].locked
+            True
+
+        """
+
+        self.locked = True
+
+    def unlock(self):
+        """Convenience function for plug.locked = False"""
+        self.locked = False
 
     @property
     def locked(self):
@@ -2601,22 +2771,52 @@ class Plug(object):
     @locked.setter
     def locked(self, value):
         """Lock attribute"""
+
         elements = (
             self
             if self.isArray or self.isCompound
             else [self]
         )
 
-        # Use setAttr in place of MPlug.isKeyable = False, as that
-        # doesn't persist the scene on save if the attribute is dynamic.
         for el in elements:
-            cmds.setAttr(el.path(), lock=value)
+            # Use setAttr in place of MPlug.isLocked = False, as that
+            # doesn't persist the scene on save if the attribute is dynamic.
+            if el._mplug.isDynamic:
+                cmds.setAttr(el.path(), lock=value)
 
-    def lock(self):
-        self.locked = True
+            else:
+                el._mplug.isLocked = value
 
-    def unlock(self):
-        self.locked = False
+    def _channelBoxTest(self, value=None):
+        """@properties aren't tested
+
+        Examples:
+            # Static attributes work just fine
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["translateX"].channelBox
+            False
+            >>> node1["translateX"].channelBox = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["translateX"].channelBox
+            True
+
+            # Dynamic attributes work too
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["dynamicAttr"] = Double()
+            >>> node1["dynamicAttr"].channelBox
+            False
+            >>> node1["dynamicAttr"].channelBox = True
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["dynamicAttr"].channelBox
+            True
+
+        """
 
     @property
     def channelBox(self):
@@ -2631,16 +2831,52 @@ class Plug(object):
 
     @channelBox.setter
     def channelBox(self, value):
+        """Make a non-keyable attribute visible in the channel box"""
+
         elements = (
             self
             if self.isArray or self.isCompound
             else [self]
         )
 
-        # Use setAttr in place of MPlug.isChannelBox = False, as that
-        # doesn't persist the scene on save if the attribute is dynamic.
         for el in elements:
-            cmds.setAttr(el.path(), keyable=value, channelBox=value)
+            if el._mplug.isDynamic:
+                # Use setAttr as isChannelBox doesn't
+                # persist on scene save for dynamic attributes.
+                cmds.setAttr(el.path(), keyable=value, channelBox=value)
+            else:
+                el._mplug.isChannelBox = value
+
+    def _keyableTest(self, value=None):
+        """@properties aren't tested
+
+        Examples:
+            # Static attributes work just fine
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["translateX"].keyable
+            True
+            >>> node1["translateX"].keyable = False
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["translateX"].keyable
+            False
+
+            # Dynamic attributes work too
+            >>> _new()
+            >>> node1 = createNode("transform", name="node1")
+            >>> node1["dynamicAttr"] = Double(keyable=True)
+            >>> node1["dynamicAttr"].keyable
+            True
+            >>> node1["dynamicAttr"].keyable = False
+            >>> _save()
+            >>> _load()
+            >>> node1 = encode("node1")
+            >>> node1["dynamicAttr"].keyable
+            False
+
+        """
 
     @property
     def keyable(self):
@@ -2655,16 +2891,23 @@ class Plug(object):
 
     @keyable.setter
     def keyable(self, value):
+
+        # Facilitate passing e.g. `0` or `None`
+        value = bool(value)
+
         elements = (
             self
             if self.isArray or self.isCompound
             else [self]
         )
 
-        # Use setAttr in place of MPlug.isKeyable = False, as that
-        # doesn't persist the scene on save if the attribute is dynamic.
         for el in elements:
-            cmds.setAttr(el.path(), keyable=value)
+            if el._mplug.isDynamic:
+                # Use setAttr as isKeyable doesn't
+                # persist on scene save for dynamic attributes.
+                cmds.setAttr(el.path(), keyable=value)
+            else:
+                el._mplug.isKeyable = value
 
     @property
     def hidden(self):
@@ -2691,6 +2934,30 @@ class Plug(object):
     def lockAndHide(self):
         self.lock()
         self.hide()
+
+    def attribute(self):
+        """Return the attribute MObject of this plug"""
+        return self._mplug.attribute()
+
+    @property
+    def niceName(self):
+        """The nice name of this plug, visible in e.g. Channel Box
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> assert node["translateY"].niceName == "Translate Y"
+            >>> node["translateY"].niceName = "New Name"
+            >>> assert node["translateY"].niceName == "New Name"
+
+        """
+
+        # No way of retrieving this information via the API?
+        return cmds.attributeName(self.path(), nice=True)
+
+    @niceName.setter
+    def niceName(self, value):
+        fn = om.MFnAttribute(self._mplug.attribute())
+        fn.setNiceNameOverride(value)
 
     @property
     def default(self):
@@ -2819,6 +3086,8 @@ class Plug(object):
                 '|persp.translate'
                 >>> persp["translateX"].path()
                 '|persp.translateX'
+                >>> persp["translateX"].path(full=True)
+                '|persp.translate.translateX'
 
             """
 
@@ -3205,6 +3474,11 @@ class TransformationMatrix(om.MTransformationMatrix):
 
         return super(TransformationMatrix, self).rotateBy(rot, space)
 
+    def scale(self, space=None):
+        """Make space into an optional argument"""
+        space = space or sTransform
+        return Vector(super(TransformationMatrix, self).scale(space))
+
     def quaternion(self):
         """Return transformation matrix as a Quaternion"""
         return Quaternion(self.rotation(asQuaternion=True))
@@ -3212,12 +3486,12 @@ class TransformationMatrix(om.MTransformationMatrix):
     def rotatePivot(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
-        return super(TransformationMatrix, self).rotatePivot(space)
+        return Vector(super(TransformationMatrix, self).rotatePivot(space))
 
     def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
         space = space or sTransform
-        return super(TransformationMatrix, self).translation(space)
+        return Vector(super(TransformationMatrix, self).translation(space))
 
     def setTranslation(self, trans, space=None):
         if isinstance(trans, Plug):
@@ -3273,11 +3547,6 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     def asMatrixInverse(self):  # type: () -> MatrixType
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
-
-    # A more intuitive alternative
-    translate = translateBy
-    rotate = rotateBy
-    scale = scaleBy
 
     if ENABLE_PEP8:
         x_axis = xAxis
@@ -3413,8 +3682,32 @@ class Vector(om.MVector):
 Vector3 = Vector
 
 
+def multiply_vectors(vec1, vec2):
+    """Piecewise multiplication of two vectors"""
+
+    return Vector(
+        vec1[0] * vec2[0],
+        vec1[1] * vec2[1],
+        vec1[2] * vec2[2]
+    )
+
+
+def divide_vectors(vec1, vec2):
+    """Piecewise division of two vectors"""
+
+    return Vector(
+        vec1[0] / vec2[0],
+        vec1[1] / vec2[1],
+        vec1[2] / vec2[2]
+    )
+
+
 class Point(om.MPoint):
     """Maya's MPoint"""
+
+
+class Color(om.MColor):
+    """Maya's MColor"""
 
 
 class BoundingBox(om.MBoundingBox):
@@ -4023,6 +4316,10 @@ def _python_to_mod(value, plug, mod):
     elif isinstance(value, om.MTime):
         mod.newPlugValueMTime(mplug, value)
 
+    elif isinstance(value, om.MMatrix):
+        obj = om.MFnMatrixData().create(value)
+        mod.newPlugValue(mplug, obj)
+
     elif isinstance(value, om.MEulerRotation):
         for index, value in enumerate(value):
             value = om.MAngle(value, om.MAngle.kRadians)
@@ -4167,7 +4464,18 @@ def meters(cm):
 
 
 def clear():
-    """Remove all reused nodes"""
+    """Clear all memory used by cmdx, including undo"""
+
+    if ENABLE_UNDO:
+        cmds.flushUndo()
+
+        # Traces left in here can trick Maya into thinking
+        # nodes still exists that cannot be unloaded.
+        self.shared.undo = None
+        self.shared.redo = None
+        self.shared.undos = {}
+        self.shared.redos = {}
+
     Singleton._instances.clear()
 
 
@@ -4276,10 +4584,33 @@ class _BaseModifier(object):
     Type = om.MDGModifier
 
     def __enter__(self):
+        """Support use as a context manager
+
+        Examples:
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    mod.set_attr(node["translateX"], 5.0)
+            ...
+            >>>
+
+            # Use of modified once exited is not allowed
+            >>> node = mod.createNode("transform")
+            >>> mod.doIt()
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Cannot re-use modifier which was once a context
+
+        """
+
         self.isContext = True
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
+
+        if exc_type:
+            # Let our internal calls to `assert` prevent the
+            # modifier from proceeding, given it's half-baked
+            return
 
         # Support calling `doIt` during a context,
         # without polluting the undo queue.
@@ -4287,6 +4618,10 @@ class _BaseModifier(object):
             commit(self._modifier.undoIt, self._modifier.doIt)
 
         self.doIt()
+
+        # Prevent continued use of the modifier,
+        # after exiting the context manager.
+        self.isExited = True
 
     def __init__(self,
                  undoable=True,
@@ -4297,6 +4632,7 @@ class _BaseModifier(object):
         super(_BaseModifier, self).__init__()
         self.isDone = False
         self.isContext = False
+        self.isExited = False
 
         self._modifier = self.Type()
         self._history = list()
@@ -4309,12 +4645,187 @@ class _BaseModifier(object):
             "template": template,
         }
 
+        # Extras
+        self._lockAttrs = []
+        self._keyableAttrs = []
+        self._niceNames = []
+
+        # Undo
+        self._doneLockAttrs = []
+        self._doneKeyableAttrs = []
+        self._doneNiceNames = []
+        self._attributesBeingAdded = []
+
+    @record_history
+    def niceNameAttr(self, plug, value=True):
+        """Set a new nice name for a plug
+
+        The modifier doesn't natively support this, so we
+        stow away the request and call it at the tail end
+        of call to `doIt`.
+
+        Examples:
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    mod.niceNameAttr(node["translateX"], "mainAxis")
+            ...    mod.niceNameAttr(node["rotateY"], "badRotate")
+            ...
+            >>> assert node["translateX"].niceName == 'mainAxis'
+            >>> assert node["rotateY"].niceName == 'badRotate'
+
+            # Must be undoable
+            >>> from maya import cmds
+            >>> cmds.undo()
+            >>> assert node["translateX"].niceName == 'Translate X'
+            >>> assert node["rotateY"].niceName == 'Rotate Y'
+
+            # Also works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> assert node["myDynamic"].niceName == "My Dynamic"
+
+            >>> with DagModifier() as mod:
+            ...    mod.niceNameAttr(node["myDynamic"], "Your Dynamic")
+            ...
+            >>> assert node["myDynamic"].niceName == "Your Dynamic"
+
+            # Aaaaand one for the road
+            >>> cmds.undo()
+            >>> assert node["myDynamic"].niceName == "My Dynamic"
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._niceNames.append((plug, value))
+
+    @record_history
+    def lockAttr(self, plug, value=True):
+        """Lock a plug
+
+        The modifier doesn't natively support this, so we
+        stow away the request and call it at the tail end
+        of call to `doIt`.
+
+        Examples:
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    mod.lockAttr(node["translateX"])
+            ...    mod.lockAttr(node["rotateY"])
+            ...
+            >>> assert node["translateX"].locked
+            >>> assert node["rotateY"].locked
+
+            # Must be undoable
+            >>> from maya import cmds
+            >>> cmds.undo()
+            >>> assert not node["translateX"].locked
+            >>> assert not node["rotateY"].locked
+
+            # Also works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> assert not node["myDynamic"].locked
+
+            >>> with DagModifier() as mod:
+            ...    mod.lockAttr(node["myDynamic"])
+            ...
+            >>> assert node["myDynamic"].locked
+            >>> cmds.undo()
+            >>> assert not node["myDynamic"].locked
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._lockAttrs.append((plug, value))
+
+    @record_history
+    def keyableAttr(self, plug, value=True):
+        """Make a plug keyable
+
+        The modifier doesn't natively support this, so we
+        stow away the request and call it at the tail end
+        of call to `doIt`.
+
+        Examples:
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    mod.keyableAttr(node["rotatePivotX"])
+            ...    mod.keyableAttr(node["translateX"], False)
+            ...
+            >>> node["rotatePivotX"].keyable
+            True
+            >>> node["translateX"].keyable
+            False
+
+            # Must be undoable
+            >>> from maya import cmds
+            >>> cmds.undo()
+            >>> node["rotatePivotX"].keyable
+            False
+            >>> node["translateX"].keyable
+            True
+
+            # Also works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> node["myDynamic"].keyable
+            False
+            >>> with DagModifier() as mod:
+            ...    mod.keyableAttr(node["myDynamic"])
+            ...
+            >>> node["myDynamic"].keyable
+            True
+
+            >>> cmds.undo()
+            >>> node["myDynamic"].keyable
+            False
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._keyableAttrs.append((plug, value))
+
+    def setKeyable(self, plug, value=True):
+        return self.keyableAttr(plug, value)
+
+    def setLocked(self, plug, value=True):
+        return self.lockAttr(plug, value)
+
+    def setNiceName(self, plug, value):
+        return self.niceNameAttr(plug, value)
+
     def doIt(self):
+        if self.isExited:
+            raise RuntimeError(
+                "Cannot re-use modifier which was once a context"
+            )
+
         if (not self.isContext) and self._opts["undoable"]:
             commit(self._modifier.undoIt, self._modifier.doIt)
 
         try:
             self._modifier.doIt()
+
+            # Do these last, they manage undo on their own
+            with _undo_chunk("lockAttrs"):
+                self._doLockAttrs()
+                self._doKeyableAttrs()
+                self._doNiceNames()
 
         except RuntimeError:
 
@@ -4322,17 +4833,108 @@ class _BaseModifier(object):
             if self._opts["atomic"]:
                 self.undoIt()
 
+            traceback.print_exc()
             raise ModifierError(self._history)
-        else:
 
+        else:
             # Facilitate multiple calls to doIt, whereby only
             # the latest, actually-performed actions are reported
             self._history[:] = []
 
+        self._attributesBeingAdded[:] = []
         self.isDone = True
 
     def undoIt(self):
         self._modifier.undoIt()
+
+    def _doLockAttrs(self):
+        if self._opts["undoable"]:
+            commit(self._undoLockAttrs, self._redoLockAttrs)
+
+        self._redoLockAttrs()
+
+    def _redoLockAttrs(self):
+        while self._lockAttrs:
+            plug, value = self._lockAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+
+                # Undo is handled by the plug itself, by calling on cmds
+                if not el._mplug.isDynamic:
+                    self._doneLockAttrs += [(el, el.locked, value)]
+
+                el.locked = value
+
+    def _undoLockAttrs(self):
+        while self._doneLockAttrs:
+            plug, oldValue, newValue = self._doneLockAttrs.pop(0)
+            plug.locked = oldValue
+
+            # For redo
+            self._lockAttrs += [(plug, newValue)]
+
+    def _doKeyableAttrs(self):
+        if self._opts["undoable"]:
+            commit(self._undoKeyableAttrs, self._redoKeyableAttrs)
+
+        self._redoKeyableAttrs()
+
+    def _redoKeyableAttrs(self):
+        while self._keyableAttrs:
+            plug, value = self._keyableAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                if not el._mplug.isDynamic:
+                    self._doneKeyableAttrs += [(el, el.keyable, value)]
+                el.keyable = value
+
+    def _undoKeyableAttrs(self):
+        while self._doneKeyableAttrs:
+            plug, oldValue, newValue = self._doneKeyableAttrs.pop(0)
+            plug.keyable = oldValue
+
+            # For redo
+            self._keyableAttrs += [(plug, newValue)]
+
+    def _doNiceNames(self):
+        """Apply all of the new nice names
+
+        Examples:
+            >>> with _BaseModifier() as mod:
+            ...     node = mod.createNode("reverse")
+            ...     mod.setNiceName(node["inputX"], "Test")
+            ...
+            >>> assert node["inputX"].niceName == "Test"
+
+        """
+
+        if self._opts["undoable"]:
+            commit(self._undoNiceNames, self._redoNiceNames)
+
+        self._redoNiceNames()
+
+    def _redoNiceNames(self):
+        while self._niceNames:
+            plug, value = self._niceNames.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                # No API access?
+                oldValue = cmds.attributeName(el.path(), nice=True)
+                self._doneNiceNames += [(el, oldValue, value)]
+
+                fn = om.MFnAttribute(el._mplug.attribute())
+                fn.setNiceNameOverride(value)
+
+    def _undoNiceNames(self):
+        while self._doneNiceNames:
+            plug, oldValue, newValue = self._doneNiceNames.pop(0)
+            fn = om.MFnAttribute(plug._mplug.attribute())
+            fn.setNiceNameOverride(oldValue)
+
+            self._niceNames += [(plug, newValue)]
 
     @record_history
     def createNode(self, type, name=None):
@@ -4361,27 +4963,124 @@ class _BaseModifier(object):
 
     @record_history
     def deleteNode(self, node):
-        return self._modifier.deleteNode(node._mobject)
+        """Delete a node
 
-    delete = deleteNode
+        Examples:
+            >>> _new()
+            >>> with DGModifier() as mod:
+            ...   node = mod.createNode("multMatrix", name="specialName")
+            ...
+            >>> "specialName" in cmds.ls()
+            True
+            >>> with DGModifier() as mod:
+            ...   mod.deleteNode(node)
+            ...
+            >>> "specialName" in cmds.ls()
+            False
+
+            # It does not automatically delete empty parent transforms
+            >>> with DagModifier() as mod:
+            ...   transform = mod.createNode("transform",
+            ...                              name="specialTransform")
+            ...   shape = mod.createNode("mesh",
+            ...                          name="specialShape",
+            ...                          parent=transform)
+            ...
+            >>> "specialTransform" in cmds.ls()
+            True
+            >>> "specialShape" in cmds.ls()
+            True
+            >>> with DGModifier() as mod:
+            ...   mod.deleteNode(shape)
+            ...
+            >>> "specialTransform" in cmds.ls()
+            True
+            >>> "specialShape" in cmds.ls()
+            False
+
+        """
+
+        self._modifier.deleteNode(node._mobject)
 
     @record_history
     def renameNode(self, node, name):
         return self._modifier.renameNode(node._mobject, name)
 
-    rename = renameNode
-
     @record_history
     def addAttr(self, node, attr):
+        """Add new `attr` to `node`
+
+        Examples:
+            >>> _new()
+            >>> with DagModifier() as mod:
+            ...   node = mod.createNode("transform", name="myNode")
+            ...   attr = mod.addAttr(node, Double("newAttr", default=5.0))
+            ...
+            >>> node["newAttr"].read()
+            5.0
+            >>> cmds.undo()
+            >>> cmds.undo()
+            >>> node.hasAttr("newAttr")
+            False
+
+            # Protect against adding an attribute twice
+            >>> with DagModifier() as mod:
+            ...   node = mod.createNode("transform")
+            ...   attr1 = mod.addAttr(node, Boolean("sameAttr"))
+            ...   attr2 = mod.addAttr(node, Double("sameAttr"))
+            Traceback (most recent call last):
+            ...
+            ExistError: Same attribute added twice: .sameAttr
+
+            # But allow the same attributes to be added to different nodes
+            >>> with DagModifier() as mod:
+            ...   node1 = mod.createNode("transform")
+            ...   node2 = mod.createNode("transform")
+            ...   attr1 = mod.addAttr(node1, Boolean("sameAttr"))
+            ...   attr2 = mod.addAttr(node2, Double("sameAttr"))
+            ...
+            >>>
+
+        """
+
+        assert isinstance(node, Node), "%s was not a cmdx.Node"
         mobj = attr
 
         if isinstance(attr, _AbstractAttribute):
             mobj = attr.create()
 
-        self._modifier.addAttribute(node._mobject, mobj)
+        this_name = om.MFnAttribute(mobj).name
+        if node.hasAttr(this_name):
+            raise ExistError(
+                "Attribute already exists: %s" % node[this_name].path()
+            )
+
+        # Ensure it isn't in the process of being added
+        for _node, _mattr in self._attributesBeingAdded:
+            name_being_added = om.MFnAttribute(_mattr).name
+            if node == _node and this_name == name_being_added:
+                raise ExistError(
+                    "Same attribute added twice: %s.%s" % (
+                        node.path(), name_being_added)
+                )
+
+        status = self._modifier.addAttribute(node._mobject, mobj)
+
+        if not status:
+            raise ValueError(
+                "Could not add the attribute: %s.%s" % (node, attr)
+            )
 
         if isinstance(attr, String) and attr["default"]:
             log.warning("Strings don't support default values with modifier")
+
+        # Protect against user error
+        # This one is especially pesky; Maya will go ahead and create
+        # the same attribute name multiple times, only to complain when
+        # you try and undo. Bad, Maya, bad!
+        self._attributesBeingAdded += [(node, mobj)]
+
+        return mobj
 
     @record_history
     def deleteAttr(self, plug):
@@ -4394,11 +5093,18 @@ class _BaseModifier(object):
 
     @record_history
     def setAttr(self, plug, value):
+        if isinstance(plug, om.MPlug):
+            plug = Plug(plug.node(), plug)
+
+        assert plug.editable, "%s was locked or connected" % plug.path()
+
+        # Support passing a cmdx.Plug as value
         if isinstance(value, Plug):
             value = value.read()
 
-        if isinstance(plug, om.MPlug):
-            value = Plug(plug.node(), plug).read()
+        # Support passing an MPlug as value
+        if isinstance(value, om.MPlug):
+            value = Plug(value.node(), value).read()
 
         _python_to_mod(value, plug, self._modifier)
 
@@ -4410,25 +5116,32 @@ class _BaseModifier(object):
         """Connect one attribute to another, with undo
 
         Examples:
-            >>> tm = createNode("transform")
+            >>> _new()
+            >>> tm = createNode("transform", name="myTransform")
             >>> with DagModifier() as mod:
             ...   mod.connect(tm["rx"], tm["ry"])
             ...
-            >>> tx = createNode("animCurveTL")
-
-            # Connect without undo
-            >>> tm["tx"] << tx["output"]
-            >>> tm["tx"].connection() is tx
-            True
+            >>> tx = createNode("animCurveTL", name="myAnimCurve")
 
             # Automatically disconnects any connected attribute
             >>> with DagModifier() as mod:
             ...     mod.connect(tm["sx"], tm["tx"])
             ...
-            >>> tm["tx"].connection() is tm
+            >>> tm["tx"].connection()
+            |myTransform
+            >>> cmds.undo()
+            >>> cmds.undo()  # Unsure why it needs two undos :S
+            >>> tm["tx"].connection() is None
             True
-            >>> cmds.undo() if ENABLE_UNDO else DoNothing
-            >>> tm["tx"].connection() is tx
+
+            # Connect without undo
+            >>> tm["tx"] << tx["output"]
+            >>> tm["tx"].connection()
+            myAnimCurve
+
+            # Disconnect without undo
+            >>> tm["tx"] // tx["output"]
+            >>> tm["tx"].connection() is None
             True
 
         """
@@ -4439,20 +5152,175 @@ class _BaseModifier(object):
         if isinstance(dst, Plug):
             dst = dst._mplug
 
+        assert isinstance(src, om.MPlug), "%s must be of type MPlug" % src
+        assert isinstance(dst, om.MPlug), "%s must be of type MPlug" % dst
+
+        if dst.isLocked:
+            # Modifier can't perform this connect, but wouldn't
+            # tell you about it until you `doIt()`. Bad.
+            path = dst.partialName(
+                includeNodeName=False,
+                useLongNames=True,
+                useFullAttributePath=False
+            )
+
+            raise LockedError("Channel locked, cannot connect '%s'" % path)
+
         if force:
             # Disconnect any plug connected to `other`
             disconnected = False
 
+            # Ensure we only disconnect incoming attributes,
+            # we don't care about whether this attribute connects
+            # to something else.
             for plug in dst.connectedTo(True, False):
-                self.disconnect(a=plug, b=dst)
+                self.disconnect(plug, dst)
                 disconnected = True
 
             if disconnected:
                 # Connecting after disconnecting breaks undo,
                 # unless we do it first.
+                #
+                # NOTE: This is bad, the user should be in control of when
+                # the modifier is actually being called. Especially if we
+                # want to avoid calling it altogether in case of an exception
                 self.doIt()
 
         self._modifier.connect(src, dst)
+
+    def connectAttr(self, srcPlug, dstNode, dstAttr):
+        """Connect a plug to an attribute
+
+        This method enables connecting to attributes that hasn't
+        yet been created.
+
+        Examples:
+            >>> _new()
+
+            # Connect to newly created attributes
+            >>> with DagModifier() as mod:
+            ...     newNode = mod.createNode("transform", name="newNode")
+            ...     newAttr = mod.addAttr(newNode, Double("newAttr"))
+            ...     mod.connectAttr(newNode["visibility"], newNode, newAttr)
+            ...
+            >>> newNode["newAttr"].read()
+            1.0
+
+            # Also works with undo
+            >>> cmds.undo()
+            >>> cmds.undo()
+            >>> newNode.hasAttr("newAttr")
+            False
+            >>> cmds.redo()
+            >>> newNode.hasAttr("newAttr")
+            True
+
+            >>> with DagModifier() as mod:
+            ...     otherNode = mod.createNode("transform", name="otherNode")
+            ...     otherAttr = mod.addAttr(otherNode, Message("otherAttr"))
+            ...     mod.connectAttr(newNode["newAttr"], otherNode, otherAttr)
+            ...
+            >>> newNode["newAttr"].connection()
+            |otherNode
+
+            >>> cmds.undo()
+            >>> cmds.undo()
+            >>> newNode["newAttr"].connection()
+            |newNode
+
+        """
+
+        assert isinstance(srcPlug, (Plug, om.MPlug)), "srcPlug not a plug"
+        assert isinstance(dstNode, (Node, om.MObject)), "dstNode not a node"
+        assert isinstance(dstAttr, om.MObject), "dstAttr not an MObject"
+
+        if isinstance(srcPlug, Plug):
+            srcPlug = srcPlug._mplug
+
+        srcNode = srcPlug.node()
+        srcAttr = srcPlug.attribute()
+
+        if isinstance(dstNode, Node):
+            dstNode = dstNode.object()
+
+        return self.connectAttrs(srcNode, srcAttr, dstNode, dstAttr)
+
+    def connectAttrs(self, srcNode, srcAttr, dstNode, dstAttr):
+        """Connect a new attribute to another new attribute
+
+        This method enables connecting to attributes, neither of
+        which hasn't been created yet.
+
+        Examples:
+            # Connect to newly created attributes
+            >>> with DagModifier() as mod:
+            ...     newNode = mod.createNode("transform")
+            ...     newAttr = mod.addAttr(newNode, Double("newAttr"))
+            ...     mod.connectAttr(newNode["visibility"], newNode, newAttr)
+            ...
+            >>> newNode["newAttr"].read()
+            1.0
+
+        """
+
+        if isinstance(srcNode, Node):
+            srcNode = srcNode.object()
+
+        if isinstance(dstNode, Node):
+            dstNode = dstNode.object()
+
+        if isinstance(srcAttr, Plug):
+            srcAttr = srcAttr.attribute()
+
+        if isinstance(dstAttr, Plug):
+            dstAttr = dstAttr.attribute()
+
+        assert isinstance(srcNode, om.MObject)
+        assert isinstance(srcAttr, om.MObject)
+        assert isinstance(dstNode, om.MObject)
+        assert isinstance(dstAttr, om.MObject)
+
+        self._modifier.connect(srcNode, srcAttr,
+                               dstNode, dstAttr)
+
+    def tryConnect(self, src, dst):
+        """Connect and ignore failure
+
+        Convenience method to improve readability of your code.
+
+        Returns:
+            success (bool): Whether or not the connection succeeded
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node["translateY"].lock()
+            >>> with DGModifier() as mod:
+            ...     mod.connect(node["tx"], node["ty"])
+            ...
+            Traceback (most recent call last):
+            ...
+            LockedError: Channel locked, cannot connect 'translateY'
+
+            # Now let's tryConnect
+            >>> with DGModifier() as mod:
+            ...    success = mod.tryConnect(node["tx"], node["ty"])
+            ...
+            >>> success
+            False
+
+        """
+
+        try:
+            self.connect(src, dst)
+
+        except LockedError:
+            return False
+
+        except Exception:
+            return False
+
+        else:
+            return True
 
     @record_history
     def disconnect(self, a, b=None, source=True, destination=True):
@@ -4562,6 +5430,10 @@ class _BaseModifier(object):
 
         return count
 
+    # Aliases
+    delete = deleteNode
+    rename = renameNode
+
     if ENABLE_PEP8:
         do_it = doIt
         undo_it = undoIt
@@ -4572,6 +5444,15 @@ class _BaseModifier(object):
         set_attr = setAttr
         delete_attr = deleteAttr
         reset_attr = resetAttr
+        lock_attr = lockAttr
+        keyable_attr = keyableAttr
+        nice_name_attr = niceNameAttr
+        try_connect = tryConnect
+        connect_attr = connectAttr
+        connect_attrs = connectAttrs
+        set_keyable = setKeyable
+        set_locked = setLocked
+        set_nice_name = setNiceName
 
 
 class DGModifier(_BaseModifier):
@@ -4690,6 +5571,13 @@ class DagModifier(_BaseModifier):
         create_node = createNode
 
 
+class HashableTime(om.MTime):
+    """Use time in a dictionary"""
+
+    def __hash__(self):
+        return hash(self.value)
+
+
 # Convenience functions
 def connect(a, b):
     with DagModifier() as mod:
@@ -4779,17 +5667,44 @@ def createNode(type, name=None, parent=None):
         >>> node = createNode("transform")  # Type as string
         >>> node = createNode(tTransform)  # Type as ID
 
+        # Shape without transform automatically creates transform
+        >>> node = createNode("mesh")
+        >>> node.isA(kTransform)
+        True
+
+        # DG nodes are also OK
+        >>> node = createNode("multMatrix")
+
+        # Parenting is A-OK
+        >>> parent = createNode("transform")
+        >>> child = createNode("transform", parent=parent)
+        >>> child.parent() == parent
+        True
+
+        # Custom name is OK
+        >>> specialName = createNode("transform", name="specialName")
+        >>> specialName.name() == "specialName"
+        True
+
     """
 
+    kwargs = {}
+    fn = GlobalDependencyNode
+
+    if name:
+        kwargs["name"] = name
+
+    if parent:
+        kwargs["parent"] = parent._mobject
+        fn = GlobalDagNode
+
     try:
-        with DagModifier() as mod:
-            node = mod.createNode(type, name=name, parent=parent)
+        mobj = fn.create(type, **kwargs)
+    except RuntimeError as e:
+        log.debug(str(e))
+        raise TypeError("Unrecognized node type '%s'" % type)
 
-    except TypeError:
-        with DGModifier() as mod:
-            node = mod.createNode(type, name=name)
-
-    return node
+    return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None, time=None):
@@ -4979,14 +5894,30 @@ def connectAttr(src, dst):
 
 
 def delete(*nodes):
+    # Flatten possible sub-lists
+    flattened = list()
+    for node in nodes:
+        if isinstance(node, (tuple, list)):
+            flattened += node
+        else:
+            flattened += [node]
 
-    with DGModifier() as mod:
-        for node in nodes:
+    # Use DAG modifier rather than DG, because
+    # DG doesn't understand hierarchy.
+    with DagModifier() as mod:
+        for node in flattened:
             if isinstance(node, str):
                 node, node = node.rsplit(".", 1)
                 node = encode(node)
                 node = node[node]
+
+            if not node.exists:
+                # May have been a child of something
+                # deleted earlier
+                continue
+
             mod.delete(node)
+            mod.do_it()
 
 
 def rename(node, name):
@@ -5245,6 +6176,12 @@ def last(iterator, default=None):
 # --------------------------------------------------------
 
 
+# Disconnect behaviors
+kNothing = om.MFnAttribute.kNothing
+kReset = om.MFnAttribute.kReset
+kDelete = om.MFnAttribute.kDelete
+
+
 class _AbstractAttribute(dict):
     Fn = None
     Type = None
@@ -5264,6 +6201,13 @@ class _AbstractAttribute(dict):
     ChannelBox = False
     AffectsAppearance = False
     AffectsWorldSpace = False
+
+    # What should happen when an attribute is disconnected?
+    # kNothing | leave the attribute set to its last known value
+    # kReset   | reset the attribute to its default value
+    # kDelete  | delete the element of the array that was connected
+    #          | (only relevant for array attributes)
+    DisconnectBehavior = kNothing
 
     Help = ""
 
@@ -5324,10 +6268,13 @@ class _AbstractAttribute(dict):
                  array=False,
                  indexMatters=None,
                  connectable=True,
+                 disconnectBehavior=kNothing,
                  help=None):
 
         self.Fn = type(self).Fn()
 
+        # To avoid repeating the long list of arguments above,
+        # store all arguments to this function using "locals"
         args = locals().copy()
         args.pop("self")
 
@@ -5399,6 +6346,7 @@ class _AbstractAttribute(dict):
         self.Fn.channelBox = self["channelBox"]
         self.Fn.affectsAppearance = self["affectsAppearance"]
         self.Fn.affectsWorldSpace = self["affectsWorldSpace"]
+        self.Fn.disconnectBehavior = self["disconnectBehavior"]
         self.Fn.array = self["array"]
 
         if self["indexMatters"] is False:
@@ -5792,6 +6740,7 @@ unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
 unique_shared = "cmdx_%s_shared" % __version__.replace(".", "_")
+
 if unique_shared not in sys.modules:
     sys.modules[unique_shared] = types.ModuleType(unique_shared)
 
@@ -5895,17 +6844,11 @@ def install():
 
 
 def uninstall():
-    if ENABLE_UNDO:
+    if ENABLE_UNDO and self.installed:
+
         # Plug-in may exist in undo queue and
         # therefore cannot be unloaded until flushed.
-        cmds.flushUndo()
-
-        # Discard shared module
-        shared.undo = None
-        shared.redo = None
-        shared.undos.clear()
-        shared.redos.clear()
-        sys.modules.pop(unique_shared, None)
+        clear()
 
         cmds.unloadPlugin(unique_plugin)
 
@@ -6379,6 +7322,27 @@ class Cache(object):
 
     def transform(self, node):
         pass
+
+
+# Testing utilities
+def _new():
+    cmds.file(new=True, force=True)
+
+
+def _tempfile():
+    import tempfile
+    dirname = tempfile.gettempdir()
+    return os.path.join(dirname, "test.ma")
+
+
+def _save():
+    cmds.file(rename=_tempfile())
+    cmds.file(save=True, type="mayaAscii")
+
+
+def _load():
+    cmds.file(_tempfile(), open=True, force=True)
+
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

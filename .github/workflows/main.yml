@@ -1,0 +1,72 @@
+name: cmdx-test
+
+on:
+  push:
+    branches: [ master ]
+
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  maya:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    strategy:
+
+      # Without this, all containers stop if any fail
+      # That's bad, we want to know whether it's only one
+      # or if it happens to multiples or all.
+      fail-fast: false
+
+      matrix:
+        containerImage: [
+          "mottosso/maya:2015sp6",
+          "mottosso/maya:2016sp1",
+          "mottosso/maya:2017",
+          "mottosso/maya:2018",
+          "mottosso/maya:2019",
+          "mottosso/maya:2020"
+        ]
+
+    container: ${{ matrix.containerImage }}
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v1
+
+      - name: pip install
+        run: |
+          wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+          mayapy get-pip.py --user
+          mayapy -m pip install --user \
+            nose \
+            nose-exclude \
+            coverage \
+            flaky \
+            sphinx \
+            sphinxcontrib-napoleon
+
+        # Since 2019, this sucker throws an unnecessary warning if not declared
+      - name: Environment
+        run: |
+          export XDG_RUNTIME_DIR=/var/tmp/runtime-root
+
+      - name: Unittests
+        run: |
+          pwd
+          ls
+          mayapy --version
+          mayapy run_tests.py
+
+      - name: Test docs
+        run: |
+          mayapy build_livedocs.py && mayapy test_docs.py
+
+      - name: Build docs
+        run: |
+          mayapy build_docs.py
