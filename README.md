@@ -23,6 +23,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 | Date     | Version   | Event
 |:---------|:----------|:----------
+| Mar 2020 | 0.5.0 | Stable release
 | Aug 2019 | 0.4.0 | Public release
 | Feb 2018 | 0.1.0 | Extracted into its own repository
 | Jun 2017 | 0.0.0 | Starts as an internal module
