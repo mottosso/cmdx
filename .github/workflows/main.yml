@@ -23,16 +23,23 @@ jobs:
       fail-fast: false
 
       matrix:
-        containerImage: [
-          "mottosso/maya:2015sp6",
-          "mottosso/maya:2016sp1",
-          "mottosso/maya:2017",
-          "mottosso/maya:2018",
-          "mottosso/maya:2019",
-          "mottosso/maya:2020"
-        ]
+       include:
+         - maya: "2015sp6"
+           pip: "2.7/get-pip.py"
+         - maya: "2016sp1"
+           pip: "2.7/get-pip.py"
+         - maya: "2017"
+           pip: "2.7/get-pip.py"
+         - maya: "2018"
+           pip: "2.7/get-pip.py"
+         - maya: "2019"
+           pip: "2.7/get-pip.py"
+         - maya: "2020"
+           pip: "2.7/get-pip.py"
+         - maya: "2022"
+           pip: "get-pip.py"
 
-    container: ${{ matrix.containerImage }}
+    container: mottosso/maya:${{ matrix.maya }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -41,7 +48,7 @@ jobs:
 
       - name: pip install
         run: |
-          wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+          wget https://bootstrap.pypa.io/pip/${{ matrix.pip }}
           mayapy get-pip.py --user
           mayapy -m pip install --user \
             nose \

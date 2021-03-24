@@ -142,21 +142,23 @@ def test_getattrtime():
                     edit=True,
                     time=(0, 24),
                     attribute="translateY",
+                    inTangentType="linear",
                     outTangentType="linear")
 
     # These floating point values can differ ever so slightly
-    assert_almost_equals(transform["ty"].read(time=0), 0.0, places=5)
+    assert_almost_equals(transform["ty"].read(time=0.0), 0.0, places=5)
     assert_almost_equals(transform["ty"].read(time=0.5), 5.0, places=5)
-    assert_almost_equals(transform["ty"].read(time=1), 10.0, places=5)
+    assert_almost_equals(transform["ty"].read(time=1.0), 10.0, places=5)
 
     # From the current context (Maya 2018 and above)
     if hasattr(om.MDGContext, "makeCurrent"):
-        with cmdx.DGContext(0):
+        with cmdx.DGContext(0.0):
             assert_almost_equals(transform["ty"].read(), 0.0, places=5)
         with cmdx.DGContext(0.5):
             assert_almost_equals(transform["ty"].read(), 5.0, places=5)
-        with cmdx.DGContext(1):
+        with cmdx.DGContext(1.0):
             assert_almost_equals(transform["ty"].read(), 10.0, places=5)
+
         # Custom units
         with cmdx.DGContext(0, cmdx.TimeUiUnit()):
             assert_almost_equals(transform["ty"].read(), 0.0, places=5)
@@ -164,6 +166,7 @@ def test_getattrtime():
             assert_almost_equals(transform["ty"].read(), 5.0, places=5)
         with cmdx.DGContext(24, cmdx.TimeUiUnit()):
             assert_almost_equals(transform["ty"].read(), 10.0, places=5)
+
         # Alternate syntax
         with cmdx.DGContext(cmdx.TimeUiUnit()(0)):
             assert_almost_equals(transform["ty"].read(), 0.0, places=5)
@@ -459,9 +462,9 @@ def test_modifier_history():
     try:
         mod.doIt()
     except cmdx.ModifierError as e:
-        pass
-
-    tasks = [task[0] for task in e.history]
-    assert_equals(tasks[0], "createNode")
-    assert_equals(tasks[1], "connect")
-    assert_equals(tasks[2], "setAttr")
+        tasks = [task[0] for task in e.history]
+        assert_equals(tasks[0], "createNode")
+        assert_equals(tasks[1], "connect")
+        assert_equals(tasks[2], "setAttr")
+    else:
+        assert False, "I should have failed"
