@@ -1,6 +1,6 @@
 <a href=/cmdx/><p align=center><img height=140 src=https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png></p></a>
 
-<p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a></p>
+<p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a><br>For Maya 2015-2022</p>
 
 <br>
 
@@ -23,6 +23,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 | Date     | Version   | Event
 |:---------|:----------|:----------
+| Mar 2020 | 0.5.1 | Support for Maya 2022
 | Mar 2020 | 0.5.0 | Stable release
 | Aug 2019 | 0.4.0 | Public release
 | Feb 2018 | 0.1.0 | Extracted into its own repository
@@ -30,17 +31,17 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 ##### Status
 
-[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://github.com/mottosso/cmdx/)
-[![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
+[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://github.com/mottosso/cmdx/) [![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
 
-| Maya | Status
-|:----------|:-----
-| 2015 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2015)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2016 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2016)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2017 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2017)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2018 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2018)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2019 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2019)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
-| 2020 | [![Build Status](https://mottosso.visualstudio.com/cmdx/_apis/build/status/mottosso.cmdx?branchName=master&jobName=Maya&configuration=Maya%20maya2020)](https://mottosso.visualstudio.com/cmdx/_build/latest?definitionId=7&branchName=master)
+| Maya    | Status
+|:----------|:----
+| 2015 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
+| 2016 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
+| 2017 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
+| 2018 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
+| 2019 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
+| 2020 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
+| 2022 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
 
 ##### Usecases
 
