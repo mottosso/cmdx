@@ -17,7 +17,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 PY3 = sys.version_info[0] == 3
 
@@ -534,14 +534,20 @@ class Node(object):
             >>> node["myDist", Centimeters] = node["translateX", Meters]
             >>> round(node["rotateX", Radians], 3)
             0.017
-            >>> node["myDist"] = Distance()
-            Traceback (most recent call last):
-            ...
-            ExistError: myDist
-            >>> node["notExist"] = 5
-            Traceback (most recent call last):
-            ...
-            ExistError: |myNode.notExist
+            >>> try:
+            ...    node["myDist"] = Distance()
+            ... except Exception as e:
+            ...    assert isinstance(e, ExistError)
+            ... else:
+            ...    assert False
+            >>>
+            >>> try:
+            ...   node["notExist"] = 5
+            ... except Exception as f:
+            ...   assert isinstance(f, ExistError)
+            ... else:
+            ...   assert False
+            >>>
             >>> delete(node)
 
         """
@@ -574,11 +580,7 @@ class Node(object):
                         # where this exception is thrown. Stay catious.
                         raise ExistError(key)
 
-        try:
-            plug = self.findPlug(key)
-        except RuntimeError:
-            raise ExistError("%s.%s" % (self.path(), key))
-
+        plug = self.findPlug(key)
         plug = Plug(self, plug, unit=unit)
 
         if not getattr(self._modifier, "isDone", True):
@@ -594,6 +596,10 @@ class Node(object):
 
         # Else, write it immediately
         plug.write(value)
+
+    def __hash__(self):
+        """Support storing in set() and as key in dict()"""
+        return hash(self.path())
 
     def _onDestroyed(self, mobject):
         self._destroyed = True
@@ -884,7 +890,13 @@ class Node(object):
                 if cached:
                     raise KeyError("'%s' not cached" % name)
 
-        plug = self._fn.findPlug(name, False)
+        assert isinstance(name, string_types), "%s was not string" % name
+
+        try:
+            plug = self._fn.findPlug(name, True)
+        except RuntimeError:
+            raise ExistError("%s.%s" % (self.path(), name))
+
         self._state["plugs"][name] = plug
 
         return plug
@@ -944,8 +956,8 @@ class Node(object):
 
         Example:
             >>> node = createNode("transform", name="myName")
-            >>> node.name()
-            u'myName'
+            >>> node.name() == 'myName'
+            True
 
         """
 
@@ -960,13 +972,13 @@ class Node(object):
         Example:
             >>> _ = cmds.file(new=True, force=True)
             >>> node = createNode("transform", name="myNode")
-            >>> node.namespace()
-            u''
+            >>> node.namespace() == ""
+            True
             >>> _ = cmds.namespace(add=":A")
             >>> _ = cmds.namespace(add=":A:B")
             >>> node = createNode("transform", name=":A:B:myNode")
-            >>> node.namespace()
-            u'A:B'
+            >>> node.namespace() == 'A:B'
+            True
 
         """
 
@@ -1050,8 +1062,8 @@ class Node(object):
 
         Example:
             >>> node = createNode("choice")
-            >>> node.type()
-            u'choice'
+            >>> node.type() == 'choice'
+            True
 
         """
 
@@ -1082,6 +1094,7 @@ class Node(object):
         if isinstance(mobj, _AbstractAttribute):
             mobj = attr.create()
 
+        assert isinstance(mobj, om.MObject)
         self._fn.addAttribute(mobj)
 
         # These don't natively support defaults by Maya
@@ -1281,6 +1294,44 @@ if __maya_version__ >= 2017:
         This class wraps that interface to align with regular attribute access,
         for an as-transparent-as-possible experience.
 
+        Examples:
+            >> from maya import cmds
+            >> _ = cmds.file(new=True, force=True)
+
+            # Establish a published plug
+            >> con = cmds.container(name="myContainer")
+            >> con = encode(con)
+            >> con.isA(kDagNode)
+            False
+            >> isinstance(con, ContainerNode)
+            True
+
+            >> from maya import cmds
+            >> _ = cmds.file(new=True, force=True)
+
+            # Establish a published plug
+            >> node = cmds.createNode("transform")
+            >> con = cmds.container(name="myContainer",
+            ..                      addNode=[node],
+            ..                      type="dagContainer")
+            >> plug = cmds.container(con,
+            ..                       edit=True,
+            ..                       publishName="inputTranslate")
+            >> binding = ("%s.tx" % node, plug)
+            >> _ = cmds.container(con, edit=True, bindAttr=binding)
+
+            # Query and connect that published plug
+            >> source = createNode("transform")
+            >> con = encode(con)
+            >> con.isA(kDagNode)
+            True
+            >> isinstance(con, ContainerNode)
+            True
+            >> source["tx"] >> con[plug]
+            >> source["tx"] = 5.0
+            >> con["inputTranslate"].read()
+            5.0
+
         """
 
         _Fn = om.MFnContainerNode
@@ -1357,10 +1408,10 @@ class DagNode(Node):
         Example:
             >>> parent = createNode("transform", "myParent")
             >>> child = createNode("transform", "myChild", parent=parent)
-            >>> child.name()
-            u'myChild'
-            >>> child.path()
-            u'|myParent|myChild'
+            >>> child.name() == 'myChild'
+            True
+            >>> child.path() == '|myParent|myChild'
+            True
 
         """
 
@@ -1392,12 +1443,12 @@ class DagNode(Node):
             >>> _ = cmds.file(new=True, force=True)
             >>> parent = createNode("transform", name="myParent")
             >>> child = createNode("transform", name="myChild", parent=parent)
-            >>> child.shortestPath()
-            u'myChild'
+            >>> child.shortestPath() == "myChild"
+            True
             >>> child = createNode("transform", name="myChild")
             >>> # Now `myChild` could refer to more than a single node
-            >>> child.shortestPath()
-            u'|myChild'
+            >>> child.shortestPath() == '|myChild'
+            True
 
         """
 
@@ -1687,7 +1738,18 @@ class DagNode(Node):
 
         other = "typeId" if isinstance(type, om.MTypeId) else "typeName"
 
-        for index in range(self._fn.childCount()):
+        assert self._fn.hasObj(self._mobject), "This is a Maya bug"
+
+        try:
+            count = int(self._fn.childCount())
+        except OverflowError:
+            # Maya does this sometimes and you'd be lucky if
+            # Python catches onto it. More likely it will
+            # fatal crash your Maya, as it likely accesses
+            # a bad memory address.
+            raise
+
+        for index in range(count):
             try:
                 mobject = self._fn.child(index)
 
@@ -2131,10 +2193,10 @@ class AnimCurve(Node):
                 self._fna.addKey(time, value, interpolation, interpolation)
 
         def keys(self, times, values, interpolation=Linear):
-            times = map(
+            times = list(map(
                 lambda t: Seconds(t) if isinstance(t, (float, int)) else t,
                 times
-            )
+            ))
 
             try:
                 self._fna.addKeys(times, values)
@@ -2190,6 +2252,9 @@ class Plug(object):
 
     # Python 3
     __nonzero__ = __bool__
+
+    def __round__(self, digits=2):
+        return round(self.read(), digits)
 
     def __float__(self):
         """Return plug as floating point value
@@ -2431,11 +2496,11 @@ class Plug(object):
             for value in values:
                 yield value
 
-    def __getitem__(self, index):
+    def __getitem__(self, logicalIndex):
         """Read from child of array or compound plug
 
         Arguments:
-            index (int): Logical index of plug (NOT physical, make note)
+            logicalIndex (int): Logical index of plug (NOT physical, make note)
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -2450,21 +2515,45 @@ class Plug(object):
             >>> node["translate"][2].read()
             5.1
 
+            # Elements are accessed by logical index, rather than physical
+            >>> tm = createNode("transform")
+            >>> mult = createNode("multMatrix")
+            >>> plug = mult["matrixIn"]
+            >>> plug[0] << tm["matrix"]
+            >>> plug[1] << tm["parentMatrix"][0]
+            >>> plug[2] << tm["worldMatrix"][0]
+
+            >>> plug[2].connection(plug=True) == tm["worldMatrix"]
+            True
+
+            # Notice how index 2 remains index 2 even on disconnect
+            # The physical index moves to 1.
+            >>> plug[1].disconnect()
+            >>> plug[2].connection(plug=True) == tm["worldMatrix"]
+            True
+
         """
 
         cls = self.__class__
 
-        if isinstance(index, int):
+        if isinstance(logicalIndex, int):
             # Support backwards-indexing
-            if index < 0:
-                index = self.count() - abs(index)
+            if logicalIndex < 0:
+                logicalIndex = self.count() - abs(logicalIndex)
 
             if self._mplug.isArray:
-                item = self._mplug.elementByLogicalIndex(index)
+                # Preserve behavior from MEL
+                #
+                # NOTE: Physical index makes a lot more sense for
+                # programmatic use, but it isn't reliable when
+                # accessing native Maya array attributes like worldMatrix
+                # In that case, there is no index-0, even though a logical
+                # index 0 most definitely always (?) exists.
+                item = self._mplug.elementByLogicalIndex(logicalIndex)
                 return cls(self._node, item, self._unit)
 
             elif self._mplug.isCompound:
-                item = self._mplug.child(index)
+                item = self._mplug.child(logicalIndex)
                 return cls(self._node, item, self._unit)
 
             else:
@@ -2472,7 +2561,7 @@ class Plug(object):
                     "%s does not support indexing" % self.path()
                 )
 
-        elif isinstance(index, string_types):
+        elif isinstance(logicalIndex, string_types):
             # Compound attributes have no equivalent
             # to "MDependencyNode.findPlug()" and must
             # be searched by hand.
@@ -2481,14 +2570,14 @@ class Plug(object):
                     child = self._mplug.child(child)
                     _, name = child.name().rsplit(".", 1)
 
-                    if index == name:
+                    if logicalIndex == name:
                         return cls(self._node, child)
 
             else:
                 raise TypeError("'%s' is not a compound attribute"
                                 % self.path())
 
-            raise ExistError("'%s' was not found" % index)
+            raise ExistError("'%s' was not found" % logicalIndex)
 
     def __setitem__(self, index, value):
         """Write to child of array or compound plug
@@ -2527,7 +2616,12 @@ class Plug(object):
         self._modifier = modifier
 
     def plug(self):
+        """Return the MPlug of this cmdx.Plug"""
         return self._mplug
+
+    def attribute(self):
+        """Return the attribute MObject of this cmdx.Plug"""
+        return self._mplug.attribute()
 
     @property
     def isArray(self):
@@ -2535,22 +2629,71 @@ class Plug(object):
 
     @property
     def arrayIndices(self):
-        if not self.isArray:
+        if not self._mplug.isArray:
             raise TypeError('{} is not an array'.format(self.path()))
-        return self._mplug.getExistingArrayAttributeIndices()
+
+        # Convert from `p_OpenMaya_py2.rItemNot3Strs` to list
+        return list(self._mplug.getExistingArrayAttributeIndices())
 
     @property
     def isCompound(self):
         return self._mplug.isCompound
 
-    def next_available_index(self, start_index=0):
+    def nextAvailableIndex(self, startIndex=0):
+        """Find the next unconnected element in an array plug
+
+        Array plugs have both a "logical" and "physical" index.
+        Accessing any array plug via index means to access it's
+        logical element.
+
+        [0]<---- plug1
+        [.]
+        [.]
+        [3]<---- plug2
+        [4]<---- plug3
+        [5]<---- plug4
+        [.]
+        [7]<---- plug5
+
+        In the above scenario, 5 plugs are connected by 5 physical
+        indices, and yet the last index is 7. 7 is a logical index.
+
+        This function walks each element from the `startIndex` in search
+        of the first available index, in this case [1].
+
+        Examples:
+            >>> transform = createNode("transform")
+            >>> mult = createNode("multMatrix")
+            >>> mult["matrixIn"][0] << transform["matrix"]
+            >>> mult["matrixIn"][1] << transform["matrix"]
+            >>> mult["matrixIn"][2] << transform["matrix"]
+
+            # 3 logical indices are occupied
+            >>> mult["matrixIn"].count()
+            3
+
+            # Disconnecting affects the physical count
+            >>> mult["matrixIn"][1].disconnect()
+            >>> mult["matrixIn"].count()
+            2
+
+            # But the last logical index is still 2
+            >>> mult["matrixIn"].arrayIndices
+            [0, 2]
+
+            # Finally, let's find the next available index
+            >>> mult["matrixIn"].nextAvailableIndex()
+            1
+
+        """
+
         # Assume a max of 10 million connections
         max_index = 1e7
 
-        while start_index < max_index:
-            if self[start_index].connection() is None:
-                return start_index
-            start_index += 1
+        while startIndex < max_index:
+            if self[startIndex].connection() is None:
+                return startIndex
+            startIndex += 1
 
         # No connections means the first index is available
         return 0
@@ -2598,7 +2741,7 @@ class Plug(object):
             raise TypeError("\"%s\" was not an array attribute" % self.path())
 
         if autofill:
-            index = self.next_available_index()
+            index = self.nextAvailableIndex()
         else:
             index = self.count()
 
@@ -2681,7 +2824,7 @@ class Plug(object):
             >>> node["translateY"] = 12
             >>> node["rotate"] = 1
             >>> tm = node["matrix"].asTransform()
-            >>> map(round, tm.rotation())
+            >>> [round(v, 1) for v in tm.rotation()]
             [1.0, 1.0, 1.0]
             >>> list(tm.translation())
             [0.0, 12.0, 0.0]
@@ -2935,10 +3078,6 @@ class Plug(object):
         self.lock()
         self.hide()
 
-    def attribute(self):
-        """Return the attribute MObject of this plug"""
-        return self._mplug.attribute()
-
     @property
     def niceName(self):
         """The nice name of this plug, visible in e.g. Channel Box
@@ -3185,7 +3324,7 @@ class Plug(object):
 
             """
 
-            times, values = map(UiUnit(), values.keys()), values.values()
+            times, values = list(map(UiUnit(), values.keys())), values.values()
             anim = createNode(_find_curve_type(self))
             anim.keys(times, values, interpolation=Linear)
             anim["output"] >> self
@@ -3380,6 +3519,7 @@ class Plug(object):
         lock_and_hide = lockAndHide
         array_indices = arrayIndices
         type_class = typeClass
+        next_available_index = nextAvailableIndex
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -5024,13 +5164,16 @@ class _BaseModifier(object):
             False
 
             # Protect against adding an attribute twice
-            >>> with DagModifier() as mod:
-            ...   node = mod.createNode("transform")
-            ...   attr1 = mod.addAttr(node, Boolean("sameAttr"))
-            ...   attr2 = mod.addAttr(node, Double("sameAttr"))
-            Traceback (most recent call last):
-            ...
-            ExistError: Same attribute added twice: .sameAttr
+            >>> try:
+            ...   with DagModifier() as mod:
+            ...     node = mod.createNode("transform")
+            ...     attr1 = mod.addAttr(node, Boolean("sameAttr"))
+            ...     attr2 = mod.addAttr(node, Double("sameAttr"))
+            ... except Exception as e:
+            ...   assert isinstance(e, ExistError)
+            ... else:
+            ...   assert False
+            >>>
 
             # But allow the same attributes to be added to different nodes
             >>> with DagModifier() as mod:
@@ -5294,12 +5437,14 @@ class _BaseModifier(object):
         Examples:
             >>> node = createNode("transform")
             >>> node["translateY"].lock()
-            >>> with DGModifier() as mod:
-            ...     mod.connect(node["tx"], node["ty"])
-            ...
-            Traceback (most recent call last):
-            ...
-            LockedError: Channel locked, cannot connect 'translateY'
+            >>> mod = DGModifier()
+            >>> try:
+            ...    mod.connect(node["tx"], node["ty"])
+            ... except Exception as e:
+            ...    assert isinstance(e, LockedError)
+            ... else:
+            ...    assert False
+            >>>
 
             # Now let's tryConnect
             >>> with DGModifier() as mod:
@@ -5528,8 +5673,8 @@ class DagModifier(_BaseModifier):
         True
         >>> "myChild" in cmds.ls()
         True
-        >>> parent.child().name()
-        u'myChild'
+        >>> parent.child().name() == 'myChild'
+        True
         >>> mod = DagModifier()
         >>> _ = mod.delete(child)
         >>> mod.doIt()
@@ -5641,11 +5786,11 @@ Context = DGContext
 
 
 def ls(*args, **kwargs):
-    return map(encode, cmds.ls(*args, **kwargs))
+    return list(map(encode, cmds.ls(*args, **kwargs)))
 
 
 def selection(*args, **kwargs):
-    return map(encode, cmds.ls(*args, selection=True, **kwargs))
+    return list(map(encode, cmds.ls(*args, selection=True, **kwargs)))
 
 
 def createNode(type, name=None, parent=None):
@@ -5948,19 +6093,56 @@ def objExists(obj):
         return True
 
 
-# PEP08
-sl = selection
-create_node = createNode
-get_attr = getAttr
-set_attr = setAttr
-add_attr = addAttr
-list_relatives = listRelatives
-list_connections = listConnections
-connect_attr = connectAttr
-obj_exists = objExists
-current_time = currentTime
+# Possible up-axes
+Y = "y"
+Z = "z"
 
-# Speciality functions
+
+if __maya_version__ >= 2019:
+    def upAxis():
+        """Get the current up-axis as string
+
+        Returns:
+            string: "y" for Y-up, "z" for Z-up
+
+        """
+
+        return om.MGlobal.upAxis()
+
+    def setUpAxis(axis=Y):
+        if axis == Y:
+            om.MGlobal.setYAxisUp()
+        else:
+            om.MGlobal.setZAxisUp()
+
+else:
+    def upAxis():
+        return cmds.optionVar(query="upAxisDirection")
+
+    def setUpAxis(axis=Y):
+        cmds.optionVar(stringValue=("upAxisDirection", axis))
+        cmds.warning(
+            "Changing up-axis via cmdx in Maya 2019 "
+            "or below requires a restart."
+        )
+
+
+if ENABLE_PEP8:
+    sl = selection
+    create_node = createNode
+    get_attr = getAttr
+    set_attr = setAttr
+    add_attr = addAttr
+    list_relatives = listRelatives
+    list_connections = listConnections
+    connect_attr = connectAttr
+    obj_exists = objExists
+    current_time = currentTime
+    up_axis = upAxis
+    set_up_axis = setUpAxis
+
+
+# Special-purpose functions
 
 kOpen = om1.MFnNurbsCurve.kOpen
 kClosed = om1.MFnNurbsCurve.kClosed
