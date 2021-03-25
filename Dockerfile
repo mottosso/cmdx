@@ -1,6 +1,6 @@
-FROM mottosso/maya:2020
+FROM mottosso/maya:2022
 
-RUN wget https://bootstrap.pypa.io/pip/2.7/get-pip.py && \
+RUN wget https://bootstrap.pypa.io/pip/get-pip.py && \
   mayapy get-pip.py --user && \
   mayapy -m pip install --user \
     nose \
