@@ -1,4 +1,11 @@
-from sphinx.cmdline import main
+try:
+    # Python 2
+    from sphinx.cmdline import main
+
+except ImportError:
+    # Python 3
+    from sphinx.cmd.build import main
+
 from maya import standalone
 
 print("Initializing Maya..")
