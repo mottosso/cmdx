@@ -407,7 +407,7 @@ class Singleton(type):
         else:
             sup = Node
 
-        self = super(Singleton, sup).__call__(mobject, exists, modifier)
+        self = super(Singleton, sup).__call__(mobject, exists)
         self._hashCode = hsh
         self._hexStr = hx
         cls._instances[hx] = self
@@ -514,7 +514,7 @@ class Node(object):
         except RuntimeError:
             raise ExistError("%s.%s" % (self.path(), key))
 
-        return Plug(self, plug, unit=unit, key=key, modifier=self._modifier)
+        return Plug(self, plug, unit=unit, key=key)
 
     def __setitem__(self, key, value):
         """Support item assignment of new attributes or values
@@ -583,17 +583,6 @@ class Node(object):
         plug = self.findPlug(key)
         plug = Plug(self, plug, unit=unit)
 
-        if not getattr(self._modifier, "isDone", True):
-
-            # Only a few attribute types are supported by a modifier
-            if _python_to_mod(value, plug, self._modifier._modifier):
-                return
-            else:
-                log.warning(
-                    "Could not write %s via modifier, writing directly.."
-                    % plug
-                )
-
         # Else, write it immediately
         plug.write(value)
 
@@ -627,14 +616,12 @@ class Node(object):
         self.deleteAttr(key)
 
     @withTiming()
-    def __init__(self, mobject, exists=True, modifier=None):
+    def __init__(self, mobject, exists=True):
         """Initialise Node
 
         Private members:
             mobject (om.MObject): Wrap this MObject
             fn (om.MFnDependencyNode): The corresponding function set
-            modifier (om.MDagModifier, optional): Operations are
-                deferred to this modifier.
             destroyed (bool): Has this node been destroyed by Maya?
             state (dict): Optional state for performance
 
@@ -642,7 +629,6 @@ class Node(object):
 
         self._mobject = mobject
         self._fn = self._Fn(mobject)
-        self._modifier = modifier
         self._destroyed = False
         self._removed = False
         self._hashCode = None
@@ -1260,9 +1246,6 @@ class Node(object):
                              connections=connection), None)
 
     def rename(self, name):
-        if not getattr(self._modifier, "isDone", True):
-            return self._modifier.rename(self, name)
-
         mod = om.MDGModifier()
         mod.renameNode(self._mobject, name)
         mod.doIt()
@@ -1354,8 +1337,7 @@ if __maya_version__ >= 2017:
             mplug = mplugs[keys.index(key)]
             return Plug(self, mplug,
                         unit=None,
-                        key=key,
-                        modifier=self._modifier)
+                        key=key)
 
 
 class DagNode(Node):
@@ -2177,8 +2159,8 @@ class ObjectSet(Node):
 
 class AnimCurve(Node):
     if __maya_version__ >= 2016:
-        def __init__(self, mobj, exists=True, modifier=None):
-            super(AnimCurve, self).__init__(mobj, exists, modifier)
+        def __init__(self, mobj, exists=True):
+            super(AnimCurve, self).__init__(mobj, exists)
             self._fna = oma.MFnAnimCurve(mobj)
 
         def key(self, time, value, interpolation=Linear):
@@ -2596,7 +2578,7 @@ class Plug(object):
         """Support storing in set() and as key in dict()"""
         return hash(self.path())
 
-    def __init__(self, node, mplug, unit=None, key=None, modifier=None):
+    def __init__(self, node, mplug, unit=None, key=None):
         """A Maya plug
 
         Arguments:
@@ -2613,7 +2595,6 @@ class Plug(object):
         self._unit = unit
         self._cached = None
         self._key = key
-        self._modifier = modifier
 
     def plug(self):
         """Return the MPlug of this cmdx.Plug"""
@@ -3333,9 +3314,6 @@ class Plug(object):
         if isinstance(value, dict) and __maya_version__ > 2015:
             return self.animate(value)
 
-        if not getattr(self._modifier, "isDone", True):
-            return self._modifier.setAttr(self, value)
-
         try:
             _python_to_plug(value, self)
             self._cached = value
@@ -3348,9 +3326,6 @@ class Plug(object):
             raise
 
     def connect(self, other, force=True):
-        if not getattr(self._modifier, "isDone", True):
-            return self._modifier.connect(self, other, force)
-
         mod = om.MDGModifier()
 
         if force:
@@ -3393,15 +3368,9 @@ class Plug(object):
 
         other = getattr(other, "_mplug", None)
 
-        if not getattr(self._modifier, "isDone", True):
-            mod = self._modifier
-            mod.disconnect(self._mplug, other, source, destination)
-            # Don't do it, leave that to the parent context
-
-        else:
-            mod = DGModifier()
-            mod.disconnect(self._mplug, other, source, destination)
-            mod.doIt()
+        mod = DGModifier()
+        mod.disconnect(self._mplug, other, source, destination)
+        mod.doIt()
 
     def connections(self,
                     type=None,
@@ -4606,17 +4575,22 @@ def meters(cm):
 def clear():
     """Clear all memory used by cmdx, including undo"""
 
+    Singleton._instances.clear()
+
     if ENABLE_UNDO:
-        cmds.flushUndo()
 
         # Traces left in here can trick Maya into thinking
         # nodes still exists that cannot be unloaded.
-        self.shared.undo = None
-        self.shared.redo = None
+        self.shared.undoId = None
+        self.shared.redoId = None
         self.shared.undos = {}
         self.shared.redos = {}
 
-    Singleton._instances.clear()
+        cmds.flushUndo()
+
+    # Also ensure Python does its job
+    import gc
+    gc.collect()
 
 
 def _encode1(path):
@@ -4733,46 +4707,37 @@ class _BaseModifier(object):
             ...
             >>>
 
-            # Use of modified once exited is not allowed
-            >>> node = mod.createNode("transform")
-            >>> mod.doIt()
-            Traceback (most recent call last):
-            ...
-            RuntimeError: Cannot re-use modifier which was once a context
-
         """
 
+        # Given that we perform lots of operations in a single context,
+        # let's establish our own chunk for it. We'll use the unique
+        # memory address of this particular instance as a name,
+        # such that we can identify it amongst the possible-nested
+        # modifiers once it exits.
+        cmds.undoInfo(chunkName="%x" % id(self), openChunk=True)
+
         self.isContext = True
+
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
+        cmds.undoInfo(chunkName="%x" % id(self), closeChunk=True)
 
         if exc_type:
             # Let our internal calls to `assert` prevent the
             # modifier from proceeding, given it's half-baked
             return
 
-        # Support calling `doIt` during a context,
-        # without polluting the undo queue.
-        if self.isContext and self._opts["undoable"]:
-            commit(self._modifier.undoIt, self._modifier.doIt)
-
-        self.doIt()
-
-        # Prevent continued use of the modifier,
-        # after exiting the context manager.
-        self.isExited = True
+        self.redoIt()
 
     def __init__(self,
                  undoable=True,
                  interesting=True,
                  debug=True,
-                 atomic=True,
+                 atomic=False,
                  template=None):
         super(_BaseModifier, self).__init__()
-        self.isDone = False
         self.isContext = False
-        self.isExited = False
 
         self._modifier = self.Type()
         self._history = list()
@@ -4813,12 +4778,6 @@ class _BaseModifier(object):
             >>> assert node["translateX"].niceName == 'mainAxis'
             >>> assert node["rotateY"].niceName == 'badRotate'
 
-            # Must be undoable
-            >>> from maya import cmds
-            >>> cmds.undo()
-            >>> assert node["translateX"].niceName == 'Translate X'
-            >>> assert node["rotateY"].niceName == 'Rotate Y'
-
             # Also works with dynamic attributes
             >>> with DagModifier() as mod:
             ...    node = mod.createNode("transform")
@@ -4830,10 +4789,6 @@ class _BaseModifier(object):
             ...    mod.niceNameAttr(node["myDynamic"], "Your Dynamic")
             ...
             >>> assert node["myDynamic"].niceName == "Your Dynamic"
-
-            # Aaaaand one for the road
-            >>> cmds.undo()
-            >>> assert node["myDynamic"].niceName == "My Dynamic"
 
         """
 
@@ -4878,6 +4833,7 @@ class _BaseModifier(object):
             ...
             >>> assert node["myDynamic"].locked
             >>> cmds.undo()
+            >>> cmds.undo()  # One more for cmds.setAttr
             >>> assert not node["myDynamic"].locked
 
         """
@@ -4907,14 +4863,6 @@ class _BaseModifier(object):
             >>> node["translateX"].keyable
             False
 
-            # Must be undoable
-            >>> from maya import cmds
-            >>> cmds.undo()
-            >>> node["rotatePivotX"].keyable
-            False
-            >>> node["translateX"].keyable
-            True
-
             # Also works with dynamic attributes
             >>> with DagModifier() as mod:
             ...    node = mod.createNode("transform")
@@ -4927,10 +4875,6 @@ class _BaseModifier(object):
             ...
             >>> node["myDynamic"].keyable
             True
-
-            >>> cmds.undo()
-            >>> node["myDynamic"].keyable
-            False
 
         """
 
@@ -4950,18 +4894,9 @@ class _BaseModifier(object):
         return self.niceNameAttr(plug, value)
 
     def doIt(self):
-        if self.isExited:
-            raise RuntimeError(
-                "Cannot re-use modifier which was once a context"
-            )
-
-        if (not self.isContext) and self._opts["undoable"]:
-            commit(self._modifier.undoIt, self._modifier.doIt)
-
         try:
             self._modifier.doIt()
 
-            # Do these last, they manage undo on their own
             with _undo_chunk("lockAttrs"):
                 self._doLockAttrs()
                 self._doKeyableAttrs()
@@ -4982,15 +4917,22 @@ class _BaseModifier(object):
             self._history[:] = []
 
         self._attributesBeingAdded[:] = []
-        self.isDone = True
 
     def undoIt(self):
+        self._undoLockAttrs()
+        self._undoKeyableAttrs()
+        self._undoNiceNames()
         self._modifier.undoIt()
 
-    def _doLockAttrs(self):
-        if self._opts["undoable"]:
-            commit(self._undoLockAttrs, self._redoLockAttrs)
+    def redoIt(self):
+        self.doIt()
 
+        # Append to undo *after* attempting to do, in case
+        # do actually fails in which case there's nothing to undo.
+        if self.isContext and self._opts["undoable"]:
+            commit(self.undoIt, self.redoIt)
+
+    def _doLockAttrs(self):
         self._redoLockAttrs()
 
     def _redoLockAttrs(self):
@@ -5015,9 +4957,6 @@ class _BaseModifier(object):
             self._lockAttrs += [(plug, newValue)]
 
     def _doKeyableAttrs(self):
-        if self._opts["undoable"]:
-            commit(self._undoKeyableAttrs, self._redoKeyableAttrs)
-
         self._redoKeyableAttrs()
 
     def _redoKeyableAttrs(self):
@@ -5049,9 +4988,6 @@ class _BaseModifier(object):
             >>> assert node["inputX"].niceName == "Test"
 
         """
-
-        if self._opts["undoable"]:
-            commit(self._undoNiceNames, self._redoNiceNames)
 
         self._redoNiceNames()
 
@@ -5092,7 +5028,7 @@ class _BaseModifier(object):
             )
             self._modifier.renameNode(mobj, name)
 
-        node = Node(mobj, exists=False, modifier=self)
+        node = Node(mobj, exists=False)
 
         if not self._opts["interesting"]:
             plug = node["isHistoricallyInteresting"]
@@ -5142,6 +5078,11 @@ class _BaseModifier(object):
 
         self._modifier.deleteNode(node._mobject)
 
+        if False:
+            # Deletion via modifiers seem awefully unstable
+            # Should we just use this instead? :S
+            om.MGlobal.deleteNode(node._mobject)
+
     @record_history
     def renameNode(self, node, name):
         return self._modifier.renameNode(node._mobject, name)
@@ -5158,7 +5099,6 @@ class _BaseModifier(object):
             ...
             >>> node["newAttr"].read()
             5.0
-            >>> cmds.undo()
             >>> cmds.undo()
             >>> node.hasAttr("newAttr")
             False
@@ -5251,6 +5191,12 @@ class _BaseModifier(object):
 
         _python_to_mod(value, plug, self._modifier)
 
+    def trySetAttr(self, plug, value):
+        try:
+            self.setAttr(plug, value)
+        except Exception:
+            pass
+
     def resetAttr(self, plug):
         self.setAttr(plug, plug.default)
 
@@ -5273,7 +5219,6 @@ class _BaseModifier(object):
             >>> tm["tx"].connection()
             |myTransform
             >>> cmds.undo()
-            >>> cmds.undo()  # Unsure why it needs two undos :S
             >>> tm["tx"].connection() is None
             True
 
@@ -5351,7 +5296,6 @@ class _BaseModifier(object):
 
             # Also works with undo
             >>> cmds.undo()
-            >>> cmds.undo()
             >>> newNode.hasAttr("newAttr")
             False
             >>> cmds.redo()
@@ -5366,7 +5310,6 @@ class _BaseModifier(object):
             >>> newNode["newAttr"].connection()
             |otherNode
 
-            >>> cmds.undo()
             >>> cmds.undo()
             >>> newNode["newAttr"].connection()
             |newNode
@@ -5587,6 +5530,7 @@ class _BaseModifier(object):
         rename_node = renameNode
         add_attr = addAttr
         set_attr = setAttr
+        try_set_attr = trySetAttr
         delete_attr = deleteAttr
         reset_attr = resetAttr
         lock_attr = lockAttr
@@ -5640,9 +5584,11 @@ class DagModifier(_BaseModifier):
         >>> mod.connect(parent["tz"], shape["tz"])
         >>> mod.setAttr(parent["sx"], 2.0)
         >>> parent["tx"] >> shape["ty"]
+        >>> round(shape["ty"], 1)
+        0.0
         >>> parent["tx"] = 5.1
         >>> round(shape["ty"], 1)  # Not yet created nor connected
-        0.0
+        5.1
         >>> mod.doIt()
         >>> round(shape["ty"], 1)
         5.1
@@ -5705,7 +5651,7 @@ class DagModifier(_BaseModifier):
             )
             self._modifier.renameNode(mobj, name)
 
-        return DagNode(mobj, exists=False, modifier=self)
+        return DagNode(mobj, exists=False)
 
     @record_history
     def parent(self, node, parent=None):
@@ -6209,10 +6155,6 @@ def curve(parent, points, degree=1, form=kOpen):
 
     assert isinstance(parent, DagNode), (
         "parent must be of type cmdx.DagNode"
-    )
-
-    assert parent._modifier is None or parent._modifier.isDone, (
-        "curve() currently doesn't work with a modifier"
     )
 
     # Superimpose end knots
@@ -6927,8 +6869,8 @@ if unique_shared not in sys.modules:
     sys.modules[unique_shared] = types.ModuleType(unique_shared)
 
 shared = sys.modules[unique_shared]
-shared.undo = None
-shared.redo = None
+shared.undoId = None
+shared.redoId = None
 shared.undos = {}
 shared.redos = {}
 
@@ -6954,17 +6896,17 @@ def commit(undo, redo=lambda: None):
     # from a single thread, which should already be the case
     # given that Maya's API is not threadsafe.
     try:
-        assert shared.redo is None
-        assert shared.undo is None
+        assert shared.redoId is None
+        assert shared.undoId is None
     except AssertionError:
         log.debug("%s has a problem with undo" % __name__)
 
     # Temporarily store the functions at shared-level,
     # they are later picked up by the command once called.
-    shared.undo = "%x" % id(undo)
-    shared.redo = "%x" % id(redo)
-    shared.undos[shared.undo] = undo
-    shared.redos[shared.redo] = redo
+    shared.undoId = "%x" % id(undo)
+    shared.redoId = "%x" % id(redo)
+    shared.undos[shared.undoId] = undo
+    shared.redos[shared.redoId] = redo
 
     # Let Maya know that something is undoable
     getattr(cmds, unique_command)()
@@ -7042,19 +6984,40 @@ def maya_useNewAPI():
 
 
 class _apiUndo(om.MPxCommand):
-    def doIt(self, args):
-        self.undo = shared.undo
-        self.redo = shared.redo
+    # For debugging, should always be 0 unless there's something to undo
+    _aliveCount = 0
 
-        # Facilitate the above precautionary measure
-        shared.undo = None
-        shared.redo = None
+    def __init__(self, *args, **kwargs):
+        super(_apiUndo, self).__init__(*args, **kwargs)
+        _apiUndo._aliveCount += 1
+
+    def __del__(self):
+        _apiUndo._aliveCount -= 1
+        self.undoId = None
+        self.redoId = None
+
+    def doIt(self, args):
+
+        # Store the last undo/redo commands in this
+        # instance of the _apiUndo command.
+        self.undoId = shared.undoId
+        self.redoId = shared.redoId
+
+        # With that stored, let's avoid storing it elsewhere
+        shared.undoId = None
+        shared.redoId = None
 
     def undoIt(self):
-        shared.undos[self.undo]()
+        try:
+            shared.undos.pop(self.undoId)()
+        except KeyError:
+            pass
 
     def redoIt(self):
-        shared.redos[self.redo]()
+        try:
+            shared.redos.pop(self.redoId)()
+        except KeyError:
+            pass
 
     def isUndoable(self):
         # Without this, the above undoIt and redoIt will not be called

@@ -440,7 +440,7 @@ def test_modifier_first_error():
 def test_modifier_atomicity():
     """Modifier rolls back changes on failure"""
 
-    mod = cmdx.DagModifier()
+    mod = cmdx.DagModifier(atomic=True)
     node = mod.createNode("transform", name="UniqueName")
     mod.connect(node["translateX"], node["translateY"])
     mod.setAttr(node["translateY"], 5.0)
