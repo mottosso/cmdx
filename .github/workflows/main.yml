@@ -24,10 +24,6 @@ jobs:
 
       matrix:
        include:
-         - maya: "2015sp6"
-           pip: "2.7/get-pip.py"
-         - maya: "2016sp1"
-           pip: "2.7/get-pip.py"
          - maya: "2017"
            pip: "2.7/get-pip.py"
          - maya: "2018"
