@@ -193,36 +193,40 @@ def _undo_chunk(name):
         cmds.undoInfo(chunkName=name, closeChunk=True)
 
 
-if SAFE_MODE:
-    def _isalive(mobj):
-        """Make as sure as humanly-possible that this mobject is safe"""
-        if not mobj.isNull():
-            return False
+def _isalive(mobj):
+    """Make as sure as humanly-possible that this mobject is safe"""
 
-        handle = om.MObjectHandle(mobj)
-        if not handle.isValid():
-            return False
+    # Rare case of an empty MObject being passed, e.g. MObject()
+    if mobj.isNull():
+        return False
 
-        if not handle.isAlive():
-            return False
+    handle = om.MObjectHandle(mobj)
 
-        return True
+    # The node has been destroyed, e.g. new scene or flushed undo
+    if not handle.isValid():
+        return False
 
-else:
-    def _isalive(mobj):
-        return True
+    # The node is present in the scene, but has been removed. Could
+    # potentially be undone and given new life. We don't care.
+    if not handle.isAlive():
+        return False
+
+    return True
 
 
 def protected(func):
     """Prevent fatal crashes from illegal access to deleted nodes"""
-    if ROGUE_MODE or not SAFE_MODE:
+    if ROGUE_MODE:
         return func
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
         node = args[0]
-        assert isinstance(node, Node)
-        assert _isalive(node._mobject)
+        assert isinstance(node, Node), "arg[0] should have been a cmdx.Node"
+
+        if node.destroyed or not _isalive(node._mobject):
+            raise ExistError("Cannot perform operation on deleted node")
+
         return func(*args, **kwargs)
 
     return func_wrapper
@@ -402,9 +406,15 @@ class Singleton(type):
         if exists and handle.isValid():
             try:
                 node = cls._instances[hx]
-                assert om.MObjectHandle(node._mobject).isAlive()
-            except (KeyError, AssertionError):
+                assert not node._destroyed
+
+            except KeyError:
                 pass
+
+            except AssertionError:
+                # He's dead Jim
+                cls._instances.pop(hx)
+
             else:
                 Stats.NodeReuseCount += 1
                 return node
@@ -458,9 +468,18 @@ class Node(object):
 
     def __eq__(self, other):
         """MObject supports this operator explicitly"""
+
+        # On scene-open, an old MObject can reference a new node,
+        # most typically the `top` camera node. Therefore, it isn't
+        # enough to only compare MObject to MObject
+
         try:
             # Better to ask forgivness than permission
-            return self._mobject == other._mobject
+            return (
+                _isalive(self._mobject) and
+                _isalive(other._mobject) and
+                self._mobject == other._mobject
+            )
         except AttributeError:
             return str(self) == str(other)
 
@@ -622,27 +641,45 @@ class Node(object):
 
         """
 
-        if SAFE_MODE:
-            assert _isalive(mobject)
-
-        else:
-            # In "production mode", we'll re-use the same function set
-            self._fn = self._Fn(mobject)
-
         self._mobject = mobject
+        self._destroyed = False
         self._hashCode = None
         self._state = {
             "values": dict(),
             "callbacks": list()
         }
 
+        # There is no humanly possible way of knowing when
+        # an MObject is destroyed, other than to listen for
+        # it via a callback. Please correct me if I'm wrong,
+        # callbacks are death.
+        self._state["callbacks"] += [
+            # Monitor node deletion, to prevent accidental
+            # use of MObject past its lifetime which may
+            # result in a fatal crash.
+            om.MNodeMessage.addNodeDestroyedCallback(
+                mobject,
+                self._onDestroyed,  # func
+                None  # clientData
+            )
+        ]
+
         Stats.NodeInitCount += 1
 
-    if SAFE_MODE:
-        @property
-        def _fn(self):
+    def __del__(self):
+        for callback in self._state["callbacks"]:
+            om.MMessage.removeCallback(callback)
+        self._state["callbacks"].clear()
+
+    def _onDestroyed(self, mobject, _=None):
+        self._destroyed = True
+
+    @property
+    def _fn(self):
+        if SAFE_MODE:
             assert _isalive(self._mobject)
-            return self._Fn(self._mobject)
+
+        return self._Fn(self._mobject)
 
     def plugin(self):
         """Return the user-defined class of the plug-in behind this node"""
@@ -674,10 +711,6 @@ class Node(object):
         return _data[self.hex]
 
     @property
-    def destroyed(self):
-        return not om.MObjectHandle(self._mobject).isValid()
-
-    @property
     def exists(self):
         """The node exists in both memory *and* scene
 
@@ -688,21 +721,21 @@ class Node(object):
             >>> cmds.delete(str(node))
             >>> node.exists
             False
-            >>> node.destroyed
-            False
             >>> _ = cmds.file(new=True, force=True)
             >>> node.exists
             False
-            >>> node.destroyed
-            True
 
         """
 
-        return not self.removed and not self.destroyed
+        return _isalive(self._mobject)
 
     @property
     def removed(self):
-        return om.MObjectHandle(self._mobject).isAlive()
+        return not _isalive(self._mobject)
+
+    @property
+    def destroyed(self):
+        return self._destroyed
 
     @property
     def hashCode(self):
@@ -836,13 +869,17 @@ class Node(object):
             >>> plug1 = node.findPlug("translateX")
             >>> isinstance(plug1, om.MPlug)
             True
-            >>> plug1 is node.findPlug("translateX")
+            >>> plug1 == node.findPlug("translateX")
             True
 
         """
 
         assert isinstance(name, string_types), "%s was not string" % name
-        assert _isalive(self._mobject)
+
+        # `findPlug` has a tendency of bringing Maya down with it.
+        # Let's not give it the satisfaction.
+        if not _isalive(self._mobject):
+            raise ExistError
 
         try:
             # We always want a non-networked plug. It's safer and as-fast.
@@ -1343,19 +1380,14 @@ class DagNode(Node):
     def __repr__(self):
         return self.path()
 
-    def __init__(self, mobject, *args, **kwargs):
-        super(DagNode, self).__init__(mobject, *args, **kwargs)
-
-        if not SAFE_MODE:
-            # Convert self._tfn to om.MFnTransform(self.dagPath())
-            # if you want to use its functions which require sWorld
-            self._tfn = om.MFnTransform(mobject)
-
-    if SAFE_MODE:
-        @property
-        def _tfn(self):
+    @property
+    def _tfn(self):
+        if SAFE_MODE:
             assert _isalive(self._mobject)
-            return om.MFnTransform(self._mobject)
+
+        # Convert self._tfn to om.MFnTransform(self.dagPath())
+        # if you want to use its functions which require sWorld
+        return om.MFnTransform(self._mobject)
 
     @protected
     def path(self):
@@ -4452,6 +4484,10 @@ def encode(path):  # type: (str) -> Node
         raise ExistError("'%s' does not exist" % path)
 
     mobj = selectionList.getDependNode(0)
+
+    # Deleted nodes can still get picked up, unless
+    # they are also destroyed. But we don't care for
+    # removed-but-not-destroyed nodes
     return Node(mobj)
 
 
@@ -4705,14 +4741,16 @@ class _BaseModifier(object):
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
-        cmds.undoInfo(chunkName="%x" % id(self), closeChunk=True)
-
         if exc_type:
             # Let our internal calls to `assert` prevent the
             # modifier from proceeding, given it's half-baked
             return
 
-        self.redoIt()
+        try:
+            self.redoIt()
+
+        finally:
+            cmds.undoInfo(chunkName="%x" % id(self), closeChunk=True)
 
     def __init__(self,
                  undoable=True,
@@ -4735,6 +4773,157 @@ class _BaseModifier(object):
         }
 
         self._attributesBeingAdded = []
+
+        # Extras
+        self._lockAttrs = []
+        self._keyableAttrs = []
+        self._niceNames = []
+
+        # Undo
+        self._doneLockAttrs = []
+        self._doneKeyableAttrs = []
+        self._doneNiceNames = []
+
+        self._attributesBeingAdded = []
+
+    @record_history
+    def setNiceName(self, plug, value=True):
+        """Set a new nice name for a plug
+
+        The modifier doesn't natively support this, so we
+        stow away the request and call it at the tail end
+        of call to `doIt`.
+
+        Examples:
+            # Only works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> assert node["myDynamic"].niceName == "My Dynamic"
+
+            >>> with DagModifier() as mod:
+            ...    mod.setNiceName(node["myDynamic"], "Your Dynamic")
+            ...
+            >>> assert node["myDynamic"].niceName == "Your Dynamic"
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        assert plug._mplug.isDynamic, "%s was not a dynamic attribute" % plug
+        self._niceNames.append((plug, value))
+
+    @record_history
+    def setLocked(self, plug, value=True):
+        """Lock a plug
+
+        The modifier doesn't natively support this, so we
+        stow away the request and call it at the tail end
+        of call to `doIt`.
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> with DagModifier() as mod:
+            ...    mod.setLocked(node["translateX"])
+            ...    mod.setLocked(node["rotateY"])
+            ...
+            >>> assert node["translateX"].locked
+            >>> assert node["rotateY"].locked
+
+            # Must be undoable
+            >>> from maya import cmds
+            >>> cmds.undo()
+            >>> assert not node["translateX"].locked
+            >>> assert not node["rotateY"].locked
+
+            # Also works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> assert not node["myDynamic"].locked
+
+            >>> with DagModifier() as mod:
+            ...    mod.setLocked(node["myDynamic"])
+            ...
+            >>> assert node["myDynamic"].locked
+            >>> cmds.undo()
+            >>> assert not node["myDynamic"].locked
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._lockAttrs.append((plug, value))
+
+    @record_history
+    def setKeyable(self, plug, value=True):
+        """Make a plug keyable
+
+        The modifier doesn't natively support this, so we
+        stow away the request and call it at the tail end
+        of call to `doIt`.
+
+        Examples:
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    mod.setKeyable(node["rotatePivotX"])
+            ...    mod.setKeyable(node["translateX"], False)
+            ...
+            >>> node["rotatePivotX"].keyable
+            True
+            >>> node["translateX"].keyable
+            False
+
+            # Also works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> node["myDynamic"].keyable
+            False
+            >>> with DagModifier() as mod:
+            ...    mod.setKeyable(node["myDynamic"])
+            ...
+            >>> node["myDynamic"].keyable
+            True
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._keyableAttrs.append((plug, value))
+
+    def _doLockAttrs(self):
+        while self._lockAttrs:
+            plug, value = self._lockAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.setAttr(el.path(), lock=value)
+
+    def _doKeyableAttrs(self):
+        while self._keyableAttrs:
+            plug, value = self._keyableAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.setAttr(el.path(), keyable=value)
+
+    def _doNiceNames(self):
+        while self._niceNames:
+            plug, value = self._niceNames.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.addAttr(el.path(), edit=True, niceName=value)
 
     def doIt(self):
         try:
@@ -4765,7 +4954,16 @@ class _BaseModifier(object):
         # Append to undo *after* attempting to do, in case
         # do actually fails in which case there's nothing to undo.
         if self.isContext and self._opts["undoable"]:
-            commit(self.undoIt, self.redoIt)
+            # We'll commit doIt rather than redoIt, since
+            # the below special-commands are called via cmds
+            # and manage undo/redo on their own, without our help.
+            commit(self.undoIt, self.doIt)
+
+        # These all involve calling on cmds,
+        # which manages undo on its own.
+        self._doLockAttrs()
+        self._doKeyableAttrs()
+        self._doNiceNames()
 
     @record_history
     def createNode(self, type, name=None):
@@ -4783,10 +4981,9 @@ class _BaseModifier(object):
             )
             self._modifier.renameNode(mobj, name)
 
-        if SAFE_MODE:
-            # Create every node immediately, to allow for
-            # calls to MObjectHandle.isAlive()
-            self._modifier.doIt()
+        # Create every node immediately, to allow for
+        # calls to MObjectHandle.isAlive()
+        self._modifier.doIt()
 
         node = Node(mobj, exists=False)
 
@@ -4836,16 +5033,24 @@ class _BaseModifier(object):
 
         """
 
-        assert _isalive(node._mobject)
-        self._modifier.deleteNode(node._mobject)
+        # This is one picky s-o-b, let's not give it the
+        # satisfaction of ever erroring out on us. Performance
+        # is of less importance here, as deletion is not time-cricital
+        mobj = node._mobject
+        if not _isalive(mobj):
+            raise ExistError
+
+        self._modifier.deleteNode(mobj)
 
         # This appears to happen regardless of calling doIt yourself,
-        # and the documentation recommends you do it.
+        # and the documentation recommends you do it always. Let's do it.
         self._modifier.doIt()
 
     @record_history
     def renameNode(self, node, name):
-        assert _isalive(node._mobject)
+        if SAFE_MODE:
+            assert _isalive(node._mobject)
+
         return self._modifier.renameNode(node._mobject, name)
 
     @record_history
@@ -4888,7 +5093,9 @@ class _BaseModifier(object):
         """
 
         assert isinstance(node, Node), "%s was not a cmdx.Node"
-        assert _isalive(node._mobject)
+
+        if SAFE_MODE:
+            assert _isalive(node._mobject)
 
         mobj = attr
 
@@ -4937,7 +5144,9 @@ class _BaseModifier(object):
         assert not plug._mplug.isNull
 
         node = plug.node()
-        assert _isalive(node._mobject)
+
+        if SAFE_MODE:
+            assert _isalive(node._mobject)
 
         # Erase cached values, they're no longer valid
         node.clear()
@@ -5101,9 +5310,12 @@ class _BaseModifier(object):
 
         """
 
-        assert isinstance(srcPlug, (Plug, om.MPlug)), "srcPlug not a plug"
-        assert isinstance(dstNode, (Node, om.MObject)), "dstNode not a node"
-        assert isinstance(dstAttr, om.MObject), "dstAttr not an MObject"
+        assert isinstance(srcPlug, (Plug, om.MPlug)), "%s not a plug" % srcPlug
+        assert isinstance(dstNode, (Node, om.MObject)), "%s not node" % dstNode
+        assert (
+            isinstance(dstAttr, om.MObject) or
+            isinstance(dstAttr, string_types)
+        ), "%s not an MObject" % dstAttr
 
         if isinstance(srcPlug, Plug):
             srcPlug = srcPlug._mplug
@@ -5113,10 +5325,15 @@ class _BaseModifier(object):
         srcAttr = srcPlug.attribute()
 
         if isinstance(dstNode, Node):
+
             assert _isalive(dstNode._mobject)
             dstNode = dstNode.object()
 
-        return self.connectAttrs(srcNode, srcAttr, dstNode, dstAttr)
+        if SAFE_MODE:
+            assert _isalive(srcNode)
+            assert _isalive(dstNode)
+
+        self.connectAttrs(srcNode, srcAttr, dstNode, dstAttr)
 
     def connectAttrs(self, srcNode, srcAttr, dstNode, dstAttr):
         """Connect a new attribute to another new attribute
@@ -5137,7 +5354,8 @@ class _BaseModifier(object):
             # Support for passing attribute by name
             >>> with DagModifier() as mod:
             ...     newNode = mod.createNode("transform")
-            ...     mod.addAttr(newNode, Double("newAttr"))
+            ...     _ = mod.addAttr(newNode, Double("newAttr"))
+            ...     mod.doIt()
             ...     mod.connectAttr(newNode["visibility"], newNode, "newAttr")
             ...
             >>> newNode["newAttr"].read()
@@ -5146,7 +5364,8 @@ class _BaseModifier(object):
             # Support for passing both attributes by name
             >>> with DagModifier() as mod:
             ...     newNode = mod.createNode("transform")
-            ...     mod.addAttr(newNode, Double("newAttr"))
+            ...     _ = mod.addAttr(newNode, Double("newAttr"))
+            ...     mod.doIt()
             ...     mod.connectAttrs(newNode, "visibility", newNode, "newAttr")
             ...
             >>> newNode["newAttr"].read()
@@ -5167,10 +5386,18 @@ class _BaseModifier(object):
 
         if isinstance(srcAttr, string_types):
             # Support passing of attributes as string
-            srcAttr = om.MFnDependencyNode(srcNode).attribute(srcAttr)
+            name = srcAttr
+            srcAttr = om.MFnDependencyNode(dstNode).attribute(name)
+
+            if srcAttr.isNull():
+                raise ExistError("Could not find %s.attribute %s" % name)
 
         if isinstance(dstAttr, string_types):
-            dstAttr = om.MFnDependencyNode(dstNode).attribute(dstAttr)
+            name = dstAttr
+            dstAttr = om.MFnDependencyNode(dstNode).attribute(name)
+
+            if dstAttr.isNull():
+                raise ExistError("Could not find %s.attribute %s" % name)
 
         if isinstance(srcAttr, Plug):
             # Support passing of attributes as cmdx.Plug
@@ -5188,8 +5415,9 @@ class _BaseModifier(object):
 
         assert not srcAttr.isNull()
         assert not dstAttr.isNull()
-        assert _isalive(srcNode)
-        assert _isalive(dstNode)
+
+        if SAFE_MODE:
+            assert _isalive(srcNode) and _isalive(dstNode)
 
         self._modifier.connect(srcNode, srcAttr,
                                dstNode, dstAttr)
@@ -5243,7 +5471,7 @@ class _BaseModifier(object):
         """Disconnect `a` from `b`
 
         Normally, Maya only performs a disconnect if the
-        connection is incoming. Bidirectional
+        connection is incoming.
 
         disconnect(A, B) => OK
          __________       _________
@@ -5322,8 +5550,8 @@ class _BaseModifier(object):
         if isinstance(b, Plug):
             b = b._mplug
 
-        assert not a.isNull
-        assert not b.isNull
+        assert a and not a.isNull
+        assert b is None or not b.isNull
 
         count = 0
         incoming = (True, False)
@@ -5369,6 +5597,9 @@ class _BaseModifier(object):
         try_connect = tryConnect
         connect_attr = connectAttr
         connect_attrs = connectAttrs
+        set_keyable = setKeyable
+        set_locked = setLocked
+        set_nice_name = setNiceName
 
 
 class DGModifier(_BaseModifier):
@@ -5478,8 +5709,7 @@ class DagModifier(_BaseModifier):
             )
             self._modifier.renameNode(mobj, name)
 
-        if SAFE_MODE:
-            self._modifier.doIt()
+        self._modifier.doIt()
 
         return DagNode(mobj, exists=False)
 

@@ -225,17 +225,18 @@ def test_nodereuse():
     assert_is(cmdx.encode("|myNode"), nodeA)
     assert_is(nodeB.parent(), nodeA)
 
-    with tempdir() as tmp:
-        fname = os.path.join(tmp, "myScene.ma")
-        cmds.file(rename=fname)
-        cmds.file(save=True, type="mayaAscii")
-        cmds.file(fname, open=True, force=True)
-
-        # On scene open, the current scene is closed, triggering
-        # the nodeDestroyed callback which invalidates the node
-        # for cmdx. Upon encoding this node anew, cmdx will
-        # allocate a new instance for it.
-        assert_is_not(cmdx.encode("|myNode"), nodeA)
+    # On scene open, the current scene is closed which *should*
+    # invalidate all MObjects. However. An old MObject can sometimes
+    # reference a new node, most typically the `top` camera node.#
+    # It doesn't always happen, and appears random. So we should test
+    # a few more times, just to make more sure.
+    for attempt in range(5):
+        with tempdir() as tmp:
+            fname = os.path.join(tmp, "myScene.ma")
+            cmds.file(rename=fname)
+            cmds.file(save=True, type="mayaAscii")
+            cmds.file(fname, open=True, force=True)
+            assert_is_not(cmdx.encode("|myNode"), nodeA)
 
 
 @with_setup(new_scene)
@@ -254,8 +255,13 @@ def test_nodereuse_noexist():
     # from a non-existing node.
     assert_raises(cmdx.ExistError, cmdx.encode, "|myNode")
 
-    # Any operation on a deleted node raises RuntimeError
-    assert_raises(RuntimeError, lambda: nodeA.name())
+    # Any operation on a deleted node raises ExistError
+    try:
+        print(nodeA.name())
+    except cmdx.ExistError:
+        pass
+    else:
+        assert False
 
 
 @with_setup(new_scene)
