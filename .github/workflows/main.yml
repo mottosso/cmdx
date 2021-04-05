@@ -59,6 +59,7 @@ jobs:
       - name: Environment
         run: |
           export XDG_RUNTIME_DIR=/var/tmp/runtime-root
+          export MAYA_DISABLE_ADP=1
 
       - name: Unittests
         run: |
