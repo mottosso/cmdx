@@ -667,8 +667,19 @@ class Node(object):
         Stats.NodeInitCount += 1
 
     def __del__(self):
+        """Clean up callbacks on garbage collection
+
+        These may/should clean up themselves alongside node
+        destruction, but in case they don't we make extra sure.
+
+        """
+
         for callback in self._state["callbacks"]:
-            om.MMessage.removeCallback(callback)
+            try:
+                om.MMessage.removeCallback(callback)
+            except RuntimeError:
+                pass
+
         self._state["callbacks"].clear()
 
     def _onDestroyed(self, mobject, _=None):
@@ -694,8 +705,8 @@ class Node(object):
         return self._mobject
 
     def isAlive(self):
-        """The node exists in the scene"""
-        return om.MObjectHandle(self._mobject).isAlive()
+        """The node exists somewhere in memory"""
+        return not self._destroyed
 
     @property
     def data(self):
