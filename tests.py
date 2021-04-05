@@ -453,8 +453,8 @@ def test_modifier_atomicity():
 
     assert_raises(cmdx.ModifierError, mod.doIt)
 
-    # Node got created, even though
-    assert "UniqueName" not in cmds.ls()
+    # Node never got created
+    assert "|UniqueName" not in cmds.ls()
 
 
 def test_modifier_history():
@@ -474,3 +474,138 @@ def test_modifier_history():
         assert_equals(tasks[2], "setAttr")
     else:
         assert False, "I should have failed"
+
+
+def test_modifier_undo():
+    new_scene()
+
+    with cmdx.DagModifier() as mod:
+        mod.createNode("transform", name="nodeA")
+        mod.createNode("transform", name="nodeB")
+        mod.createNode("transform", name="nodeC")
+
+    assert "|nodeC" in cmdx.ls()
+    cmds.undo()
+    assert "|nodeC" not in cmdx.ls()
+
+
+def test_modifier_locked():
+    """Modifiers properly undo setLocked"""
+
+    new_scene()
+    node = cmdx.createNode("transform")
+    assert not node["translateX"].locked
+
+    with cmdx.DagModifier() as mod:
+        mod.setLocked(node["translateX"], True)
+
+    assert node["translateX"].locked
+    cmds.undo()
+    assert not node["translateX"].locked
+    cmds.redo()
+    assert node["translateX"].locked
+    cmds.undo()
+    assert not node["translateX"].locked
+
+
+def test_modifier_keyable():
+    """Modifiers properly undo setKeyable"""
+
+    new_scene()
+    node = cmdx.createNode("transform")
+    assert node["translateX"].keyable
+
+    with cmdx.DagModifier() as mod:
+        mod.setKeyable(node["translateX"], False)
+
+    assert not node["translateX"].keyable
+    cmds.undo()
+    assert node["translateX"].keyable
+    cmds.redo()
+    assert not node["translateX"].keyable
+    cmds.undo()
+    assert node["translateX"].keyable
+
+
+def test_modifier_nicename():
+    """Modifiers properly undo setNiceName"""
+
+    new_scene()
+    node = cmdx.createNode("transform")
+    node["myName"] = cmdx.Double()
+    assert node["myName"].niceName == "My Name"
+
+    with cmdx.DagModifier() as mod:
+        mod.setNiceName(node["myName"], "Nice Name")
+
+    assert node["myName"].niceName == "Nice Name"
+    cmds.undo()
+    assert node["myName"].niceName == "My Name"
+    cmds.redo()
+    assert node["myName"].niceName == "Nice Name"
+    cmds.undo()
+    assert node["myName"].niceName == "My Name"
+
+
+def test_modifier_plug_cmds_undo():
+    """cmds and Modifiers undo in the same chunk"""
+
+    new_scene()
+    with cmdx.DagModifier() as mod:
+        mod.createNode("transform", name="cmdxNode")
+        cmds.createNode("transform", name="cmdsNode")
+
+    assert "|cmdxNode" in cmdx.ls()
+    assert "|cmdsNode" in cmdx.ls()
+
+    cmds.undo()
+
+    assert "|cmdxNode" not in cmdx.ls()
+    assert "|cmdsNode" not in cmdx.ls()
+
+    cmds.redo()
+
+    assert "|cmdxNode" in cmdx.ls()
+    assert "|cmdsNode" in cmdx.ls()
+
+    cmds.undo()
+
+    assert "|cmdxNode" not in cmdx.ls()
+    assert "|cmdsNode" not in cmdx.ls()
+
+
+def test_commit_undo():
+    """commit is as stable as Modifiers"""
+
+    new_scene()
+
+    # Maintain reference to this
+    test_commit_undo.node = None
+
+    def do():
+        test_commit_undo.node = cmdx.createNode("transform", name="nodeA")
+
+    do()
+
+    def undo():
+        cmdx.delete(test_commit_undo.node)
+
+    cmdx.commit(undo=undo, redo=do)
+
+    assert "|nodeA" in cmdx.ls()
+
+    cmds.undo()
+
+    assert "|nodeA" not in cmdx.ls()
+
+    cmds.redo()
+
+    assert "|nodeA" in cmdx.ls()
+
+    cmds.undo()
+
+    assert "|nodeA" not in cmdx.ls()
+
+
+def test_modifier_redo():
+    pass
