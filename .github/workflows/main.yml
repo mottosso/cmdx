@@ -42,17 +42,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v1
 
+      # We'll lock each version to one that works with both Python 2.7 and 3.7
       - name: pip install
         run: |
           wget https://bootstrap.pypa.io/pip/${{ matrix.pip }}
           mayapy get-pip.py --user
           mayapy -m pip install --user \
-            nose \
-            nose-exclude \
-            coverage \
-            flaky \
-            sphinx \
-            sphinxcontrib-napoleon
+            nose==1.3.7 \
+            nose-exclude==0.5.0 \
+            coverage==5.5 \
+            flaky==3.7.0 \
+            sphinx==1.8.5 \
+            sphinxcontrib-napoleon==0.7
 
         # Since 2019, this sucker throws an unnecessary warning if not declared
       - name: Environment
