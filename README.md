@@ -1,6 +1,6 @@
 <a href=/cmdx/><p align=center><img height=140 src=https://user-images.githubusercontent.com/2152766/34321609-f134e0cc-e80a-11e7-8dad-d124fea80e77.png></p></a>
 
-<p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a><br>For Maya 2015-2022</p>
+<p align=center>A fast subset of <a href=http://help.autodesk.com/cloudhelp/2018/ENU/Maya-Tech-Docs/CommandsPython/index.html><code>maya.cmds</code></a><br>For Maya 2017-2022</p>
 
 <br>
 
@@ -23,6 +23,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 | Date     | Version   | Event
 |:---------|:----------|:----------
+| Apr 2020 | 0.6.0 | Stable Undo/Redo, dropped support for Maya 2015-2016
 | Mar 2020 | 0.5.1 | Support for Maya 2022
 | Mar 2020 | 0.5.0 | Stable release
 | Aug 2019 | 0.4.0 | Public release
@@ -35,8 +36,6 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 | Maya    | Status
 |:----------|:----
-| 2015 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
-| 2016 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
 | 2017 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
 | 2018 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
 | 2019 | [![cmdx-test](https://github.com/mottosso/cmdx/actions/workflows/main.yml/badge.svg)](https://github.com/mottosso/cmdx/actions/workflows/main.yml)
@@ -76,7 +75,6 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
 - [Node and attribute reuse](#query-reduction)
 - [Transactions](#transactions)
 - [Hashable References](#hashable-references)
-- [Signals](#signals)
 - [PEP8 Dual Syntax](#pep8-dual-syntax)
 
 <br>
@@ -157,7 +155,7 @@ With [so many options](#comparison) for interacting with Maya, when or why shoul
 
 ### System Requirements
 
-`cmdx` runs on Maya 2015 SP3 and above (SP2 does *not* work).
+`cmdx` runs on Maya 2017 above.
 
 It *may* run on older versions too, but those are not being tested. To bypass the version check, see [`CMDX_IGNORE_VERSION`](#cmdx_ignore_version).
 
@@ -597,14 +595,15 @@ For undo, you've got two options.
 node = cmdx.createNode("transform")
 ```
 
-This operation is undoable, because under the hood it calls `cmdx.DagModifier`.
+This operation is not undoable and is intended for use with `cmdx.commit` and/or within a Python plug-in.
 
 ```py
 node["translateX"] = 5
 node["tx"] >> node["ty"]
+cmdx.delete(node)
 ```
 
-These operations however is *not* undoable.
+These operations are also not undoable.
 
 In order to edit attributes with support for undo, you must use either a modifier or call `commit`. This is how the Maya API normally works, for both Python and C++.
 
@@ -638,7 +637,10 @@ With this level of control, you are able to put Maya in a bad state.
 
 ```py
 a = cmdx.encode("existingNode")
-b = cmdx.createNode("transform", name="newNode")
+
+with cmdx.DagModifier() as mod:
+    b = mod.createNode("transform", name="newNode")
+
 b["ty"] >> a["tx"]
 ```
 
@@ -752,8 +754,6 @@ objset.append(member)
 for member in objset:
   print(member)
 ```
-
-> NOTE: `MFnSet` was first introduced to the Maya Python API 2.0 in Maya 2016 and has been backported to work with `cmdx` in Maya 2015, leveraging the equivalent functionality found in API 1.0. It does however mean that there is a performance impact in Maya <2016 of roughly 0.01 ms/node.
 
 <br>
 
@@ -1163,6 +1163,8 @@ assert b.child(contains="nurbsCurve") != c
 
 **Drawing a line**
 
+<img width=200 src=https://user-images.githubusercontent.com/2152766/113600037-5ba77180-9637-11eb-8adc-cf2130131bb4.png>
+
 ```python
 import cmdx
 
@@ -1176,6 +1178,8 @@ This creates a new `nurbsCurve` shape and fills it with points.
 **Drawing an arc**
 
 Append the `degree` argument for a smooth curve.
+
+<img width=200 src=https://user-images.githubusercontent.com/2152766/113600082-69f58d80-9637-11eb-8a5a-0d72a1f2fbd4.png>
 
 ```python
 import cmdx
@@ -1192,13 +1196,15 @@ shape["cached"] = cmdx.NurbsCurveData(
 
 Append the `form` argument for closed loop.
 
+<img width=200 src=https://user-images.githubusercontent.com/2152766/113600244-9d381c80-9637-11eb-8712-b5051df5c4b0.png>
+
 ```python
 import cmdx
 
 parent = cmdx.createNode("transform")
 shape = cmdx.createNode("nurbsCurve", parent=parent)
 shape["cached"] = cmdx.NurbsCurveData(
-    points=((0, 0, 0), (1, 1, 0), (0, 2, 0)),
+    points=((1, 1, 0), (-1, 1, 0), (-1, -1, 0), (1, -1, 0)),
     degree=2,
     form=cmdx.kClosed
 )
@@ -1554,7 +1560,7 @@ It's not all roses; in order of severity:
 Modifiers in `cmdx` extend the native modifiers with these extras.
 
 1. **Automatically undoable** Like `cmds`
-2. **Transactional** Changes are automatically rolled back on error, making every modifier atomic
+2. **Atomic** Changes are automatically rolled back on error, making every modifier atomic
 3. **Debuggable** Maya's native modifier throws an error without including what or where it happened. `cmdx` provides detailed diagnostics of what was supposed to happen, what happened, attempts to figure out why and what line number it occurred on.
 4. **Name templates** Reduce character count by delegating a "theme" of names across many new nodes.
 
@@ -1572,24 +1578,14 @@ with cmdx.DagModifier() as mod:
 
 Now when calling `undo`, the above lines will be undone as you'd expect.
 
-If you prefer, modern syntax still works here.
-
-```python
-with cmdx.DagModifier() as mod:
-    parent = mod.createNode("transform", name="MyParent")
-    child = mod.createNode("transform", parent=parent)
-    parent["translate"] = (1, 2, 3)
-    parent["rotate"] >> child["rotate"]
-```
-
-And PEP8.
+There is also a completely equivalent PEP8 syntax.
 
 ```python
 with cmdx.DagModifier() as mod:
     parent = mod.create_node("transform", name="MyParent")
     child = mod.create_node("transform", parent=parent)
-    parent["translate"] = (1, 2, 3)
-    parent["rotate"] >> child["rotate"]
+    mod.set_attr(parent + ".translate", (1, 2, 3))
+    mod.connect(parent + ".rotate", child + ".rotate")
 ```
 
 Name templates look like this.
@@ -1601,7 +1597,101 @@ with cmdx.DagModifier(template="myName_{type}") as mod:
 assert node.name() == "myName_transform"
 ```
 
-This makes it easy to move a block of code into a modifier without changing things around. Perhaps to test performance, or to figure out whether undo support is necessary.
+##### Connect To Newly Created Attribute
+
+Creating a new attribute returns a "promise" of that attribute being created. You can pass that to `connectAttr` to both create and connect attributes in the same modifier.
+
+```py
+with cmdx.DagModifier() as mod:
+    node = mod.createNode("transform")
+    attr = mod.createAttr(node, cmdx.Double("myNewAttr"))
+    mod.connectAttr(node["translateX"], attr)
+```
+
+You can even connect *two* previously unexisting attributes at the same time with `connectAttrs`.
+
+```py
+
+with cmdx.DagModifier() as mod:
+    node = mod.createNode("transform")
+    attr1 = mod.createAttr(node, cmdx.Double("attr1"))
+    attr2 = mod.createAttr(node, cmdx.Double("attr2"))
+    mod.connectAttrs(node, attr1, node, attr2)
+```
+
+##### Convenience Historyically Interesting
+
+Sometimes you're creating a series of utility nodes that you don't want visible in the channel box. So you can either go..
+
+```py
+with cmdx.DGModifier() as mod:
+    reverse = mod.createNode("reverse")
+    multMatrix = mod.createNode("multMatrix")
+    mod.set_attr(reverse["isHistoricallyInteresting"], False)
+    mod.set_attr(multMatrix["isHistoricallyInteresting"], False)
+```
+
+..or use the convenience argument to make everything neat.
+
+```py
+with cmdx.DGModifier(interesting=False) as mod:
+    mod.createNode("reverse")
+    mod.createNode("multMatrix")
+```
+
+##### Convenience Try Set Attr
+
+Sometimes you aren't too concerned whether setting an attribute actually succeeds or not. Perhaps you're writing a bulk-importer, and it'll become obvious to the end-user whether attributes were set or not, or you simply could not care less.
+
+For that, you can either..
+
+```py
+with cmdx.DagModifier() as mod:
+    try:
+        mod.setAttr(node["attr1"], 5.0)
+    except cmdx.LockedError:
+        pass  # This is OK
+    try:
+        mod.setAttr(node["attr2"], 5.0)
+    except cmdx.LockedError:
+        pass  # This is OK
+    try:
+        mod.setAttr(node["attr3"], 5.0)
+    except cmdx.LockedError:
+        pass  # This is OK
+```
+
+..or you can use the convenience `trySetAttr` to ease up on readability.
+
+```py
+
+with cmdx.DagModifier() as mod:
+    mod.trySetAttr(node["attr1"], 5.0)
+    mod.trySetAttr(node["attr2"], 5.0)
+    mod.trySetAttr(node["attr3"], 5.0)
+```
+
+##### Convenience Set Attr
+
+Sometimes, the attribute you're setting is connected to by another attribute. Maybe driven by some controller on a character rig?
+
+In such cases, the attribute cannot be set, and must set whichever attribute is feeding into it instead. So you could..
+
+```py
+with cmdx.DagModifier() as mod:
+    if node["myAttr"].connected:
+        other = node["myAttr"].connection(destination=False, plug=True)
+        mod.setAttr(other["myAttr"], 5.0)
+    else:
+        mod.setAttr(node["myAttr"], 5.0)
+```
+
+Or, you can use the `smart_set_attr` to automate this process.
+
+```py
+with cmdx.DagModifier() as mod:
+    mod.smartSetAttr(node["myAttr"], 5.0)
+```
 
 ##### Limitations
 
@@ -1609,28 +1699,7 @@ The modifier is quite limited in what features it provides; in general, it can o
 
 1. It cannot read attributes
 2. It cannot set complex attribute types, such as meshes or nurbs curves
-3. It cannot query a future hierarchy, such as asking for the parent or children of a newly created node
-
-Furthermore, there are a few limitations with regards to modern syntax.
-
-1. It cannot connect an existing attribute to one on a newly node, e.g. `existing["tx"] >> new["tx"]`
-2. ...
-
-<br>
-
-### Signals
-
-Maya offers a large number of callbacks for responding to native events in your code. `cmdx` wraps some of these in an alternative interface akin to Qt Signals and Slots.
-
-```python
-import cmdx
-
-def onDestroyed():
-  pass
-
-node = cmdx.createNode("transform")
-node.onDestroyed.append(onDestroyed)
-```
+3. It cannot query a future hierarchy, such as asking for the parent or children of a newly created node unless you call `doIt()` first)
 
 <br>
 
