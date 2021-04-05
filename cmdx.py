@@ -4445,7 +4445,7 @@ def _python_to_mod(value, plug, mod):
             _python_to_mod(value, plug[index], mod)
 
     else:
-        log.warning(
+        raise TypeError(
             "Unsupported plug type for modifier: %s" % type(value)
         )
         return False
