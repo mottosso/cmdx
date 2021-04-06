@@ -6192,9 +6192,9 @@ def setUpAxis(axis=Y):
 
     if __maya_version__ >= 2019:
         if axis == Y:
-            om.MGlobal.setYAxisUp()
+            om.MGlobal.setYAxisUp(True)
         else:
-            om.MGlobal.setZAxisUp()
+            om.MGlobal.setZAxisUp(True)
     else:
         cmds.optionVar(stringValue=("upAxisDirection", axis))
         cmds.warning(
