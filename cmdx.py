@@ -6167,7 +6167,7 @@ def upAxis():
         >>> assert upAxis() == Vector(0, 1, 0)
 
     Returns:
-        string: "y" for Y-up, "z" for Z-up
+        Vector: (0, 1, 0) for Y-up, (0, 0, 1) for Z-up
 
     """
 
