@@ -44,8 +44,9 @@ if __name__ == "__main__":
     else:
         sys.stdout.write("Skipping coveralls\n")
 
-    # Graceful exit
-    standalone.uninitialize()
+    if os.name == "nt":
+        # Graceful exit, only Windows seems to like this consistently
+        standalone.uninitialize()
 
     # Trust but verify
     os._exit(0 if result.success else 1)
