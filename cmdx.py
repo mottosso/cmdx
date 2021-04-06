@@ -6157,28 +6157,45 @@ Y = "y"
 Z = "z"
 
 
-if __maya_version__ >= 2019:
-    def upAxis():
-        """Get the current up-axis as string
+def upAxis():
+    """Get the current up-axis as a Vector
 
-        Returns:
-            string: "y" for Y-up, "z" for Z-up
+    Examples:
+        >>> setUpAxis(Z)
+        >>> assert upAxis() == Vector(0, 0, 1)
+        >>> setUpAxis(Y)
+        >>> assert upAxis() == Vector(0, 1, 0)
 
-        """
+    Returns:
+        string: "y" for Y-up, "z" for Z-up
 
-        return om.MGlobal.upAxis()
+    """
 
-    def setUpAxis(axis=Y):
+    if __maya_version__ >= 2019:
+        return Vector(om.MGlobal.upAxis())
+
+    else:
+        if cmds.optionVar(query="upAxisDirection").lower() == "y":
+            return Vector(0, 1, 0)
+
+        else:
+            # Maya only supports two axes
+            return Vector(0, 0, 1)
+
+
+def setUpAxis(axis=Y):
+    """Set the current up-axis as Y or Z
+
+    Tested in :func:`upAxis`
+
+    """
+
+    if __maya_version__ >= 2019:
         if axis == Y:
             om.MGlobal.setYAxisUp()
         else:
             om.MGlobal.setZAxisUp()
-
-else:
-    def upAxis():
-        return cmds.optionVar(query="upAxisDirection")
-
-    def setUpAxis(axis=Y):
+    else:
         cmds.optionVar(stringValue=("upAxisDirection", axis))
         cmds.warning(
             "Changing up-axis via cmdx in Maya 2019 "
