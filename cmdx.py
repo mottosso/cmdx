@@ -2304,6 +2304,34 @@ class Plug(object):
             other = other.read()
         return self.read() != other
 
+    def __lt__(self, other):
+        """Is plug less than `other`?
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node["scaleX"] < node["translateX"]
+            False
+
+        """
+
+        if isinstance(other, Plug):
+            other = other.read()
+        return self.read() < other
+
+    def __gt__(self, other):
+        """Is plug greater than `other`?
+
+        Examples:
+            >>> node = createNode("transform")
+            >>> node["scaleX"] > node["translateX"]
+            True
+
+        """
+
+        if isinstance(other, Plug):
+            other = other.read()
+        return self.read() > other
+
     def __neg__(self):
         """Negate unary operator
 
@@ -4717,7 +4745,7 @@ class _BaseModifier(object):
     """Interactively edit an existing scenegraph with support for undo/redo
 
     Arguments:
-        undoable (bool, optional): Put undoIt on the undo queue
+        undoable (bool, optional): For contexts, put undoIt on the undo queue
         interesting (bool, optional): New nodes should appear
             in the channelbox
         debug (bool, optional): Include additional debug data,
@@ -5234,6 +5262,17 @@ class _BaseModifier(object):
         except Exception:
             pass
 
+    def forceSetAttr(self, plug, value):
+        if plug._mplug.isLocked:
+            raise LockedError("%s is locked and cannot be forced." % plug)
+
+        if plug.connected:
+            # Disconnect anything connecting to this plug
+            self.disconnect(plug, destination=False)
+            self.doIt()
+
+        self.setAttr(plug, value)
+
     def resetAttr(self, plug):
         self.setAttr(plug, plug.default)
 
@@ -5638,6 +5677,7 @@ class _BaseModifier(object):
         add_attr = addAttr
         set_attr = setAttr
         try_set_attr = trySetAttr
+        force_set_attr = forceSetAttr
         smart_set_attr = smartSetAttr
         delete_attr = deleteAttr
         reset_attr = resetAttr
@@ -6639,7 +6679,14 @@ class Enum(_AbstractAttribute):
     def create(self, cls=None):
         attr = super(Enum, self).create(cls)
 
-        for index, field in enumerate(self["fields"]):
+        for index in range(len(self["fields"])):
+            field = self["fields"][index]
+
+            # Support passing in of arbitrary indexes
+            # E.g. fields=((0, "Box"), (3, "Sphere"))
+            if isinstance(field, (tuple, list)):
+                index, field = field
+
             self.Fn.addField(field, index)
 
         return attr
