@@ -31,7 +31,7 @@ if __name__ == "__main__":
     result = nose.main(
         argv=argv,
         addplugins=[flaky.FlakyPlugin()],
-        
+
         # We'll exit in our own way,
         # since Maya typically enjoys throwing
         # segfaults during cleanup of normal exits
@@ -44,5 +44,9 @@ if __name__ == "__main__":
     else:
         sys.stdout.write("Skipping coveralls\n")
 
-    # Good night Maya, you aweful segfaulter
+    if os.name == "nt":
+        # Graceful exit, only Windows seems to like this consistently
+        standalone.uninitialize()
+
+    # Trust but verify
     os._exit(0 if result.success else 1)
