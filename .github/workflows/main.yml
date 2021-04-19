@@ -1,9 +1,7 @@
-name: cmdx-test
+name: cmdx-workflow
 
 on:
   push:
-    branches: [ master ]
-
   pull_request:
     branches: [ master ]
 
@@ -75,3 +73,49 @@ jobs:
       - name: Build docs
         run: |
           mayapy build_docs.py
+
+      # We only upload the docs if the Maya version is 2022 as we only need one copy
+      - name: Upload docs as artifact
+        if: ${{ matrix.maya == '2022' }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: docs
+          path: ./build/html
+
+  deploy:
+    runs-on: ubuntu-latest
+    if: contains(github.ref, 'refs/tags/')
+    needs: maya
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine
+    - name: Build and publish
+      env:
+        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: |
+        python setup.py sdist bdist_wheel
+        twine upload dist/*
+
+  docs:
+    runs-on: ubuntu-latest
+    if: contains(github.ref, 'refs/tags/')
+    needs: maya
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download built docs
+        uses: actions/download-artifact@v2
+        with:
+          name: docs
+          path: ./public
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
