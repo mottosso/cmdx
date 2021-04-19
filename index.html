@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>cmdx &#8212; cmdx 0.4.11 documentation</title>
+    <title>cmdx &#8212; cmdx 0.6.0 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="_static/css/cmdx.css" />
@@ -87,6 +87,21 @@ the new node belongs</li>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="n">tTransform</span><span class="p">)</span>  <span class="c1"># Type as ID</span>
 </pre></div>
 </div>
+<p># Shape without transform automatically creates transform
+&gt;&gt;&gt; node = createNode(“mesh”)
+&gt;&gt;&gt; node.isA(kTransform)
+True</p>
+<p># DG nodes are also OK
+&gt;&gt;&gt; node = createNode(“multMatrix”)</p>
+<p># Parenting is A-OK
+&gt;&gt;&gt; parent = createNode(“transform”)
+&gt;&gt;&gt; child = createNode(“transform”, parent=parent)
+&gt;&gt;&gt; child.parent() == parent
+True</p>
+<p># Custom name is OK
+&gt;&gt;&gt; specialName = createNode(“transform”, name=”specialName”)
+&gt;&gt;&gt; specialName.name() == “specialName”
+True</p>
 </dd></dl>
 
 <dl class="function">
@@ -261,7 +276,7 @@ the new node belongs</li>
 <p>In addition to the familiar interface inherited from <cite>cmds</cite>, <cite>cmdx</cite> offers a faster, object oriented alternative to all of that functionality, and more.</p>
 <dl class="class">
 <dt id="cmdx.Node">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Node</code><span class="sig-paren">(</span><em>mobject</em>, <em>exists=True</em>, <em>modifier=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Node</code><span class="sig-paren">(</span><em>mobject</em>, <em>exists=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node" title="Permalink to this definition">¶</a></dt>
 <dd><p>A Maya dependency node</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -490,13 +505,9 @@ there to be wiped out once the postConstructor is done.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">cmds</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">exists</span>
 <span class="go">False</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">destroyed</span>
-<span class="go">False</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">exists</span>
 <span class="go">False</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">destroyed</span>
-<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -523,11 +534,11 @@ the case.</p>
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>name</strong> (<em>str</em>) – Name of plug to find</li>
-<li><strong>cached</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return cached plug, or
+<li><strong>cached</strong> (<em>bool</em><em>, </em><em>optional</em>) – (DEPRECATED) Return cached plug, or
 throw an exception. Default to False, which
 means it will run Maya’s findPlug() and cache
 the result.</li>
-<li><strong>safe</strong> (<em>bool</em><em>, </em><em>optional</em>) – Always find the plug through
+<li><strong>safe</strong> (<em>bool</em><em>, </em><em>optional</em>) – (DEPRECATED) Always find the plug through
 Maya’s API, defaults to True. This will not perform
 any caching and is intended for use during debugging
 to spot whether caching is causing trouble.</li>
@@ -538,16 +549,10 @@ to spot whether caching is causing trouble.</li>
 </table>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gt">Traceback (most recent call last):</span>
-<span class="c">...</span>
-<span class="gr">KeyError</span>: <span class="n">&quot;&#39;translateX&#39; not cached&quot;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">plug1</span><span class="p">,</span> <span class="n">om</span><span class="o">.</span><span class="n">MPlug</span><span class="p">)</span>
 <span class="go">True</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">safe</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="go">True</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
 <span class="go">True</span>
 </pre></div>
 </div>
@@ -575,11 +580,11 @@ the case.</p>
 <tbody valign="top">
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>name</strong> (<em>str</em>) – Name of plug to find</li>
-<li><strong>cached</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return cached plug, or
+<li><strong>cached</strong> (<em>bool</em><em>, </em><em>optional</em>) – (DEPRECATED) Return cached plug, or
 throw an exception. Default to False, which
 means it will run Maya’s findPlug() and cache
 the result.</li>
-<li><strong>safe</strong> (<em>bool</em><em>, </em><em>optional</em>) – Always find the plug through
+<li><strong>safe</strong> (<em>bool</em><em>, </em><em>optional</em>) – (DEPRECATED) Always find the plug through
 Maya’s API, defaults to True. This will not perform
 any caching and is intended for use during debugging
 to spot whether caching is causing trouble.</li>
@@ -590,16 +595,10 @@ to spot whether caching is causing trouble.</li>
 </table>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gt">Traceback (most recent call last):</span>
-<span class="c">...</span>
-<span class="gr">KeyError</span>: <span class="n">&quot;&#39;translateX&#39; not cached&quot;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">plug1</span><span class="p">,</span> <span class="n">om</span><span class="o">.</span><span class="n">MPlug</span><span class="p">)</span>
 <span class="go">True</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">safe</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="go">True</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="ow">is</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plug1</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">findPlug</span><span class="p">(</span><span class="s2">&quot;translateX&quot;</span><span class="p">)</span>
 <span class="go">True</span>
 </pre></div>
 </div>
@@ -814,7 +813,7 @@ similar to the UUID of Maya 2016</p>
 
 <dl class="method">
 <dt id="cmdx.Node.name">
-<code class="descname">name</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.name" title="Permalink to this definition">¶</a></dt>
+<code class="descname">name</code><span class="sig-paren">(</span><em>namespace=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.name" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the name of this node</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
@@ -827,8 +826,8 @@ defaults to False</td>
 </table>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myName&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
-<span class="go">u&#39;myName&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;myName&#39;</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -840,13 +839,13 @@ defaults to False</td>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myNode&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span>
-<span class="go">u&#39;&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span>
+<span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">namespace</span><span class="p">(</span><span class="n">add</span><span class="o">=</span><span class="s2">&quot;:A&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">namespace</span><span class="p">(</span><span class="n">add</span><span class="o">=</span><span class="s2">&quot;:A:B&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;:A:B:myNode&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span>
-<span class="go">u&#39;A:B&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;A:B&#39;</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -934,8 +933,8 @@ defaults to False</td>
 <dd><p>Return type name</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;choice&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">type</span><span class="p">()</span>
-<span class="go">u&#39;choice&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">type</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;choice&#39;</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1003,7 +1002,7 @@ defaults to False</td>
 </div>
 <dl class="class">
 <dt id="cmdx.DagNode">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">DagNode</code><span class="sig-paren">(</span><em>mobject</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">DagNode</code><span class="sig-paren">(</span><em>mobject</em>, <em>exists=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode" title="Permalink to this definition">¶</a></dt>
 <dd><p>A Maya DAG node</p>
 <p>The difference between this and Node is that a DagNode
 can have one or more children and one parent (multiple
@@ -1234,7 +1233,7 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 
 <dl class="method">
 <dt id="cmdx.DagNode.dagPath">
-<code class="descname">dagPath</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.dagPath" title="Permalink to this definition">¶</a></dt>
+<code class="descname">dagPath</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.dagPath" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a om.MDagPath for this node</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1251,7 +1250,7 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 
 <dl class="method">
 <dt id="cmdx.DagNode.dag_path">
-<code class="descname">dag_path</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.dag_path" title="Permalink to this definition">¶</a></dt>
+<code class="descname">dag_path</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.dag_path" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a om.MDagPath for this node</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1375,6 +1374,27 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 <dd></dd></dl>
 
 <dl class="method">
+<dt id="cmdx.DagNode.lineage">
+<code class="descname">lineage</code><span class="sig-paren">(</span><em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.lineage" title="Permalink to this definition">¶</a></dt>
+<dd><p>Yield parents all the way up a hierarchy</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;a&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;c&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;d&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lineage</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">lineage</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">lineage</span><span class="p">)</span> <span class="o">==</span> <span class="n">c</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">lineage</span><span class="p">)</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">lineage</span><span class="p">)</span> <span class="o">==</span> <span class="n">a</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
 <dt id="cmdx.DagNode.mapFrom">
 <code class="descname">mapFrom</code><span class="sig-paren">(</span><em>other</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.mapFrom" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return TransformationMatrix of <cite>other</cite> relative self</p>
@@ -1460,15 +1480,15 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 
 <dl class="method">
 <dt id="cmdx.DagNode.path">
-<code class="descname">path</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.path" title="Permalink to this definition">¶</a></dt>
+<code class="descname">path</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.path" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return full path to node</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;myParent&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="s2">&quot;myChild&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
-<span class="go">u&#39;myChild&#39;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">path</span><span class="p">()</span>
-<span class="go">u&#39;|myParent|myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">name</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;myChild&#39;</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">path</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;|myParent|myChild&#39;</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1486,6 +1506,32 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 <span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">parent2</span><span class="o">.</span><span class="n">assembly</span><span class="p">()</span> <span class="o">==</span> <span class="n">parent2</span>
 <span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.rotation">
+<code class="descname">rotation</code><span class="sig-paren">(</span><em>space=2</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.rotation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience method for transform(space).rotation()</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotateX&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">radians</span><span class="p">(</span><span class="mi">90</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">round</span><span class="p">(</span><span class="n">degrees</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">rotation</span><span class="p">()</span><span class="o">.</span><span class="n">x</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+<span class="go">90.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.scale">
+<code class="descname">scale</code><span class="sig-paren">(</span><em>space=2</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.scale" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience method for transform(space).scale()</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;scaleX&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">scale</span><span class="p">()</span><span class="o">.</span><span class="n">x</span>
+<span class="go">5.0</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1512,36 +1558,36 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 
 <dl class="method">
 <dt id="cmdx.DagNode.shortestPath">
-<code class="descname">shortestPath</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shortestPath" title="Permalink to this definition">¶</a></dt>
+<code class="descname">shortestPath</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shortestPath" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return shortest unique path to node</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myParent&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
-<span class="go">u&#39;myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;myChild&quot;</span>
+<span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># Now `myChild` could refer to more than a single node</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
-<span class="go">u&#39;|myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;|myChild&#39;</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
 
 <dl class="method">
 <dt id="cmdx.DagNode.shortest_path">
-<code class="descname">shortest_path</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shortest_path" title="Permalink to this definition">¶</a></dt>
+<code class="descname">shortest_path</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.shortest_path" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return shortest unique path to node</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myParent&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
-<span class="go">u&#39;myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;myChild&quot;</span>
+<span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">child</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myChild&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># Now `myChild` could refer to more than a single node</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span>
-<span class="go">u&#39;|myChild&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">shortestPath</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;|myChild&#39;</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1568,6 +1614,19 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 <dd><p>Return TransformationMatrix</p>
 </dd></dl>
 
+<dl class="method">
+<dt id="cmdx.DagNode.translation">
+<code class="descname">translation</code><span class="sig-paren">(</span><em>space=2</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.translation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience method for transform(space).translation()</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">5.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">translation</span><span class="p">()</span><span class="o">.</span><span class="n">x</span>
+<span class="go">5.0</span>
+</pre></div>
+</div>
+</dd></dl>
+
 </dd></dl>
 
 <div class="line-block">
@@ -1575,7 +1634,7 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 </div>
 <dl class="class">
 <dt id="cmdx.Plug">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Plug</code><span class="sig-paren">(</span><em>node</em>, <em>mplug</em>, <em>unit=None</em>, <em>key=None</em>, <em>modifier=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Plug</code><span class="sig-paren">(</span><em>node</em>, <em>mplug</em>, <em>unit=None</em>, <em>key=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="method">
 <dt id="cmdx.Plug.animate">
 <code class="descname">animate</code><span class="sig-paren">(</span><em>values</em>, <em>interpolation=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.animate" title="Permalink to this definition">¶</a></dt>
@@ -1712,7 +1771,7 @@ reuse potentially disconnected plugs and optimise space.</li>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTransform</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">()]</span>
 <span class="go">[1.0, 1.0, 1.0]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
 <span class="go">[0.0, 12.0, 0.0]</span>
@@ -1729,7 +1788,7 @@ reuse potentially disconnected plugs and optimise space.</li>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTransform</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">()]</span>
 <span class="go">[1.0, 1.0, 1.0]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
 <span class="go">[0.0, 12.0, 0.0]</span>
@@ -1746,7 +1805,7 @@ reuse potentially disconnected plugs and optimise space.</li>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTransform</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">()]</span>
 <span class="go">[1.0, 1.0, 1.0]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
 <span class="go">[0.0, 12.0, 0.0]</span>
@@ -1817,7 +1876,7 @@ reuse potentially disconnected plugs and optimise space.</li>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTransform</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">()]</span>
 <span class="go">[1.0, 1.0, 1.0]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
 <span class="go">[0.0, 12.0, 0.0]</span>
@@ -1834,7 +1893,7 @@ reuse potentially disconnected plugs and optimise space.</li>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">12</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;rotate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">tm</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">asTransform</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">map</span><span class="p">(</span><span class="nb">round</span><span class="p">,</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tm</span><span class="o">.</span><span class="n">rotation</span><span class="p">()]</span>
 <span class="go">[1.0, 1.0, 1.0]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">tm</span><span class="o">.</span><span class="n">translation</span><span class="p">())</span>
 <span class="go">[0.0, 12.0, 0.0]</span>
@@ -1846,6 +1905,12 @@ reuse potentially disconnected plugs and optimise space.</li>
 <dt id="cmdx.Plug.as_vector">
 <code class="descname">as_vector</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_vector" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.attribute">
+<code class="descname">attribute</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the attribute MObject of this cmdx.Plug</p>
+</dd></dl>
 
 <dl class="attribute">
 <dt id="cmdx.Plug.channelBox">
@@ -1867,7 +1932,19 @@ reuse potentially disconnected plugs and optimise space.</li>
 <dl class="attribute">
 <dt id="cmdx.Plug.connected">
 <code class="descname">connected</code><a class="headerlink" href="#cmdx.Plug.connected" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return whether or not this attribute is connected (to anything)</p>
+<dd><p>Return whether or not this attribute has an input connection</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p># ty is connected, tx is not
+&gt;&gt;&gt; node[“tx”].connected
+False</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;ty&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connected</span>
+<span class="go">True</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="method">
@@ -2030,7 +2107,32 @@ also makes the attribute non-keyable.</p>
 <dl class="method">
 <dt id="cmdx.Plug.lock">
 <code class="descname">lock</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.lock" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Convenience function for plug.locked = True</p>
+<p class="rubric">Examples</p>
+<p># Static attributes work just fine
+&gt;&gt;&gt; _new()
+&gt;&gt;&gt; node1 = createNode(“transform”, name=”node1”)
+&gt;&gt;&gt; node1[“translateX”].locked
+False
+&gt;&gt;&gt; node1[“translateX”].locked = True
+&gt;&gt;&gt; _save()
+&gt;&gt;&gt; _load()
+&gt;&gt;&gt; node1 = encode(“node1”)
+&gt;&gt;&gt; node1[“translateX”].locked
+True</p>
+<p># Dynamic attributes work too
+&gt;&gt;&gt; _new()
+&gt;&gt;&gt; node1 = createNode(“transform”, name=”node1”)
+&gt;&gt;&gt; node1[“dynamicAttr”] = Double()
+&gt;&gt;&gt; node1[“dynamicAttr”].locked
+False
+&gt;&gt;&gt; node1[“dynamicAttr”].locked = True
+&gt;&gt;&gt; _save()
+&gt;&gt;&gt; _load()
+&gt;&gt;&gt; node1 = encode(“node1”)
+&gt;&gt;&gt; node1[“dynamicAttr”].locked
+True</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="cmdx.Plug.lockAndHide">
@@ -2068,9 +2170,112 @@ also makes the attribute non-keyable.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="cmdx.Plug.nextAvailableIndex">
+<code class="descname">nextAvailableIndex</code><span class="sig-paren">(</span><em>startIndex=0</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.nextAvailableIndex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the next unconnected element in an array plug</p>
+<p>Array plugs have both a “logical” and “physical” index.
+Accessing any array plug via index means to access it’s
+logical element.</p>
+<p>[0]&lt;—- plug1
+[.]
+[.]
+[3]&lt;—- plug2
+[4]&lt;—- plug3
+[5]&lt;—- plug4
+[.]
+[7]&lt;—- plug5</p>
+<p>In the above scenario, 5 plugs are connected by 5 physical
+indices, and yet the last index is 7. 7 is a logical index.</p>
+<p>This function walks each element from the <cite>startIndex</cite> in search
+of the first available index, in this case [1].</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">transform</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;multMatrix&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span><span class="p">[</span><span class="s2">&quot;matrixIn&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">transform</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span><span class="p">[</span><span class="s2">&quot;matrixIn&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">transform</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span><span class="p">[</span><span class="s2">&quot;matrixIn&quot;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">transform</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p># 3 logical indices are occupied
+&gt;&gt;&gt; mult[“matrixIn”].count()
+3</p>
+<p># Disconnecting affects the physical count
+&gt;&gt;&gt; mult[“matrixIn”][1].disconnect()
+&gt;&gt;&gt; mult[“matrixIn”].count()
+2</p>
+<p># But the last logical index is still 2
+&gt;&gt;&gt; mult[“matrixIn”].arrayIndices
+[0, 2]</p>
+<p># Finally, let’s find the next available index
+&gt;&gt;&gt; mult[“matrixIn”].nextAvailableIndex()
+1</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="cmdx.Plug.next_available_index">
-<code class="descname">next_available_index</code><span class="sig-paren">(</span><em>start_index=0</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.next_available_index" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="descname">next_available_index</code><span class="sig-paren">(</span><em>startIndex=0</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.next_available_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the next unconnected element in an array plug</p>
+<p>Array plugs have both a “logical” and “physical” index.
+Accessing any array plug via index means to access it’s
+logical element.</p>
+<p>[0]&lt;—- plug1
+[.]
+[.]
+[3]&lt;—- plug2
+[4]&lt;—- plug3
+[5]&lt;—- plug4
+[.]
+[7]&lt;—- plug5</p>
+<p>In the above scenario, 5 plugs are connected by 5 physical
+indices, and yet the last index is 7. 7 is a logical index.</p>
+<p>This function walks each element from the <cite>startIndex</cite> in search
+of the first available index, in this case [1].</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">transform</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;multMatrix&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span><span class="p">[</span><span class="s2">&quot;matrixIn&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">transform</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span><span class="p">[</span><span class="s2">&quot;matrixIn&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">transform</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mult</span><span class="p">[</span><span class="s2">&quot;matrixIn&quot;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="n">transform</span><span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p># 3 logical indices are occupied
+&gt;&gt;&gt; mult[“matrixIn”].count()
+3</p>
+<p># Disconnecting affects the physical count
+&gt;&gt;&gt; mult[“matrixIn”][1].disconnect()
+&gt;&gt;&gt; mult[“matrixIn”].count()
+2</p>
+<p># But the last logical index is still 2
+&gt;&gt;&gt; mult[“matrixIn”].arrayIndices
+[0, 2]</p>
+<p># Finally, let’s find the next available index
+&gt;&gt;&gt; mult[“matrixIn”].nextAvailableIndex()
+1</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cmdx.Plug.niceName">
+<code class="descname">niceName</code><a class="headerlink" href="#cmdx.Plug.niceName" title="Permalink to this definition">¶</a></dt>
+<dd><p>The nice name of this plug, visible in e.g. Channel Box</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_new</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myTransform&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># Return pairs of nice names for compound attributes
+&gt;&gt;&gt; node[“scale”].niceName == (“Scale X”, “Scale Y”, “Scale Z”)
+True</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">niceName</span> <span class="o">==</span> <span class="s2">&quot;Translate Y&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">niceName</span> <span class="o">=</span> <span class="s2">&quot;New Name&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;translateY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">niceName</span> <span class="o">==</span> <span class="s2">&quot;New Name&quot;</span>
+</pre></div>
+</div>
+<p># The nice name is preserved on scene open
+&gt;&gt;&gt; _save()
+&gt;&gt;&gt; _load()
+&gt;&gt;&gt; node = encode(“myTransform”)
+&gt;&gt;&gt; assert node[“translateY”].niceName == “New Name”</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="cmdx.Plug.node">
@@ -2099,6 +2304,8 @@ also makes the attribute non-keyable.</p>
 <span class="go">&#39;|persp.translate&#39;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">()</span>
 <span class="go">&#39;|persp.translateX&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">full</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">&#39;|persp.translate.translateX&#39;</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2106,7 +2313,8 @@ also makes the attribute non-keyable.</p>
 <dl class="method">
 <dt id="cmdx.Plug.plug">
 <code class="descname">plug</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.plug" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return the MPlug of this cmdx.Plug</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="cmdx.Plug.read">
@@ -2184,7 +2392,8 @@ method does not alter the keyable state of the attribute.</p>
 <dl class="method">
 <dt id="cmdx.Plug.unlock">
 <code class="descname">unlock</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.unlock" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Convenience function for plug.locked = False</p>
+</dd></dl>
 
 <dl class="attribute">
 <dt id="cmdx.Plug.writable">
@@ -2224,57 +2433,57 @@ and <cite>plug.locked</cite>.</p>
 
 <dl class="class">
 <dt id="cmdx.String">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">String</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.String" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">String</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.String" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Message">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Message</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Message" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Message</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Message" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Matrix">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Matrix</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Matrix" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Matrix</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Matrix" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Long">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Long</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Long" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Long</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Long" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Double">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Double3">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double3</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double3" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double3</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double3" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Boolean">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Boolean</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Boolean" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Boolean</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Boolean" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.AbstractUnit">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">AbstractUnit</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.AbstractUnit" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">AbstractUnit</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.AbstractUnit" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Angle">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Angle</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Angle" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Angle</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Angle" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Time">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Time</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Time" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Time</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Time" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Distance">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Distance</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Distance" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Distance</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Distance" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <div class="line-block">
