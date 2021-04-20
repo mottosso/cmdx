@@ -1600,6 +1600,9 @@ class DagNode(Node):
         plug = self["worldMatrix"][0] if space == sWorld else self["matrix"]
         return TransformationMatrix(plug.asMatrix(time))
 
+    def transformation(self):
+        return TransformationMatrix(self._tfn.transformation())
+
     def translation(self, space=sObject, time=None):
         """Convenience method for transform(space).translation()
 
@@ -3813,6 +3816,27 @@ class TransformationMatrix(om.MTransformationMatrix):
 
     """
 
+    def __repr__(self):
+        return (
+            "MTransformationMatrix(\n"
+            "  translate: {t}\n"
+            "  rotate: {r}\n"
+            "  scale: {s}\n"
+            "  rotatePivot: {rp}\n"
+            "  rotatePivotTranslation: {rpt}\n"
+            "  scalePivot: {sp}\n"
+            "  scalePivotTranslation: {spt}\n"
+            ")"
+        ).format(
+            t=self.translation(),
+            r=self.rotation(),
+            s=self.scale(),
+            rp=self.rotatePivot(),
+            rpt=self.rotatePivotTranslation(),
+            sp=self.scalePivot(),
+            spt=self.scalePivotTranslation(),
+        )
+
     def __init__(self, matrix=None, translate=None, rotate=None, scale=None):
 
         # It doesn't like being handed `None`
@@ -3901,6 +3925,25 @@ class TransformationMatrix(om.MTransformationMatrix):
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).rotatePivot(space))
+
+    def rotatePivotTranslation(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return Vector(
+            super(TransformationMatrix, self).rotatePivotTranslation(space)
+        )
+
+    def scalePivot(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return Vector(super(TransformationMatrix, self).scalePivot(space))
+
+    def scalePivotTranslation(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return Vector(
+            super(TransformationMatrix, self).scalePivotTranslation(space)
+        )
 
     def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
