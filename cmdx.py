@@ -6222,7 +6222,7 @@ class DagModifier(_BaseModifier):
         try:
             mobj = self._modifier.createNode(type, parent)
         except TypeError as e:
-            if e.message == "parent is not a transform type":
+            if str(e) == "parent is not a transform type":
                 raise TypeError("'%s' is not a transform type," % parent)
             else:
                 raise TypeError("'%s' is not a valid node type," % type)
