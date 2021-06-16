@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import re
 import os
 import sys
 import json
@@ -214,6 +215,29 @@ def _isalive(mobj):
         return False
 
     return True
+
+
+def _camel_to_title(text):
+    """Convert camelCase `text` to Title Case
+
+    Example:
+        >>> _camel_to_title("mixedCase")
+        'Mixed Case'
+        >>> _camel_to_title("myName")
+        'My Name'
+        >>> _camel_to_title("you")
+        'You'
+        >>> _camel_to_title("You")
+        'You'
+        >>> _camel_to_title("This is That")
+        'This Is That'
+
+    """
+
+    return re.sub(
+        r"((?<=[a-z])[A-Z]|(?<!\A)[A-Z](?=[a-z]))",
+        r" \1", text
+    ).title().replace("  ", " ")
 
 
 def protected(func):
@@ -1060,6 +1084,36 @@ class Node(object):
             sort_keys=sort_keys
         )
 
+    def index(self, plug):
+        """ Find index of `attr` in its owning node
+         _____________
+        |             |
+        |    Friction o -> 126
+        |        Mass o -> 127
+        |     Color R o -> 128
+        |     Color G o -> 129
+        |     Color B o -> 130
+        |             |
+        |_____________|
+
+        # TODO: This is really slow
+
+        """
+
+        assert isinstance(plug, Plug), "%r was not a cmdx.Plug" % plug
+
+        node = plug.node()
+
+        for i in range(node._fn.attributeCount()):
+            attr = node._fn.attribute(i)
+            fn = om.MFnAttribute(attr)
+
+            if fn.shortName == plug.name(long=False):
+                return i
+
+        # Can happen if asking for an index of a plug from another node
+        raise ValueError("Index of '%s' not found" % plug.name())
+
     def type(self):
         """Return type name
 
@@ -1094,11 +1148,38 @@ class Node(object):
 
         mobj = attr
 
+        xattr = None
         if isinstance(mobj, _AbstractAttribute):
+            xattr = mobj
             mobj = attr.create()
 
         assert isinstance(mobj, om.MObject)
-        self._fn.addAttribute(mobj)
+
+        try:
+            self._fn.addAttribute(mobj)
+
+        except RuntimeError:
+            # Maya doesn't tell you *why* it fails,
+            # so let's do some investigating
+
+            # But we can only do that if we've
+            # got something to work with.
+            if xattr is not None:
+                # fn = om.MFnAttribute(mobj)
+                if xattr["shortName"] in self:
+                    raise ExistError(
+                        "%s['%s'] already exists!"
+                        % (self.name(), xattr["shortName"])
+                    )
+
+                if xattr["name"] in self:
+                    raise ExistError(
+                        "%s['%s'] already exists!"
+                        % (self.name(), xattr["name"])
+                    )
+
+            # We didn't find anything wrong, proceed with generic error
+            raise
 
         # These don't natively support defaults by Maya
         # They aren't being saved with the file, unless
@@ -1549,6 +1630,9 @@ class DagNode(Node):
         plug = self["worldMatrix"][0] if space == sWorld else self["matrix"]
         return TransformationMatrix(plug.asMatrix(time))
 
+    def transformation(self):
+        return TransformationMatrix(self._tfn.transformation())
+
     def translation(self, space=sObject, time=None):
         """Convenience method for transform(space).translation()
 
@@ -1626,7 +1710,7 @@ class DagNode(Node):
     # Alias
     root = assembly
 
-    def parent(self, type=None):
+    def parent(self, type=None, filter=None):
         """Return parent of node
 
         Arguments:
@@ -1640,6 +1724,13 @@ class DagNode(Node):
             >>> not child.parent(type="camera")
             True
             >>> parent.parent()
+            >>> child.parent(filter=om.MFn.kTransform) == parent
+            True
+            >>> child.parent(filter=om.MFn.kJoint) is None
+            True
+
+        Returns:
+            parent (Node): If any, else None
 
         """
 
@@ -1650,11 +1741,14 @@ class DagNode(Node):
 
         cls = self.__class__
 
+        if filter is not None and not mobject.hasFn(filter):
+            return None
+
         if not type or type == self._fn.__class__(mobject).typeName:
             return cls(mobject)
 
     @protected
-    def lineage(self, type=None):
+    def lineage(self, type=None, filter=None):
         """Yield parents all the way up a hierarchy
 
         Example:
@@ -1676,7 +1770,10 @@ class DagNode(Node):
         parent = self.parent(type)
         while parent is not None:
             yield parent
-            parent = parent.parent(type)
+            parent = parent.parent(type, filter)
+
+    # Alias
+    parenthood = lineage
 
     @protected
     def children(self,
@@ -2645,6 +2742,91 @@ class Plug(object):
         self._cached = None
         self._key = key
 
+    def clone(self, name, shortName=None, niceName=None):
+        """Return `AbstractAttribute` of this exact plug
+
+        This can be used to replicate one plug on another node,
+        including default values, min/max values, hidden and keyable
+        states etc.
+
+        Examples:
+            >>> parent = createNode("transform")
+            >>> cam = createNode("camera", parent=parent)
+            >>> original = cam["focalLength"]
+            >>> clone = original.clone("focalClone")
+
+            # Original setup is preserved
+            >>> clone["min"]
+            2.5
+            >>> clone["max"]
+            100000.0
+
+            >>> cam.addAttr(clone)
+            >>> cam["focalClone"].read()
+            35.0
+
+            # Also works with modifiers
+            >>> with DagModifier() as mod:
+            ...   clone = cam["fStop"].clone("fClone")
+            ...   _ = mod.addAttr(cam, clone)
+            ...
+            >>> cam["fClone"].read()
+            5.6
+
+        """
+
+        assert isinstance(self, Plug)
+
+        if self.isArray:
+            raise TypeError("Array plugs are unsupported")
+
+        if self.isCompound:
+            raise TypeError("Compound plugs are unsupported")
+
+        if niceName is False:
+            niceName = None
+        else:
+            niceName = niceName or self.niceName
+
+        # There is no way to tell whether the niceName of
+        # a plug is automatically generated by Maya or if
+        # it is overridden by the user (if there is, please let me know!)
+        # So we'll wing it, and assume the user has not given
+        # the same nice name as would have been generated from
+        # the long name.
+        if niceName == _camel_to_title(name):
+            niceName = None
+
+        cls = self.typeClass()
+        fn = self.fn()
+        attr = cls(
+            name,
+            default=self.default,
+            label=niceName,
+            shortName=shortName,
+            writable=fn.writable,
+            readable=fn.readable,
+            cached=fn.cached,
+            storable=fn.storable,
+            keyable=fn.keyable,
+            hidden=fn.hidden,
+            channelBox=fn.channelBox,
+            affectsAppearance=fn.affectsAppearance,
+            affectsWorldSpace=fn.affectsWorldSpace,
+            array=fn.array,
+            indexMatters=fn.indexMatters,
+            connectable=fn.connectable,
+            disconnectBehavior=fn.disconnectBehavior,
+        )
+
+        if hasattr(fn, "getMin") and fn.hasMin():
+            attr["min"] = fn.getMin()
+
+        if hasattr(fn, "getMax") and fn.hasMax():
+            attr["max"] = fn.getMax()
+
+        return attr
+
     def plug(self):
         """Return the MPlug of this cmdx.Plug"""
         return self._mplug
@@ -2727,6 +2909,10 @@ class Plug(object):
 
         # No connections means the first index is available
         return 0
+
+    def pull(self):
+        """Pull on a plug, without seriasing any value. For performance"""
+        self._mplug.asMObject()
 
     def append(self, value, autofill=False):
         """Add `value` to end of self, which is an array
@@ -2869,17 +3055,35 @@ class Plug(object):
 
     def asEulerRotation(self, order=kXYZ, time=None):
         value = self.read(time=time)
-        return om.MEulerRotation(value, order)
+        return Euler(om.MEulerRotation(value, order))
 
     asEuler = asEulerRotation
 
     def asQuaternion(self, time=None):
         value = self.read(time=time)
         value = Euler(value).asQuaternion()
+        return value
 
     def asVector(self, time=None):
         assert self.isArray or self.isCompound, "'%s' not an array" % self
         return Vector(self.read(time=time))
+
+    def asPoint(self, time=None):
+        assert self.isArray or self.isCompound, "'%s' not an array" % self
+        return Point(self.read(time=time))
+
+    def asTime(self, time=None):
+        attr = self._mplug.attribute()
+        type = attr.apiType()
+
+        if type != om.MFn.kTimeAttribute:
+            raise TypeError("%s is not a time attribute" % self.path())
+
+        kwargs = {}
+        if time is not None:
+            kwargs["context"] = DGContext(time=time)
+
+        return self._mplug.asMTime(**kwargs)
 
     @property
     def connected(self):
@@ -2899,6 +3103,30 @@ class Plug(object):
         """
 
         return self.connection(destination=False) is not None
+
+    def animated(self, recursive=True):
+        """Return whether this attribute is connected to an animCurve
+
+        Arguments:
+            recursive (bool, optional): Should I travel to connected
+                attributes in search of an animCurve, or only look to
+                the immediate connection?
+
+        """
+
+        other = self.connection(destination=False, plug=True)
+        while other is not None:
+
+            node = other.node()
+            if node.object().hasFn(om.MFn.kAnimCurve):
+                return True
+
+            if not recursive:
+                break
+
+            other = other.connection(destination=False, plug=True)
+
+        return False
 
     def lock(self):
         """Convenience function for plug.locked = True
@@ -3164,6 +3392,43 @@ class Plug(object):
         """Return default value of plug"""
         return _plug_to_default(self._mplug)
 
+    def fn(self):
+        """Return the correct function set for the plug attribute MObject"""
+
+        attr = self._mplug.attribute()
+        typ = attr.apiType()
+
+        if typ == om.MFn.kNumericAttribute:
+            fn = om.MFnNumericAttribute(attr)
+
+        elif typ == om.MFn.kUnitAttribute:
+            fn = om.MFnUnitAttribute(attr)
+
+        elif typ in (om.MFn.kDoubleLinearAttribute,
+                     om.MFn.kFloatLinearAttribute,
+                     om.MFn.kDoubleAngleAttribute,
+                     om.MFn.kFloatAngleAttribute):
+            return om.MFnUnitAttribute(attr)
+
+        elif typ == om.MFn.kTypedAttribute:
+            fn = om.MFnTypedAttribute(attr)
+
+        elif typ in (om.MFn.kMatrixAttribute,
+                     om.MFn.kFloatMatrixAttribute):
+            fn = om.MFnMatrixAttribute(attr)
+
+        elif typ == om.MFn.kMessageAttribute:
+            fn = om.MFnMessageAttribute(attr)
+
+        else:
+            raise TypeError(
+                "Couldn't figure out function set for '%s.%s'" % (
+                    self.path(), attr.apiTypeStr
+                )
+            )
+
+        return fn
+
     def reset(self):
         """Restore plug to default value"""
 
@@ -3219,63 +3484,121 @@ class Plug(object):
         return self._mplug.attribute().apiTypeStr
 
     def typeClass(self):
-        """Retrieve cmdx type of plug
+        """Retrieve cmdx Attribute class of plug, e.g. Double
+
+        This reverse-engineers the plug attribute into the
+        attribute class used to originally create it. It'll
+        work on attributes not created with cmdx as well, but
+        won't catch'em'all (see below)
+
+        Examples:
+            >>> victim = createNode("transform")
+            >>> victim["enumAttr"] = Enum()
+            >>> victim["stringAttr"] = String()
+            >>> victim["messageAttr"] = Message()
+            >>> victim["matrixAttr"] = Matrix()
+            >>> victim["longAttr"] = Long()
+            >>> victim["doubleAttr"] = Double()
+            >>> victim["floatAttr"] = Float()
+            >>> victim["double3Attr"] = Double3()
+            >>> victim["booleanAttr"] = Boolean()
+            >>> victim["angleAttr"] = Angle()
+            >>> victim["timeAttr"] = Time()
+            >>> victim["distanceAttr"] = Distance()
+            >>> victim["compoundAttr"] = Compound(children=[Double("Temp")])
+
+            >>> assert victim["enumAttr"].typeClass() == Enum
+            >>> assert victim["stringAttr"].typeClass() == String
+            >>> assert victim["messageAttr"].typeClass() == Message
+            >>> assert victim["matrixAttr"].typeClass() == Matrix
+            >>> assert victim["longAttr"].typeClass() == Long
+            >>> assert victim["doubleAttr"].typeClass() == Double
+            >>> assert victim["floatAttr"].typeClass() == Float
+            >>> assert victim["double3Attr"].typeClass() == Double3
+            >>> assert victim["booleanAttr"].typeClass() == Boolean
+            >>> assert victim["angleAttr"].typeClass() == Angle
+            >>> assert victim["timeAttr"].typeClass() == Time
+            >>> assert victim["distanceAttr"].typeClass() == Distance
+            >>> assert victim["compoundAttr"].typeClass() == Compound
+
+            # Unsupported
+            # >>> victim["dividerAttr"] = Divider()
+            # >>> victim["double2Attr"] = Double2()
+            # >>> victim["double4Attr"] = Double4()
+            # >>> victim["angle2Attr"] = Angle2()
+            # >>> victim["angle3Attr"] = Angle3()
+            # >>> victim["distance2Attr"] = Distance2()
+            # >>> victim["distance3Attr"] = Distance3()
+            # >>> victim["distance4Attr"] = Distance4()
 
         """
 
         attr = self._mplug.attribute()
-        k = attr.apiType()
+        typ = attr.apiType()
 
-        if k == om.MFn.kAttribute3Double:
+        if typ == om.MFn.kAttribute3Double:
             return Double3
 
-        elif k == om.MFn.kNumericAttribute:
-            k = om.MFnNumericAttribute(attr).numericType()
-            if k == om.MFnNumericData.kBoolean:
+        elif typ == om.MFn.kNumericAttribute:
+            typ = om.MFnNumericAttribute(attr).numericType()
+            if typ == om.MFnNumericData.kBoolean:
                 return Boolean
-            elif k in (om.MFnNumericData.kLong,
-                       om.MFnNumericData.kInt):
+
+            elif typ in (om.MFnNumericData.kLong,
+                         om.MFnNumericData.kInt):
                 return Long
-            elif k == om.MFnNumericData.kDouble:
+
+            elif typ == om.MFnNumericData.kDouble:
                 return Double
 
-        elif k in (om.MFn.kDoubleAngleAttribute,
-                   om.MFn.kFloatAngleAttribute):
+            elif typ == om.MFnNumericData.kFloat:
+                return Float
+
+        elif typ in (om.MFn.kDoubleAngleAttribute,
+                     om.MFn.kFloatAngleAttribute):
             return Angle
-        elif k in (om.MFn.kDoubleLinearAttribute,
-                   om.MFn.kFloatLinearAttribute):
+
+        elif typ in (om.MFn.kDoubleLinearAttribute,
+                     om.MFn.kFloatLinearAttribute):
             return Distance
-        elif k == om.MFn.kTimeAttribute:
+
+        elif typ == om.MFn.kTimeAttribute:
             return Time
-        elif k == om.MFn.kEnumAttribute:
+
+        elif typ == om.MFn.kEnumAttribute:
             return Enum
 
-        elif k == om.MFn.kUnitAttribute:
-            k = om.MFnUnitAttribute(attr).unitType()
-            if k == om.MFnUnitAttribute.kAngle:
+        elif typ == om.MFn.kUnitAttribute:
+            typ = om.MFnUnitAttribute(attr).unitType()
+            if typ == om.MFnUnitAttribute.kAngle:
                 return Angle
-            elif k == om.MFnUnitAttribute.kDistance:
+
+            elif typ == om.MFnUnitAttribute.kDistance:
                 return Distance
-            elif k == om.MFnUnitAttribute.kTime:
+
+            elif typ == om.MFnUnitAttribute.kTime:
                 return Time
 
-        elif k == om.MFn.kTypedAttribute:
-            k = om.MFnTypedAttribute(attr).attrType()
-            if k == om.MFnData.kString:
+        elif typ == om.MFn.kTypedAttribute:
+            typ = om.MFnTypedAttribute(attr).attrType()
+            if typ == om.MFnData.kString:
                 return String
-            elif k == om.MFnData.kMatrix:
+
+            elif typ == om.MFnData.kMatrix:
                 return Matrix
 
-        elif k == om.MFn.kCompoundAttribute:
+        elif typ == om.MFn.kCompoundAttribute:
             return Compound
-        elif k in (om.Mfn.kMatrixAttribute,
-                   om.MFn.kFloatMatrixAttribute):
+
+        elif typ in (om.MFn.kMatrixAttribute,
+                     om.MFn.kFloatMatrixAttribute):
             return Matrix
-        elif k == om.MFn.kMessageAttribute:
+
+        elif typ == om.MFn.kMessageAttribute:
             return Message
 
-        t = self._mplug.attribute().apiTypeStr
-        log.warning('{} is not implemented'.format(t))
+        apitype = self._mplug.attribute().apiTypeStr
+        raise TypeError('%s is not implemented' % apitype)
 
     def path(self, full=False):
         """Return path to attribute, including node path
@@ -3568,6 +3891,8 @@ class Plug(object):
         as_euler = asEuler
         as_quaternion = asQuaternion
         as_vector = asVector
+        as_point = asPoint
+        as_time = asTime
         channel_box = channelBox
         lock_and_hide = lockAndHide
         array_indices = arrayIndices
@@ -3591,6 +3916,27 @@ class TransformationMatrix(om.MTransformationMatrix):
         scale (tuple, Vector, optional): Initial scale value
 
     """
+
+    def __repr__(self):
+        return (
+            "MTransformationMatrix(\n"
+            "  translate: {t}\n"
+            "  rotate: {r}\n"
+            "  scale: {s}\n"
+            "  rotatePivot: {rp}\n"
+            "  rotatePivotTranslation: {rpt}\n"
+            "  scalePivot: {sp}\n"
+            "  scalePivotTranslation: {spt}\n"
+            ")"
+        ).format(
+            t=self.translation(),
+            r=self.rotation(),
+            s=self.scale(),
+            rp=self.rotatePivot(),
+            rpt=self.rotatePivotTranslation(),
+            sp=self.scalePivot(),
+            spt=self.scalePivotTranslation(),
+        )
 
     def __init__(self, matrix=None, translate=None, rotate=None, scale=None):
 
@@ -3681,6 +4027,25 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).rotatePivot(space))
 
+    def rotatePivotTranslation(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return Vector(
+            super(TransformationMatrix, self).rotatePivotTranslation(space)
+        )
+
+    def scalePivot(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return Vector(super(TransformationMatrix, self).scalePivot(space))
+
+    def scalePivotTranslation(self, space=None):
+        """This method does not typically support optional arguments"""
+        space = space or sTransform
+        return Vector(
+            super(TransformationMatrix, self).scalePivotTranslation(space)
+        )
+
     def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
         space = space or sTransform
@@ -3755,6 +4120,25 @@ class TransformationMatrix(om.MTransformationMatrix):
 
 
 class MatrixType(om.MMatrix):
+    def __str__(self):
+        fmt = (
+            "%.2f %.2f %.2f %.2f\n"
+            "%.2f %.2f %.2f %.2f\n"
+            "%.2f %.2f %.2f %.2f\n"
+            "%.2f %.2f %.2f %.2f"
+        )
+
+        return fmt % (
+            self(0, 0), self(0, 1), self(0, 2), self(0, 3),
+            self(1, 0), self(1, 1), self(1, 2), self(1, 3),
+            self(2, 0), self(2, 1), self(2, 2), self(2, 3),
+            self(3, 0), self(3, 1), self(3, 2), self(3, 3),
+        )
+
+    def __repr__(self):
+        value = "\n".join("  " + line for line in str(self).split("\n"))
+        return "%s.Matrix4(\n%s\n)" % (__name__, value)
+
     def __call__(self, *item):
         """Native API 2.0 MMatrix does not support indexing
 
@@ -3851,7 +4235,7 @@ class Vector(om.MVector):
                 self.z + value,
             )
 
-        return super(Vector, self).__add__(value)
+        return Vector(super(Vector, self).__add__(value))
 
     def __iadd__(self, value):
         if isinstance(value, (int, float)):
@@ -3861,13 +4245,13 @@ class Vector(om.MVector):
                 self.z + value,
             )
 
-        return super(Vector, self).__iadd__(value)
+        return Vector(super(Vector, self).__iadd__(value))
 
     def dot(self, value):
-        return super(Vector, self).__mul__(value)
+        return Vector(super(Vector, self).__mul__(value))
 
     def cross(self, value):
-        return super(Vector, self).__xor__(value)
+        return Vector(super(Vector, self).__xor__(value))
 
 
 # Alias, it can't take anything other than values
@@ -3945,6 +4329,14 @@ class Quaternion(om.MQuaternion):
     def isNormalised(self, tol=0.0001):
         return abs(self.length() - 1.0) < tol
 
+    def asMatrix(self):
+        return Matrix4(super(Quaternion, self).asMatrix())
+
+    if ENABLE_PEP8:
+        as_matrix = asMatrix
+        is_normalised = isNormalised
+        length_squared = lengthSquared
+
 
 # Alias
 Quat = Quaternion
@@ -3977,10 +4369,10 @@ def twistSwingToQuaternion(ts):
 
 class EulerRotation(om.MEulerRotation):
     def asQuaternion(self):
-        return super(EulerRotation, self).asQuaternion()
+        return Quaternion(super(EulerRotation, self).asQuaternion())
 
     def asMatrix(self):
-        return MatrixType(super(EulerRotation, self).asMatrix())
+        return Matrix4(super(EulerRotation, self).asMatrix())
 
     order = {
         'xyz': kXYZ,
@@ -4056,16 +4448,16 @@ class CachedPlug(Plug):
         return self._value
 
 
-def _plug_to_default(plug):
-    """Find default value from plug, regardless of attribute type"""
+def _plug_to_default(mplug):
+    """Find default value from mplug, regardless of attribute type"""
 
-    if plug.isArray:
+    if mplug.isArray:
         raise TypeError("Array plugs are unsupported")
 
-    if plug.isCompound:
+    if mplug.isCompound:
         raise TypeError("Compound plugs are unsupported")
 
-    attr = plug.attribute()
+    attr = mplug.attribute()
     type = attr.apiType()
 
     if type == om.MFn.kTypedAttribute:
@@ -4109,6 +4501,7 @@ def _plug_to_python(plug, unit=None, context=None):
 
     """
 
+    assert isinstance(plug, om.MPlug), "'%r' was not an MPlug" % plug
     assert not plug.isNull, "'%s' was null" % plug
 
     kwargs = dict()
@@ -4518,6 +4911,9 @@ def _python_to_mod(value, plug, mod):
             value = om.MAngle(value, om.MAngle.kRadians)
             _python_to_mod(value, plug[index], mod)
 
+    elif isinstance(value, om.MQuaternion):
+        _python_to_mod(value.asEulerRotation(), plug, mod)
+
     else:
         raise TypeError(
             "Unsupported plug type for modifier: %s" % type(value)
@@ -4824,20 +5220,22 @@ class _BaseModifier(object):
         try:
             self.redoIt()
 
-            # These all involve calling on cmds,
-            # which manages undo on its own.
-            self._doLockAttrs()
-            self._doKeyableAttrs()
-            self._doNiceNames()
-
-        finally:
             if self._opts["undoable"]:
-
                 # Make our commit within the current undo chunk,
-                # to combine the commands from the above special
-                # attribute edits which happen via maya.cmds
+                # but *before* we call any maya.cmds as it may
+                # otherwise confuse the chunk
                 commit(self._modifier.undoIt, self._modifier.doIt)
 
+            # These all involve calling on cmds,
+            # which manages undo on its own.
+            self._doKeyableAttrs()
+            self._doNiceNames()
+            self._doLockAttrs()
+
+        finally:
+
+            # Ensure we close the undo chunk no matter what
+            if self._opts["undoable"]:
                 cmds.undoInfo(chunkName="%x" % id(self), closeChunk=True)
 
     def __init__(self,
@@ -4901,7 +5299,6 @@ class _BaseModifier(object):
             plug = Plug(Node(plug.node()), plug)
 
         assert isinstance(plug, Plug), "%s was not a plug" % plug
-        assert plug._mplug.isDynamic, "%s was not a dynamic attribute" % plug
         self._niceNames.append((plug, value))
 
     @record_history
@@ -5011,7 +5408,13 @@ class _BaseModifier(object):
             elements = plug if plug.isArray or plug.isCompound else [plug]
 
             for el in elements:
-                cmds.addAttr(el.path(), edit=True, niceName=value)
+                if el._mplug.isDynamic:
+                    # Use setAttr as isKeyable doesn't
+                    # persist on scene save for dynamic attributes.
+                    cmds.addAttr(el.path(), edit=True, niceName=value)
+                else:
+                    fn = om.MFnAttribute(el._mplug.attribute())
+                    fn.setNiceNameOverride(value)
 
     def doIt(self):
         try:
@@ -5384,7 +5787,7 @@ class _BaseModifier(object):
                 # NOTE: This is bad, the user should be in control of when
                 # the modifier is actually being called. Especially if we
                 # want to avoid calling it altogether in case of an exception
-                self.doIt()
+                self._modifier.doIt()
 
         self._modifier.connect(src, dst)
 
@@ -5818,8 +6221,11 @@ class DagModifier(_BaseModifier):
 
         try:
             mobj = self._modifier.createNode(type, parent)
-        except TypeError:
-            raise TypeError("'%s' is not a valid node type" % type)
+        except TypeError as e:
+            if str(e) == "parent is not a transform type":
+                raise TypeError("'%s' is not a transform type," % parent)
+            else:
+                raise TypeError("'%s' is not a valid node type," % type)
 
         template = self._opts["template"]
         if name or template:
@@ -5842,6 +6248,9 @@ class DagModifier(_BaseModifier):
         if SAFE_MODE:
             self._modifier.doIt()
 
+    reparent = parent
+    reparentNode = parent
+
     if ENABLE_PEP8:
         create_node = createNode
 
@@ -5859,9 +6268,12 @@ def connect(a, b):
         mod.connect(a, b)
 
 
-def currentTime():
-    """Return current time in MTime format"""
-    return oma.MAnimControl.currentTime()
+def currentTime(time=None):
+    """Set or return current time in MTime format"""
+    if time is None:
+        return oma.MAnimControl.currentTime()
+    else:
+        return oma.MAnimControl.setCurrentTime(time)
 
 
 class DGContext(om.MDGContext):
@@ -6581,6 +6993,7 @@ class _AbstractAttribute(dict):
                  name,
                  default=None,
                  label=None,
+                 shortName=None,
 
                  writable=None,
                  readable=None,
@@ -6617,12 +7030,40 @@ class _AbstractAttribute(dict):
         # Filled in on creation
         self["mobject"] = None
 
-        # MyName -> myName
-        self["shortName"] = self["name"][0].lower() + self["name"][1:]
+        self["shortName"] = (
+            args.pop("shortName") or
+
+            # MyName -> myName
+            self["name"][0].lower() + self["name"][1:]
+        )
 
         for key, value in args.items():
             default = getattr(self, key[0].upper() + key[1:])
             self[key] = value if value is not None else default
+
+    def dumps(self):
+        """Return a block of text representing the config of this attribute"""
+
+        result = ["type: %s" % type(self).__name__]
+
+        for key, value in self.items():
+            if key == "disconnectBehavior":
+                value = {
+                    kNothing: "kNothing",
+                    kReset: "kReset",
+                    kDelete: "kDelete"
+                }[value]
+
+            if key == "label":
+                key = "niceName"
+
+            # Internal
+            if key == "mobject":
+                continue
+
+            result += ["%s: %s" % (key, value)]
+
+        return "\n".join(result)
 
     def default(self, cls=None):
         """Return one of three available values
@@ -6737,8 +7178,12 @@ class Divider(Enum):
         kwargs.pop("fields", None)
         kwargs.pop("label", None)
 
+        # Account for spaces in label
+        # E.g. "Hard Pin" -> "hardPin"
+        name = label[0].lower() + label[1:].replace(" ", "")
+
         super(Divider, self).__init__(
-            label, fields=(label,), label=" ", **kwargs
+            name, fields=(label,), label=" ", **kwargs
         )
 
 
@@ -6795,6 +7240,15 @@ class Double(_AbstractAttribute):
 
     def read(self, data):
         return data.inputValue(self["mobject"]).asDouble()
+
+
+class Float(_AbstractAttribute):
+    Fn = om.MFnNumericAttribute
+    Type = om.MFnNumericData.kFloat
+    Default = 0.0
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asFloat()
 
 
 class Double3(_AbstractAttribute):
@@ -7201,6 +7655,9 @@ class _apiUndo(om.MPxCommand):
     def __init__(self, *args, **kwargs):
         super(_apiUndo, self).__init__(*args, **kwargs)
         _apiUndo._aliveCount += 1
+
+        self.undoId = None
+        self.redoId = None
 
     def __del__(self):
         _apiUndo._aliveCount -= 1
