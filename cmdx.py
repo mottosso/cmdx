@@ -19,7 +19,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 PY3 = sys.version_info[0] == 3
 
