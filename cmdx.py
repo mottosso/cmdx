@@ -8,6 +8,7 @@ import time
 import math
 import types
 import logging
+import getpass
 import operator
 import traceback
 import collections
@@ -4374,13 +4375,22 @@ class EulerRotation(om.MEulerRotation):
     def asMatrix(self):
         return Matrix4(super(EulerRotation, self).asMatrix())
 
-    order = {
+    strToOrder = {
         'xyz': kXYZ,
         'xzy': kXZY,
         'yxz': kYXZ,
         'yzx': kYZX,
         'zxy': kZXY,
         'zyx': kZYX
+    }
+
+    orderToStr = {
+        kXYZ: 'xyz',
+        kXZY: 'xzy',
+        kYXZ: 'yxz',
+        kYZX: 'yzx',
+        kZXY: 'zxy',
+        kZYX: 'zyx'
     }
 
     if ENABLE_PEP8:
@@ -7520,8 +7530,14 @@ Distance4Attribute = Distance4
 # --------------------------------------------------------
 
 
-# E.g. ragdoll.vendor.cmdx => ragdoll_vendor_cmdx_plugin.py
-unique_plugin = "cmdx_%s_plugin.py" % __version__.replace(".", "_")
+# E.g. cmdx => cmdx_0_6_0_plugin_username0.py
+unique_plugin = "cmdx_%s_plugin_%s.py" % (
+    __version__.replace(".", "_"),
+
+    # Include username, in case two
+    # users occupy the same machine
+    getpass.getuser()
+)
 
 # Support for multiple co-existing versions of apiundo.
 unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
@@ -7612,18 +7628,51 @@ def install():
 
     """
 
+    import errno
     import shutil
-    import tempfile
 
-    tempdir = tempfile.gettempdir()
+    # E.g. c:\users\marcus\Documents\maya
+    tempdir = os.path.expanduser("~/maya/plug-ins")
+
+    try:
+        print("Making %s" % tempdir)
+        os.makedirs(tempdir)
+
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            # This is fine
+            pass
+
+        else:
+            # Can't think of a reason why this would ever
+            # happen but you can never be too careful..
+            log.debug("Could not create %s" % tempdir)
+
+            import tempfile
+            tempdir = tempfile.gettempdir()
+
     tempfname = os.path.join(tempdir, unique_plugin)
 
-    # We can't know whether we're a .pyc or .py file,
-    # but we need to copy the .py file *only*
-    fname = os.path.splitext(__file__)[0] + ".py"
+    if not os.path.exists(tempfname):
+        # We can't know whether we're a .pyc or .py file,
+        # but we need to copy the .py file *only*
+        fname = os.path.splitext(__file__)[0]
 
-    # Copy *and overwrite*
-    shutil.copy(fname, tempfname)
+        try:
+            shutil.copyfile(fname + ".py", tempfname)
+
+        except OSError:
+            # This could never really happen, but you never know.
+            # In which case, use the file as-is. This should work
+            # for a majority of cases and only really conflict when/if
+            # the undo mechanism of cmdx changes, which is exceedingly
+            # rare. The actual functionality of cmdx is independent of
+            # this plug-in and will still pick up the appropriate
+            # vendored module.
+            log.debug("Could not generate unique cmdx.py")
+            log.debug("Undo may still work, but cmdx may conflict\n"
+                      "with other instances of it.")
+            tempfname = __file__
 
     # Now we're guaranteed to not interfere
     # with other versions of cmdx. Win!
