@@ -4932,15 +4932,24 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
-def exists(path):
-    """Return whether any node at `path` exists"""
+def exists(path, strict=True):
+    """Return whether any node at `path` exists
 
-    selectionList = om.MSelectionList()
+    Arguments:
+        path (str): Full or partial path to node
+        strict (bool, optional): Error if the path isn't a full match,
+            including namespace.
+
+    """
 
     try:
-        selectionList.add(path)
+        node = encode(path)
     except RuntimeError:
         return False
+
+    if strict:
+        return node.path(namespace=True) == path
+
     return True
 
 
@@ -7635,7 +7644,6 @@ def install():
     tempdir = os.path.expanduser("~/maya/plug-ins")
 
     try:
-        print("Making %s" % tempdir)
         os.makedirs(tempdir)
 
     except OSError as e:
