@@ -2652,13 +2652,13 @@ class Plug(object):
             >>> plug[1] << tm["parentMatrix"][0]
             >>> plug[2] << tm["worldMatrix"][0]
 
-            >>> plug[2].connection(plug=True) == tm["worldMatrix"]
+            >>> plug[2].connection(plug=True) == tm["worldMatrix"][0]
             True
 
             # Notice how index 2 remains index 2 even on disconnect
             # The physical index moves to 1.
             >>> plug[1].disconnect()
-            >>> plug[2].connection(plug=True) == tm["worldMatrix"]
+            >>> plug[2].connection(plug=True) == tm["worldMatrix"][0]
             True
 
         """
@@ -3804,6 +3804,12 @@ class Plug(object):
             True
             >>> a["ihi"]
             2
+            >>> b["arrayAttr"] = Long(array=True)
+            >>> b["arrayAttr"][0] >> a["ihi"]
+            >>> a["ihi"].connection() == b
+            True
+            >>> a["ihi"].connection(plug=True) == b["arrayAttr"][0]
+            True
 
         """
 
@@ -3820,7 +3826,27 @@ class Plug(object):
                     # sometimes, we have to convert them before using them.
                     # https://forums.autodesk.com/t5/maya-programming/maya-api-what-is-a-networked-plug-and-do-i-want-it-or-not/td-p/7182472
                     if plug.isNetworked:
-                        plug = node.findPlug(plug.partialName())
+
+                        if plug.isElement:
+                            # Name would be e.g. 'myArrayAttr[0]'
+                            # raise TypeError(plug.partialName() + "\n")
+                            name = plug.partialName()
+
+                            if name.endswith("]"):
+                                name, index = name.rsplit("[", 1)
+                                index = int(index.rstrip("]"))
+
+                            else:
+                                # E.g. worldMatrix[0] -> wm
+                                index = 0
+
+                            plug = node.findPlug(name)
+
+                            # The index returned is *logical*, not physical.
+                            plug = plug.elementByLogicalIndex(index)
+
+                        else:
+                            plug = node.findPlug(plug.partialName())
 
                     yield Plug(node, plug, unit)
                 else:
@@ -4948,7 +4974,7 @@ def exists(path, strict=True):
         return False
 
     if strict:
-        return node.path(namespace=True) == path
+        return node.path() == path
 
     return True
 
