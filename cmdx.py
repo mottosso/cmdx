@@ -841,7 +841,12 @@ class Node(object):
         elif isinstance(type, string_types):
             return type == self._fn.typeName
         elif isinstance(type, (tuple, list)):
-            return self._fn.typeName in type or self._fn.typeId in type
+            for t in type:
+                if isinstance(t, string_types) and t == self._fn.typeName:
+                    return True
+                if isinstance(t, om.MTypeId) and t == self._fn.typeId:
+                    return True
+            return False
         elif isinstance(type, int):
             return self._mobject.hasFn(type)
         cmds.warning("Unsupported argument passed to isA('%s')" % type)
