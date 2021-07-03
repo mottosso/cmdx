@@ -2842,6 +2842,10 @@ class Plug(object):
         return self._mplug.isArray
 
     @property
+    def isElement(self):
+        return self._mplug.isElement
+
+    @property
     def arrayIndices(self):
         if not self._mplug.isArray:
             raise TypeError('{} is not an array'.format(self.path()))
@@ -2852,6 +2856,73 @@ class Plug(object):
     @property
     def isCompound(self):
         return self._mplug.isCompound
+
+    @property
+    def isChild(self):
+        return self._mplug.isChild
+
+    @property
+    def parent(self):
+        """Return the parent of this plug
+
+        Examples:
+            >>> node = createNode("transform", name="mynode")
+            >>> node["tz"].parent.plug() == node["translate"].plug()
+            True
+            >>> node["myArray"] = Double(array=True)
+            >>> node["myArray"][0].parent.plug() == node["myArray"].plug()
+            True
+            >>> node["visibility"].parent
+            Traceback (most recent call last):
+            ...
+            TypeError: |mynode.visibility is not a child or element
+
+        """
+        cls = self.__class__
+
+        if self._mplug.isElement:
+            return cls(self._node, self._mplug.array(), self._unit)
+
+        elif self._mplug.isChild:
+            return cls(self._node, self._mplug.parent(), self._unit)
+
+        else:
+            raise TypeError(
+                "%s is not a child or element" % self.path()
+            )
+
+    array = parent
+
+    def index(self):
+        """Return the index of this plug
+
+        Examples:
+            >>> node = createNode("transform", name="mynode")
+            >>> node["tz"].index()
+            2
+            >>> node["myArray"] = Double(array=True)
+            >>> node["myArray"].extend([2.0, 3.0])
+            >>> node["myArray"][1].index()
+            1
+            >>> node["visibility"].index()
+            Traceback (most recent call last):
+            ...
+            TypeError: |mynode.visibility is not a child or element
+
+        """
+        if self._mplug.isElement:
+            return self._mplug.logicalIndex()
+
+        elif self._mplug.isChild:
+            for index, plug in enumerate(self.parent):
+                if plug._mplug == self._mplug:
+                    return index
+
+        else:
+            raise TypeError(
+                "%s is not a child or element" % self.path()
+            )
+
 
     def nextAvailableIndex(self, startIndex=0):
         """Find the next unconnected element in an array plug
