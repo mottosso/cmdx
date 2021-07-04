@@ -1400,12 +1400,6 @@ class Node(object):
             plugs (bool, optional): Return plugs, rather than nodes
             connections (bool, optional): Return tuples of the connected plugs
 
-        Example:
-            >>> node1 = createNode("transform")
-            >>> node1 = createNode("transform")
-            >>> node1 = createNode("transform")
-            >>> node2 =
-
         """
 
         it = ItDg(self._mobject, direction=direction, traversal=traversal, level=level)
@@ -2066,7 +2060,7 @@ class DagNode(Node):
             mobj = it.currentItem()
             node = DagNode(mobj)
 
-            if node.isA(type):
+            if type is None or node.isA(type):
                 if not contains or node.shape(type=contains):
                     if not query or node.query(query):
                         yield node
