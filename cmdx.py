@@ -391,6 +391,11 @@ def TimeUiUnit():
 UiUnit = TimeUiUnit
 
 
+# Iterator alias
+ItDg = om.MItDependencyGraph
+ItDag = om.MItDag
+
+
 _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
@@ -1230,6 +1235,34 @@ class Node(object):
         attribute = attr._mplug.attribute()
         self._fn.removeAttribute(attribute)
 
+    def query(self, query):
+        """Query node attributes similar to MongoDB
+
+        Arguments:
+            query (dict, list): Check if node has these attributes
+
+        Example:
+            >>> node = createNode("transform")
+            >>> node["myAttr"] = Double(default=5)
+            >>> node.query(["myAttr"])
+            True
+            >>> node.query(["noExist"])
+            False
+            >>> node.query({"myAttr": 5})
+            True
+            >>> node.query({"myAttr": 1})
+            False
+
+        """
+
+        if isinstance(query, dict):
+            try:
+                return all(self[key] == value for key, value in query.items())
+            except ExistError:
+                return False
+        else:
+            return all(key in self for key in query)
+
     def connections(self,
                     type=None,
                     unit=None,
@@ -1345,6 +1378,93 @@ class Node(object):
                              destination=True,
                              connections=connection), None)
 
+    def walkConnections(self,
+                        type=None,
+                        filter=None,
+                        direction=ItDg.kDownstream,
+                        traversal=ItDg.kDepthFirst,
+                        level=ItDg.kPlugLevel,
+                        plugs=False,
+                        connections=False):
+        """Walk connections either upstream or downstream from this node
+
+        Arguments:
+            type (MTypeId, str, int, optional): Return only nodes of this type
+            filter (MTypeId, str, int, optional): Iterate over only nodes of this type
+            direction (int, optional): Walk upstream or downstream through the graph
+            traversal (int, optional): Traversal method, depth or breadth first
+            level (int, optional): Level of iteration through the graph,
+                defaults to plug level. Iterating at plug level will return
+                every connection between this plug and another node, whereas
+                node level would only return one connection to another node.
+            plugs (bool, optional): Return plugs, rather than nodes
+            connections (bool, optional): Return tuples of the connected plugs
+
+        Example:
+            >>> node1 = createNode("transform")
+            >>> node1 = createNode("transform")
+            >>> node1 = createNode("transform")
+            >>> node2 =
+
+        """
+
+        it = ItDg(self._mobject, direction=direction, traversal=traversal, level=level)
+
+        while not it.isDone():
+            currentNode = it.currentNode()
+
+            if currentNode == self._mobject: # Skip self
+                it.next()
+                continue
+
+            node = Node(currentNode)
+
+            if filter is not None and not node.isA(filter):
+                it.prune()
+
+            elif type is None or node.isA(type):
+                connection = Plug(node, it.currentPlug()) if plugs else node
+                if connections:
+                    plug = it.previousPlug()
+                    previous = Node(plug.node())
+                    yield connection, Plug(previous, plug) if plugs else previous
+                else:
+                    yield connection
+
+            it.next()
+
+    def downstream(self,
+                   type=None,
+                   filter=None,
+                   traversal=ItDg.kDepthFirst,
+                   level=ItDg.kPlugLevel,
+                   plugs=False,
+                   connections=False):
+        """Walk connections downstream from :func:`walkConnections()`"""
+        return self.walkConnections(type=type,
+                                    filter=filter,
+                                    direction=ItDg.kDownstream,
+                                    traversal=traversal,
+                                    level=level,
+                                    plugs=plugs,
+                                    connections=connections)
+
+    def upstream(self,
+                 type=None,
+                 filter=None,
+                 traversal=ItDg.kDepthFirst,
+                 level=ItDg.kPlugLevel,
+                 plugs=False,
+                 connections=False):
+        """Walk connections upstream from :func:`walkConnections()`"""
+        return self.walkConnections(type=type,
+                                    filter=filter,
+                                    direction=ItDg.kUpstream,
+                                    traversal=traversal,
+                                    level=level,
+                                    plugs=plugs,
+                                    connections=connections)
+
     def rename(self, name):
         mod = om.MDGModifier()
         mod.renameNode(self._mobject, name)
@@ -1364,6 +1484,7 @@ class Node(object):
         has_attr = hasAttr
         delete_attr = deleteAttr
         shortest_path = shortestPath
+        walk_connections = walkConnections
 
 
 if __maya_version__ >= 2017:
@@ -1793,8 +1914,8 @@ class DagNode(Node):
         Arguments:
             type (str, optional): Return only children that match this type
             filter (int, optional): Return only children with this function set
-            contains (str, optional): Child must have a shape of this type
             query (dict, optional): Limit output to nodes with these attributes
+            contains (str, optional): Child must have a shape of this type
 
         Example:
             >>> _ = cmds.file(new=True, force=True)
@@ -1869,20 +1990,8 @@ class DagNode(Node):
                 node = DagNode(mobject)
 
                 if not contains or node.shape(type=contains):
-                    if query is None:
+                    if not query or node.query(query):
                         yield node
-
-                    elif isinstance(query, dict):
-                        try:
-                            if all(node[key] == value
-                                   for key, value in query.items()):
-                                yield node
-                        except ExistError:
-                            continue
-
-                    else:
-                        if all(key in node for key in query):
-                            yield node
 
     def child(self,
               type=None,
@@ -1908,103 +2017,67 @@ class DagNode(Node):
     def sibling(self, type=None, filter=None):
         return next(self.siblings(type, filter), None)
 
-    # Module-level expression; this isn't evaluated
-    # at run-time, for that extra performance boost.
-    if hasattr(om, "MItDag"):
-        def descendents(self, type=None):
-            """Faster and more efficient dependency graph traversal
+    def descendents(self,
+                    type=None,
+                    traversal=ItDag.kDepthFirst,
+                    query=None,
+                    contains=None):
+        """Faster and more efficient dependency graph traversal
 
-            Requires Maya 2017+
+        Requires Maya 2017+
 
-            Example:
-                >>> grandparent = createNode("transform")
-                >>> parent = createNode("transform", parent=grandparent)
-                >>> child = createNode("transform", parent=parent)
-                >>> mesh = createNode("mesh", parent=child)
-                >>> it = grandparent.descendents(type=tMesh)
-                >>> next(it) == mesh
-                True
-                >>> next(it)
-                Traceback (most recent call last):
-                ...
-                StopIteration
+        Arguments:
+            type (str, optional): Return only descendents that match this type
+            filter (int, optional): Iterate only over nodes of this type
+            traversal (int, optional): MItDag constant for depth first or breadth first
+            query (dict, list, optional): Limit output to nodes with these attributes
+            contains (str, optional): Child must have a shape of this type
 
-            """
+        Example:
+            >>> grandparent = createNode("transform")
+            >>> parent = createNode("transform", parent=grandparent)
+            >>> child = createNode("transform", parent=parent)
+            >>> mesh = createNode("mesh", parent=child)
+            >>> it = grandparent.descendents(type=tMesh)
+            >>> next(it) == mesh
+            True
+            >>> next(it)
+            Traceback (most recent call last):
+            ...
+            StopIteration
+            >>> it = grandparent.descendents(contains="mesh")
+            >>> next(it) == child
+            True
+            >>> child["myAttr"] = Double(default=5)
+            >>> it = grandparent.descendents(query=["myAttr"])
+            >>> next(it) == child
+            True
+            >>> it = grandparent.descendents(query={"myAttr": 5})
+            >>> next(it) == child
+            True
 
-            type = type or om.MFn.kInvalid
-            typeName = None
+        """
 
-            # Support filtering by typeName
-            if isinstance(type, string_types):
-                typeName = type
-                type = om.MFn.kInvalid
+        it = ItDag(traversal, om.MFn.kInvalid)
+        it.reset(self._mobject, traversal, om.MIteratorType.kMObject)
+        it.next()  # Skip self
 
-            it = om.MItDag(om.MItDag.kDepthFirst, om.MFn.kInvalid)
-            it.reset(
-                self._mobject,
-                om.MItDag.kDepthFirst,
-                om.MIteratorType.kMObject
-            )
+        while not it.isDone():
+            mobj = it.currentItem()
+            node = DagNode(mobj)
 
-            it.next()  # Skip self
-
-            while not it.isDone():
-                mobj = it.currentItem()
-                node = DagNode(mobj)
-
-                if typeName is None:
-                    if not type or type == node._fn.typeId:
+            if node.isA(type):
+                if not contains or node.shape(type=contains):
+                    if not query or node.query(query):
                         yield node
-                else:
-                    if not typeName or typeName == node._fn.typeName:
-                        yield node
 
-                it.next()
+            it.next()
 
-    else:
-        def descendents(self, type=None):
-            """Recursive, depth-first search; compliant with MItDag of 2017+
-
-            Example:
-                >>> grandparent = createNode("transform")
-                >>> parent = createNode("transform", parent=grandparent)
-                >>> child = createNode("transform", parent=parent)
-                >>> mesh = createNode("mesh", parent=child)
-                >>> it = grandparent.descendents(type=tMesh)
-                >>> next(it) == mesh
-                True
-                >>> next(it)
-                Traceback (most recent call last):
-                ...
-                StopIteration
-
-            """
-
-            def _descendents(node, children=None):
-                children = children or list()
-                children.append(node)
-                for child in node.children(filter=None):
-                    _descendents(child, children)
-
-                return children
-
-            # Support filtering by typeName
-            typeName = None
-            if isinstance(type, str):
-                typeName = type
-                type = om.MFn.kInvalid
-
-            descendents = _descendents(self)[1:]  # Skip self
-
-            for child in descendents:
-                if typeName is None:
-                    if not type or type == child._fn.typeId:
-                        yield child
-                else:
-                    if not typeName or typeName == child._fn.typeName:
-                        yield child
-
-    def descendent(self, type=om.MFn.kInvalid):
+    def descendent(self,
+                   type=None,
+                   traversal=ItDag.kDepthFirst,
+                   query=None,
+                   contains=None):
         """Singular version of :func:`descendents()`
 
         A recursive, depth-first search.
@@ -2034,7 +2107,11 @@ class DagNode(Node):
 
         """
 
-        return next(self.descendents(type), None)
+        return next(
+            self.descendents(type=type,
+                             traversal=traversal,
+                             query=query,
+                             contains=contains), None)
 
     def duplicate(self):
         """Return a duplicate of self"""
@@ -3944,6 +4021,116 @@ class Plug(object):
                                      plugs=plug,
                                      unit=unit), None)
 
+    def walkConnections(self,
+                        type=None,
+                        filter=None,
+                        direction=ItDg.kDownstream,
+                        traversal=ItDg.kDepthFirst,
+                        level=ItDg.kPlugLevel,
+                        plugs=False,
+                        connections=False):
+        """Walk connections either upstream or downstream from this plug
+
+        Arguments:
+            type (MTypeId, str, int, optional): Return only nodes of this type
+            filter (MTypeId, str, int, optional): Iterate over only nodes of this type
+            direction (int, optional): Walk upstream or downstream through the graph
+            traversal (int, optional): Traversal method, depth or breadth first
+            level (int, optional): Level of iteration through the graph,
+                defaults to plug level. Iterating at plug level will return
+                every connection between this plug and another node, whereas
+                node level would only return one connection to another node.
+            plugs (bool, optional): Return plugs, rather than nodes
+            connections (bool, optional): Return tuples of the connected plugs
+
+        Example:
+            >>> a = createNode("transform")
+            >>> b = createNode("multiplyDivide")
+            >>> c = createNode("transform")
+            >>> a["tx"] >> b["input1X"]
+            >>> a["tx"] >> b["input2X"]
+            >>> b["outputX"] >> c["tx"]
+            >>> it = a["tx"].walkConnections(type="transform")
+            >>> next(it) == c
+            True
+            >>> it = a["tx"].walkConnections(filter="transform")
+            >>> next(it)
+            Traceback (most recent call last):
+            ...
+            StopIteration
+            >>> it = a["tx"].walkConnections()
+            >>> list(it) == [b, c, b]
+            True
+            >>> it = a["tx"].walkConnections(traversal=ItDg.kBreadthFirst)
+            >>> list(it) == [b, b, c]
+            True
+            >>> it = a["tx"].walkConnections(level=ItDg.kNodeLevel)
+            >>> list(it) == [b, c]
+            True
+            >>> it = a["tx"].walkConnections(plugs=True)
+            >>> next(it).plug() == b["input2X"].plug()
+            True
+            >>> next(it).plug() == c["tx"].plug()
+            True
+            >>> it = a["tx"].walkConnections(plugs=True, connections=True)
+            >>> con, plug = next(it)
+            >>> [con.plug(), plug.plug()] == [b["input2X"].plug(), a["tx"].plug()]
+            True
+
+        """
+
+        it = ItDg(self._mplug, direction=direction, traversal=traversal, level=level)
+        it.next()  # Skip self
+
+        while not it.isDone():
+            node = Node(it.currentNode())
+
+            if filter is not None and not node.isA(filter):
+                it.prune()
+
+            elif type is None or node.isA(type):
+                connection = Plug(node, it.currentPlug()) if plugs else node
+                if connections:
+                    plug = it.previousPlug()
+                    previous = Node(plug.node())
+                    yield connection, Plug(previous, plug) if plugs else previous
+                else:
+                    yield connection
+
+            it.next()
+
+    def downstream(self,
+                   type=None,
+                   filter=None,
+                   traversal=ItDg.kDepthFirst,
+                   level=ItDg.kPlugLevel,
+                   plugs=False,
+                   connections=False):
+        """Walk connections downstream from :func:`walkConnections()`"""
+        return self.walkConnections(type=type,
+                                    filter=filter,
+                                    direction=ItDg.kDownstream,
+                                    traversal=traversal,
+                                    level=level,
+                                    plugs=plugs,
+                                    connections=connections)
+
+    def upstream(self,
+                 type=None,
+                 filter=None,
+                 traversal=ItDg.kDepthFirst,
+                 level=ItDg.kPlugLevel,
+                 plugs=False,
+                 connections=False):
+        """Walk connections upstream from :func:`walkConnections()`"""
+        return self.walkConnections(type=type,
+                                    filter=filter,
+                                    direction=ItDg.kUpstream,
+                                    traversal=traversal,
+                                    level=level,
+                                    plugs=plugs,
+                                    connections=connections)
+
     def source(self, unit=None):
         cls = self.__class__
         plug = self._mplug.source()
@@ -3971,6 +4158,12 @@ class Plug(object):
         array_indices = arrayIndices
         type_class = typeClass
         next_available_index = nextAvailableIndex
+        is_array = isArray
+        is_child = isChild
+        is_compound = isCompound
+        is_element = isElement
+        nice_name = niceName
+        walk_connections = walkConnections
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -4262,6 +4455,9 @@ class MatrixType(om.MMatrix):
 
     def __div__(self, other):
         return type(self)(super(MatrixType, self).__div__(other))
+
+    def __invert__(self):
+        return self.inverse()
 
     def inverse(self):
         return type(self)(super(MatrixType, self).inverse())
