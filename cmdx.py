@@ -1383,7 +1383,7 @@ class Node(object):
                         filter=None,
                         direction=ItDg.kDownstream,
                         traversal=ItDg.kDepthFirst,
-                        level=ItDg.kPlugLevel,
+                        level=ItDg.kNodeLevel,
                         plugs=False,
                         connections=False):
         """Walk connections either upstream or downstream from this node
@@ -1394,7 +1394,7 @@ class Node(object):
             direction (int, optional): Walk upstream or downstream through the graph
             traversal (int, optional): Traversal method, depth or breadth first
             level (int, optional): Level of iteration through the graph,
-                defaults to plug level. Iterating at plug level will return
+                defaults to node level. Iterating at plug level will return
                 every connection between this plug and another node, whereas
                 node level would only return one connection to another node.
             plugs (bool, optional): Return plugs, rather than nodes
