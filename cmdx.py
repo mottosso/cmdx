@@ -4097,7 +4097,8 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setScale(seq, space)
 
     def rotation(self, asQuaternion=False):
-        return super(TransformationMatrix, self).rotation(asQuaternion)
+        rotation = super(TransformationMatrix, self).rotation(True)
+        return Quaternion(rotation) if asQuaternion else Euler(rotation)
 
     def setRotation(self, rot):
         """Interpret three values as an euler rotation"""
@@ -6369,7 +6370,8 @@ def ls(*args, **kwargs):
 
 
 def selection(*args, **kwargs):
-    return list(map(encode, cmds.ls(*args, selection=True, **kwargs)))
+    kwargs["selection"] = True
+    return ls(*args, **kwargs)
 
 
 def createNode(type, name=None, parent=None):
