@@ -1400,6 +1400,32 @@ class Node(object):
             plugs (bool, optional): Return plugs, rather than nodes
             connections (bool, optional): Return tuples of the connected plugs
 
+        Example:
+            >>> a = createNode("transform")
+            >>> b = createNode("multiplyDivide")
+            >>> c = createNode("transform")
+            >>> d = createNode("transform")
+            >>> a["tx"] >> b["input1X"]
+            >>> b["outputX"] >> c["tx"]
+            >>> a["ty"] >> d["ty"]
+            >>> cons = list(a.walkConnections())
+            >>> all(x in cons for x in (b, c, d))
+            True
+            >>> it = a.walkConnections(filter="transform")
+            >>> next(it) == d
+            True
+            >>> it = c.walkConnections(type="transform", direction=ItDg.kUpstream)
+            >>> next(it) == a
+            True
+            >>> cons = list(a.walkConnections(plugs=True, connections=True))
+            >>> mplugs = [(x.plug(), y.plug()) for x, y in cons]
+            >>> (b["input1X"].plug(), a["tx"].plug()) in mplugs
+            True
+            >>> (c["tx"].plug(), b["outputX"].plug()) in mplugs
+            True
+            >>> (d["ty"].plug(), a["ty"].plug()) in mplugs
+            True
+
         """
 
         it = ItDg(self._mobject, direction=direction, traversal=traversal, level=level)
