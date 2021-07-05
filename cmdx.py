@@ -4110,7 +4110,7 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setScale(seq, space)
 
     def rotation(self, asQuaternion=False):
-        rotation = super(TransformationMatrix, self).rotation(True)
+        rotation = super(TransformationMatrix, self).rotation(asQuaternion)
         return Quaternion(rotation) if asQuaternion else Euler(rotation)
 
     def setRotation(self, rot):
