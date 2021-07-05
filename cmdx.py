@@ -1290,6 +1290,19 @@ class Node(object):
                              destination=destination,
                              connections=connection), None)
 
+    def inputs(self,
+               type=None,
+               unit=None,
+               plugs=False,
+               connections=False):
+        """Return input connections from :func:`connections()`"""
+        return self.connections(type=type,
+                                unit=unit,
+                                plugs=plugs,
+                                source=True,
+                                destination=False,
+                                connections=connections)
+
     def input(self,
               type=None,
               unit=None,
