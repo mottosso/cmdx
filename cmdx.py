@@ -1853,11 +1853,11 @@ class DagNode(Node):
     # Alias
     root = assembly
 
-    def parent(self, type=None, filter=None):
+    def parent(self, type=None):
         """Return parent of node
 
         Arguments:
-            type (str, optional): Return parent, only if it matches this type
+            type (MTypeId, str, int, optional): Return parent if of this type
 
         Example:
             >>> parent = createNode("transform")
@@ -1867,9 +1867,9 @@ class DagNode(Node):
             >>> not child.parent(type="camera")
             True
             >>> parent.parent()
-            >>> child.parent(filter=om.MFn.kTransform) == parent
+            >>> child.parent(type=om.MFn.kTransform) == parent
             True
-            >>> child.parent(filter=om.MFn.kJoint) is None
+            >>> child.parent(type=om.MFn.kJoint) is None
             True
 
         Returns:
@@ -1882,16 +1882,13 @@ class DagNode(Node):
         if mobject.apiType() == om.MFn.kWorld:
             return
 
-        cls = self.__class__
+        node = Node(mobject)
 
-        if filter is not None and not mobject.hasFn(filter):
-            return None
-
-        if not type or type == self._fn.__class__(mobject).typeName:
-            return cls(mobject)
+        if type is None or node.isA(type):
+            return node
 
     @protected
-    def lineage(self, type=None, filter=None):
+    def lineage(self, type=None):
         """Yield parents all the way up a hierarchy
 
         Example:
@@ -1913,27 +1910,25 @@ class DagNode(Node):
         parent = self.parent(type)
         while parent is not None:
             yield parent
-            parent = parent.parent(type, filter)
+            parent = parent.parent(type)
 
     # Alias
     parenthood = lineage
 
     @protected
     def children(self,
-                 type=None,
-                 filter=om.MFn.kTransform,
+                 type=om.MFn.kTransform,
                  query=None,
                  contains=None):
         """Return children of node
 
         All returned children are transform nodes, as specified by the
-        `filter` argument. For shapes, use the :func:`shapes` method.
+        `type` argument. For shapes, use the :func:`shapes` method.
         The `contains` argument only returns transform nodes containing
         a shape of the type provided.
 
         Arguments:
             type (str, optional): Return only children that match this type
-            filter (int, optional): Return only children with this function set
             query (dict, optional): Limit output to nodes with these attributes
             contains (str, optional): Child must have a shape of this type
 
@@ -1947,10 +1942,8 @@ class DagNode(Node):
             True
             >>> a.child() == b
             True
-            >>> c.child(type="mesh")
-            >>> c.child(type="mesh", filter=None) == d
-            True
-            >>> c.child(type=("mesh", "transform"), filter=None) == d
+            >>> c.child()
+            >>> c.child(type="mesh") == d
             True
             >>> a.child() == b
             True
@@ -1974,13 +1967,6 @@ class DagNode(Node):
         if self.isA(kShape):
             return
 
-        Fn = self._fn.__class__
-        op = operator.eq
-        if isinstance(type, (tuple, list)):
-            op = operator.contains
-
-        other = "typeId" if isinstance(type, om.MTypeId) else "typeName"
-
         assert self._fn.hasObj(self._mobject), "This is a Maya bug"
 
         try:
@@ -2003,42 +1989,82 @@ class DagNode(Node):
                 )
                 raise
 
-            if filter is not None and not mobject.hasFn(filter):
-                continue
+            node = Node(mobject)
 
-            if not type or op(type, getattr(Fn(mobject), other)):
-                node = DagNode(mobject)
-
+            if type is None or node.isA(type):
                 if not contains or node.shape(type=contains):
                     if not query or node.query(query):
                         yield node
 
     def child(self,
-              type=None,
-              filter=om.MFn.kTransform,
+              type=om.MFn.kTransform,
               query=None,
               contains=None):
-        return next(self.children(type, filter, query, contains), None)
+        """Return first child from :func:`children()`"""
+        return next(self.children(type, query, contains), None)
 
     def shapes(self, type=None, query=None):
-        return self.children(type, kShape, query)
+        """Return child shapes of this node
 
-    def shape(self, type=None):
-        return next(self.shapes(type), None)
+        Arguments:
+            type (MTypeId, str, int, optional): Return only shapes of this type
+            query (dict, list, optional): Limit output to nodes with these attributes
 
-    def siblings(self, type=None, filter=om.MFn.kTransform):
+        Example:
+            >>> node = createNode("transform")
+            >>> child = createNode("transform", parent=node)
+            >>> mesh = createNode("mesh", parent=node)
+            >>> curve = createNode("nurbsCurve", parent=node)
+            >>> list(node.shapes()) == [mesh, curve]
+            True
+            >>> node.shape("nurbsCurve") == curve
+            True
+
+        """
+
+        for child in self.children(type=type, query=query):
+            if child.isA(kShape):
+                yield child
+
+    def shape(self, type=None, query=None):
+        """Return first shape from :func:`shapes()`"""
+        return next(self.shapes(type=type, query=query), None)
+
+    def siblings(self, type=om.MFn.kTransform, query=None):
+        """Return siblings of this node
+
+        Arguments:
+            type (MTypeId, str, int, optional): Return only nodes of this type
+            query (dict, list, optional): Limit output to nodes with these attributes
+
+        Example:
+            >>> parent = createNode("transform")
+            >>> childA = createNode("transform", parent=parent)
+            >>> childB = createNode("transform", parent=parent)
+            >>> childC = createNode("mesh", parent=parent)
+            >>> childA.sibling() == childB
+            True
+            >>> childA.sibling(type="mesh") == childC
+            True
+            >>> childB["myAttr"] = Double(default=5)
+            >>> childC.sibling(query=["myAttr"]) == childB
+            True
+
+        """
+
         parent = self.parent()
 
         if parent is not None:
-            for child in parent.children(type=type, filter=filter):
+            for child in parent.children(type=type, query=query):
                 if child != self:
                     yield child
 
-    def sibling(self, type=None, filter=None):
-        return next(self.siblings(type, filter), None)
+    def sibling(self, type=om.MFn.kTransform, query=None):
+        """Return first sibling from :func:`siblings()`"""
+        return next(self.siblings(type=type, query=query), None)
 
-    def descendents(self,
-                    type=None,
+    def descendants(self,
+                    type=om.MFn.kTransform,
                     traversal=ItDag.kDepthFirst,
                     query=None,
                     contains=None):
@@ -2047,8 +2073,7 @@ class DagNode(Node):
         Requires Maya 2017+
 
         Arguments:
-            type (str, optional): Return only descendents that match this type
-            filter (int, optional): Iterate only over nodes of this type
+            type (str, optional): Return only descendants that match this type
             traversal (int, optional): MItDag constant for depth first or breadth first
             query (dict, list, optional): Limit output to nodes with these attributes
             contains (str, optional): Child must have a shape of this type
@@ -2058,21 +2083,21 @@ class DagNode(Node):
             >>> parent = createNode("transform", parent=grandparent)
             >>> child = createNode("transform", parent=parent)
             >>> mesh = createNode("mesh", parent=child)
-            >>> it = grandparent.descendents(type=tMesh)
+            >>> it = grandparent.descendants(type=tMesh)
             >>> next(it) == mesh
             True
             >>> next(it)
             Traceback (most recent call last):
             ...
             StopIteration
-            >>> it = grandparent.descendents(contains="mesh")
+            >>> it = grandparent.descendants(contains="mesh")
             >>> next(it) == child
             True
             >>> child["myAttr"] = Double(default=5)
-            >>> it = grandparent.descendents(query=["myAttr"])
+            >>> it = grandparent.descendants(query=["myAttr"])
             >>> next(it) == child
             True
-            >>> it = grandparent.descendents(query={"myAttr": 5})
+            >>> it = grandparent.descendants(query={"myAttr": 5})
             >>> next(it) == child
             True
 
@@ -2093,12 +2118,12 @@ class DagNode(Node):
 
             it.next()
 
-    def descendent(self,
-                   type=None,
+    def descendant(self,
+                   type=om.MFn.kTransform,
                    traversal=ItDag.kDepthFirst,
                    query=None,
                    contains=None):
-        """Singular version of :func:`descendents()`
+        """Singular version of :func:`descendants()`
 
         A recursive, depth-first search.
 
@@ -2117,21 +2142,24 @@ class DagNode(Node):
             >>> c = createNode("transform", "c", parent=b)
             >>> d = createNode("transform", "d", parent=b)
             >>> e = createNode("transform", "e", parent=d)
-            >>> a.descendent() == a.child()
+            >>> a.descendant() == a.child()
             True
-            >>> list(a.descendents()) == [b, c, d, e]
+            >>> list(a.descendants()) == [b, c, d, e]
             True
             >>> f = createNode("mesh", "f", parent=e)
-            >>> list(a.descendents(type="mesh")) == [f]
+            >>> list(a.descendants(type="mesh")) == [f]
             True
 
         """
 
         return next(
-            self.descendents(type=type,
+            self.descendants(type=type,
                              traversal=traversal,
                              query=query,
                              contains=contains), None)
+
+    descendents = descendants
+    descendent = descendant
 
     def duplicate(self):
         """Return a duplicate of self"""
