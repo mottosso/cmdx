@@ -397,6 +397,19 @@ Cached = _Cached()
 _data = collections.defaultdict(dict)
 
 
+def use_modifier(func):
+    @wraps(func)
+    def wrapper_use_modifier(*args, **kwargs):
+        if _BaseModifier.current:
+            kwargs["_mod"] = _BaseModifier.current
+            return func(*args, **kwargs)
+        else:
+            with DGModifier() as mod:
+                kwargs["_mod"] = mod
+                return func(*args, **kwargs)
+    return wrapper_use_modifier
+
+
 class Singleton(type):
     """Re-use previous instances of Node
 
@@ -848,12 +861,9 @@ class Node(object):
         cmds.warning("Unsupported argument passed to isA('%s')" % type)
         return False
 
-    def lock(self, value=True):
-        if _BaseModifier.current:
-            _BaseModifier.current.lockNode(self, value)
-        else:
-            with DGModifier() as mod:
-                mod.lockNode(self, value)
+    @use_modifier
+    def lock(self, value=True, _mod=None):
+        _mod.lockNode(self, value)
 
     def isLocked(self):
         return self._fn.isLocked
@@ -1131,7 +1141,8 @@ class Node(object):
 
         return self._fn.typeName
 
-    def addAttr(self, attr):
+    @use_modifier
+    def addAttr(self, attr, _mod=None):
         """Add a new dynamic attribute to node
 
         Arguments:
@@ -1146,11 +1157,7 @@ class Node(object):
 
         """
 
-        if _BaseModifier.current:
-            _BaseModifier.current.addAttr(self, attr)
-        else:
-            with DGModifier() as mod:
-                mod.addAttr(self, attr)
+        _mod.addAttr(self, attr)
 
         # These don't natively support defaults by Maya
         # They aren't being saved with the file, unless
@@ -1178,7 +1185,8 @@ class Node(object):
 
         return self._fn.hasAttribute(attr)
 
-    def deleteAttr(self, attr):
+    @use_modifier
+    def deleteAttr(self, attr, _mod=None):
         """Delete `attr` from node
 
         Arguments:
@@ -1195,11 +1203,7 @@ class Node(object):
         if not isinstance(attr, Plug):
             attr = self[attr]
 
-        if _BaseModifier.current:
-            _BaseModifier.current.deleteAttr(attr)
-        else:
-            with DGModifier() as mod:
-                mod.deleteAttr(attr)
+        _mod.deleteAttr(attr)
 
     def connections(self,
                     type=None,
@@ -1316,12 +1320,9 @@ class Node(object):
                              destination=True,
                              connections=connection), None)
 
-    def rename(self, name):
-        if _BaseModifier.current:
-            _BaseModifier.current.renameNode(self, name)
-        else:
-            with DGModifier() as mod:
-                mod.renameNode(self, name)
+    @use_modifier
+    def rename(self, name, _mod=None):
+        _mod.renameNode(self, name)
 
     if ENABLE_PEP8:
         is_alive = isAlive
@@ -1569,13 +1570,12 @@ class DagNode(Node):
             >>> parent.addChild(child)
 
         """
-
-        mobject = child._mobject
-        if safe:
-            parent = child.parent()
-            if parent is not None:
-                parent._fn.removeChild(mobject)
-        self._fn.addChild(mobject, index)
+        mod = _BaseModifier.current
+        if mod and isinstance(mod, DagModifier):
+            mod.parent(child, self)
+        else:
+            with DagModifier() as mod:
+                mod.parent(child, self)
 
     def assembly(self):
         """Return the top-level parent of node
@@ -3145,13 +3145,10 @@ class Plug(object):
         return self._mplug.isLocked
 
     @locked.setter
-    def locked(self, value):
+    @use_modifier
+    def locked(self, value, _mod=None):
         """Lock attribute"""
-        if _BaseModifier.current:
-            _BaseModifier.current.setLocked(self, value)
-        else:
-            with DGModifier() as mod:
-                mod.setLocked(self, value)
+        _mod.setLocked(self, value)
 
     def _channelBoxTest(self, value=None):
         """@properties aren't tested
@@ -3196,14 +3193,11 @@ class Plug(object):
             return self._mplug.isChannelBox
 
     @channelBox.setter
-    def channelBox(self, value):
+    @use_modifier
+    def channelBox(self, value, _mod=None):
         """Make a non-keyable attribute visible in the channel box"""
 
-        if _BaseModifier.current:
-            _BaseModifier.current.setChannelBox(self, value)
-        else:
-            with DGModifier() as mod:
-                mod.setChannelBox(self, value)
+        _mod.setChannelBox(self, value)
 
     def _keyableTest(self, value=None):
         """@properties aren't tested
@@ -3248,12 +3242,9 @@ class Plug(object):
             return self._mplug.isKeyable
 
     @keyable.setter
-    def keyable(self, value):
-        if _BaseModifier.current:
-            _BaseModifier.current.setKeyable(self, value)
-        else:
-            with DGModifier() as mod:
-                mod.setKeyable(self, value)
+    @use_modifier
+    def keyable(self, value, _mod=None):
+        _mod.setKeyable(self, value)
 
     @property
     def hidden(self):
@@ -3316,12 +3307,9 @@ class Plug(object):
             return cmds.attributeName(self.path(), nice=True)
 
     @niceName.setter
+    @use_modifier
     def niceName(self, value):
-        if _BaseModifier.current:
-            _BaseModifier.current.setNiceName(self, value)
-        else:
-            with DGModifier() as mod:
-                mod.setNiceName(self, value)
+        _mod.setNiceName(self, value)
 
     @property
     def default(self):
@@ -3649,16 +3637,11 @@ class Plug(object):
             anim.keys(times, values, interpolation=Linear)
             anim["output"] >> self
 
-    def write(self, value):
-        if isinstance(value, dict) and __maya_version__ > 2015:
-            return self.animate(value)
+    @use_modifier
+    def write(self, value, _mod=None):
 
         try:
-            if _BaseModifier.current:
-                _BaseModifier.current.setAttr(self, value)
-            else:
-                with DGModifier() as mod:
-                    mod.setAttr(self, value)
+            _mod.setAttr(self, value)
 
         except TypeError:
             log.warning("Unsupported plug type for undo: %s" % type(value))
@@ -3674,14 +3657,12 @@ class Plug(object):
                 log.error("'%s': failed to write attribute" % self.path())
                 raise
 
-    def connect(self, other, force=True):
-        if _BaseModifier.current:
-            _BaseModifier.current.connect(self, other, force=force)
-        else:
-            with DGModifier() as mod:
-                mod.connect(self, other, force=force)
+    @use_modifier
+    def connect(self, other, force=True, _mod=None):
+        _mod.connect(self, other, force=force)
 
-    def disconnect(self, other=None, source=True, destination=True):
+    @use_modifier
+    def disconnect(self, other=None, source=True, destination=True, _mod=None):
         """Disconnect self from `other`
 
         Arguments:
@@ -3710,11 +3691,7 @@ class Plug(object):
             True
 
         """
-        if _BaseModifier.current:
-            _BaseModifier.current.disconnect(self, other, source, destination)
-        else:
-            with DGModifier() as mod:
-                mod.disconnect(self, other, source, destination)
+        _mod.disconnect(self, other, source, destination)
 
     def connections(self,
                     type=None,
@@ -5157,14 +5134,12 @@ class _BaseModifier(object):
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
-        if exc_type:
-            # Let our internal calls to `assert` prevent the
-            # modifier from proceeding, given it's half-baked
-            _BaseModifier.current = self._currentModifier
-            self._currentModifier = None
-            return
-
         try:
+            if exc_type:
+                # Let our internal calls to `assert` prevent the
+                # modifier from proceeding, given it's half-baked
+                return
+
             self.redoIt()
 
             if self._opts["undoable"]:
@@ -6212,7 +6187,17 @@ class DagModifier(_BaseModifier):
 
     @record_history
     def parent(self, node, parent=None):
+
+        if parent is not None:
+            assert isinstance(parent, DagNode), "parent must be DagNode"
+            assert node not in list(parent.lineage()), (
+                "cannot parent node to one of its children"
+            )
+
         parent = parent._mobject if parent is not None else om.MObject.kNullObj
+
+        assert isinstance(node, DagNode), "child must be DagNode"
+
         self._modifier.reparentNode(node._mobject, parent)
 
         if SAFE_MODE:
@@ -6233,9 +6218,8 @@ class HashableTime(om.MTime):
 
 
 # Convenience functions
-def connect(a, b):
-    with DagModifier() as mod:
-        mod.connect(a, b)
+def connect(a, b, force=True):
+    a.connect(b, force)
 
 
 def currentTime(time=None):
@@ -6346,22 +6330,24 @@ def createNode(type, name=None, parent=None):
     """
 
     kwargs = {}
-    fn = GlobalDependencyNode
 
     if name:
         kwargs["name"] = name
 
     if parent:
         kwargs["parent"] = parent._mobject
-        fn = GlobalDagNode
 
-    try:
-        mobj = fn.create(type, **kwargs)
-    except RuntimeError as e:
-        log.debug(str(e))
-        raise TypeError("Unrecognized node type '%s'" % type)
+    if _BaseModifier.current:
+        node = _BaseModifier.current.createNode(type, **kwargs)
+    else:
+        try:
+            with DagModifier() as mod:
+                node = mod.createNode(type, **kwargs)
+        except TypeError:
+            with DGModifier() as mod:
+                node = mod.createNode(type, **kwargs)
 
-    return Node(mobj, exists=False)
+    return node
 
 
 def getAttr(attr, type=None, time=None):
@@ -6581,18 +6567,15 @@ def delete(*nodes):
 
 
 def rename(node, name):
-    with DGModifier() as mod:
-        mod.rename(node, name)
+    node.rename(name)
 
 
 def parent(children, parent, relative=True, absolute=False, safe=True):
-    assert isinstance(parent, DagNode), "parent must be DagNode"
 
     if not isinstance(children, (tuple, list)):
         children = [children]
 
     for child in children:
-        assert isinstance(child, DagNode), "child must be DagNode"
         parent.addChild(child, safe=safe)
 
 
