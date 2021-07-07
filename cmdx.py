@@ -645,7 +645,6 @@ class Node(object):
         plug = self.findPlug(key)
         plug = Plug(self, plug, unit=unit)
 
-        # Else, write it immediately
         plug.write(value)
 
     def __hash__(self):
@@ -850,7 +849,11 @@ class Node(object):
         return False
 
     def lock(self, value=True):
-        self._fn.isLocked = value
+        if _BaseModifier.current:
+            _BaseModifier.current.lockNode(self, value)
+        else:
+            with DGModifier() as mod:
+                mod.lockNode(self, value)
 
     def isLocked(self):
         return self._fn.isLocked
@@ -1143,45 +1146,11 @@ class Node(object):
 
         """
 
-        if isinstance(attr, str):
-            node, attr = attr.rsplit(".", 1)
-            node = encode(node)
-            attr = node[attr]
-
-        mobj = attr
-
-        xattr = None
-        if isinstance(mobj, _AbstractAttribute):
-            xattr = mobj
-            mobj = attr.create()
-
-        assert isinstance(mobj, om.MObject)
-
-        try:
-            self._fn.addAttribute(mobj)
-
-        except RuntimeError:
-            # Maya doesn't tell you *why* it fails,
-            # so let's do some investigating
-
-            # But we can only do that if we've
-            # got something to work with.
-            if xattr is not None:
-                # fn = om.MFnAttribute(mobj)
-                if xattr["shortName"] in self:
-                    raise ExistError(
-                        "%s['%s'] already exists!"
-                        % (self.name(), xattr["shortName"])
-                    )
-
-                if xattr["name"] in self:
-                    raise ExistError(
-                        "%s['%s'] already exists!"
-                        % (self.name(), xattr["name"])
-                    )
-
-            # We didn't find anything wrong, proceed with generic error
-            raise
+        if _BaseModifier.current:
+            _BaseModifier.current.addAttr(self, attr)
+        else:
+            with DGModifier() as mod:
+                mod.addAttr(self, attr)
 
         # These don't natively support defaults by Maya
         # They aren't being saved with the file, unless
@@ -1223,12 +1192,14 @@ class Node(object):
             False
 
         """
-
         if not isinstance(attr, Plug):
             attr = self[attr]
 
-        attribute = attr._mplug.attribute()
-        self._fn.removeAttribute(attribute)
+        if _BaseModifier.current:
+            _BaseModifier.current.deleteAttr(attr)
+        else:
+            with DGModifier() as mod:
+                mod.deleteAttr(attr)
 
     def connections(self,
                     type=None,
@@ -1346,9 +1317,11 @@ class Node(object):
                              connections=connection), None)
 
     def rename(self, name):
-        mod = om.MDGModifier()
-        mod.renameNode(self._mobject, name)
-        mod.doIt()
+        if _BaseModifier.current:
+            _BaseModifier.current.renameNode(self, name)
+        else:
+            with DGModifier() as mod:
+                mod.renameNode(self, name)
 
     if ENABLE_PEP8:
         is_alive = isAlive
@@ -3174,21 +3147,11 @@ class Plug(object):
     @locked.setter
     def locked(self, value):
         """Lock attribute"""
-
-        elements = (
-            self
-            if self.isArray or self.isCompound
-            else [self]
-        )
-
-        for el in elements:
-            # Use setAttr in place of MPlug.isLocked = False, as that
-            # doesn't persist the scene on save if the attribute is dynamic.
-            if el._mplug.isDynamic:
-                cmds.setAttr(el.path(), lock=value)
-
-            else:
-                el._mplug.isLocked = value
+        if _BaseModifier.current:
+            _BaseModifier.current.setLocked(self, value)
+        else:
+            with DGModifier() as mod:
+                mod.setLocked(self, value)
 
     def _channelBoxTest(self, value=None):
         """@properties aren't tested
@@ -3236,19 +3199,11 @@ class Plug(object):
     def channelBox(self, value):
         """Make a non-keyable attribute visible in the channel box"""
 
-        elements = (
-            self
-            if self.isArray or self.isCompound
-            else [self]
-        )
-
-        for el in elements:
-            if el._mplug.isDynamic:
-                # Use setAttr as isChannelBox doesn't
-                # persist on scene save for dynamic attributes.
-                cmds.setAttr(el.path(), keyable=value, channelBox=value)
-            else:
-                el._mplug.isChannelBox = value
+        if _BaseModifier.current:
+            _BaseModifier.current.setChannelBox(self, value)
+        else:
+            with DGModifier() as mod:
+                mod.setChannelBox(self, value)
 
     def _keyableTest(self, value=None):
         """@properties aren't tested
@@ -3294,23 +3249,11 @@ class Plug(object):
 
     @keyable.setter
     def keyable(self, value):
-
-        # Facilitate passing e.g. `0` or `None`
-        value = bool(value)
-
-        elements = (
-            self
-            if self.isArray or self.isCompound
-            else [self]
-        )
-
-        for el in elements:
-            if el._mplug.isDynamic:
-                # Use setAttr as isKeyable doesn't
-                # persist on scene save for dynamic attributes.
-                cmds.setAttr(el.path(), keyable=value)
-            else:
-                el._mplug.isKeyable = value
+        if _BaseModifier.current:
+            _BaseModifier.current.setKeyable(self, value)
+        else:
+            with DGModifier() as mod:
+                mod.setKeyable(self, value)
 
     @property
     def hidden(self):
@@ -3374,20 +3317,11 @@ class Plug(object):
 
     @niceName.setter
     def niceName(self, value):
-        elements = (
-            self
-            if self.isArray or self.isCompound
-            else [self]
-        )
-
-        for el in elements:
-            if el._mplug.isDynamic:
-                # Use setAttr as isKeyable doesn't
-                # persist on scene save for dynamic attributes.
-                cmds.addAttr(el.path(), edit=True, niceName=value)
-            else:
-                fn = om.MFnAttribute(el._mplug.attribute())
-                fn.setNiceNameOverride(value)
+        if _BaseModifier.current:
+            _BaseModifier.current.setNiceName(self, value)
+        else:
+            with DGModifier() as mod:
+                mod.setNiceName(self, value)
 
     @property
     def default(self):
@@ -3720,26 +3654,32 @@ class Plug(object):
             return self.animate(value)
 
         try:
-            _python_to_plug(value, self)
-            self._cached = value
-
-        except RuntimeError:
-            raise
+            if _BaseModifier.current:
+                _BaseModifier.current.setAttr(self, value)
+            else:
+                with DGModifier() as mod:
+                    mod.setAttr(self, value)
 
         except TypeError:
-            log.error("'%s': failed to write attribute" % self.path())
-            raise
+            log.warning("Unsupported plug type for undo: %s" % type(value))
+
+            try:
+                _python_to_plug(value, self)
+                self._cached = value
+
+            except RuntimeError:
+                raise
+
+            except TypeError:
+                log.error("'%s': failed to write attribute" % self.path())
+                raise
 
     def connect(self, other, force=True):
-        mod = om.MDGModifier()
-
-        if force:
-            # Disconnect any plug connected to `other`
-            for plug in other._mplug.connectedTo(True, False):
-                mod.disconnect(plug, other._mplug)
-
-        mod.connect(self._mplug, other._mplug)
-        mod.doIt()
+        if _BaseModifier.current:
+            _BaseModifier.current.connect(self, other, force=force)
+        else:
+            with DGModifier() as mod:
+                mod.connect(self, other, force=force)
 
     def disconnect(self, other=None, source=True, destination=True):
         """Disconnect self from `other`
@@ -3770,12 +3710,11 @@ class Plug(object):
             True
 
         """
-
-        other = getattr(other, "_mplug", None)
-
-        mod = DGModifier()
-        mod.disconnect(self._mplug, other, source, destination)
-        mod.doIt()
+        if _BaseModifier.current:
+            _BaseModifier.current.disconnect(self, other, source, destination)
+        else:
+            with DGModifier() as mod:
+                mod.disconnect(self, other, source, destination)
 
     def connections(self,
                     type=None,
@@ -5187,6 +5126,8 @@ class _BaseModifier(object):
 
     """
 
+    current = None
+
     Type = om.MDGModifier
 
     def __enter__(self):
@@ -5210,6 +5151,8 @@ class _BaseModifier(object):
             cmds.undoInfo(chunkName="%x" % id(self), openChunk=True)
 
         self.isContext = True
+        self._currentModifier = _BaseModifier.current
+        _BaseModifier.current = self
 
         return self
 
@@ -5217,6 +5160,8 @@ class _BaseModifier(object):
         if exc_type:
             # Let our internal calls to `assert` prevent the
             # modifier from proceeding, given it's half-baked
+            _BaseModifier.current = self._currentModifier
+            self._currentModifier = None
             return
 
         try:
@@ -5231,6 +5176,7 @@ class _BaseModifier(object):
             # These all involve calling on cmds,
             # which manages undo on its own.
             self._doKeyableAttrs()
+            self._doChannelBoxAttrs()
             self._doNiceNames()
             self._doLockAttrs()
 
@@ -5239,6 +5185,9 @@ class _BaseModifier(object):
             # Ensure we close the undo chunk no matter what
             if self._opts["undoable"]:
                 cmds.undoInfo(chunkName="%x" % id(self), closeChunk=True)
+
+            _BaseModifier.current = self._currentModifier
+            self._currentModifier = None
 
     def __init__(self,
                  undoable=True,
@@ -5265,14 +5214,10 @@ class _BaseModifier(object):
         # Extras
         self._lockAttrs = []
         self._keyableAttrs = []
+        self._channelBoxAttrs = []
         self._niceNames = []
 
-        # Undo
-        self._doneLockAttrs = []
-        self._doneKeyableAttrs = []
-        self._doneNiceNames = []
-
-        self._attributesBeingAdded = []
+        self._currentModifier = None
 
     @record_history
     def setNiceName(self, plug, value=True):
@@ -5388,6 +5333,14 @@ class _BaseModifier(object):
         assert isinstance(plug, Plug), "%s was not a plug" % plug
         self._keyableAttrs.append((plug, value))
 
+    @record_history
+    def setChannelBox(self, plug, value=True):
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._channelBoxAttrs.append((plug, value))
+
     def _doLockAttrs(self):
         while self._lockAttrs:
             plug, value = self._lockAttrs.pop(0)
@@ -5403,6 +5356,14 @@ class _BaseModifier(object):
 
             for el in elements:
                 cmds.setAttr(el.path(), keyable=value)
+
+    def _doChannelBoxAttrs(self):
+        while self._channelBoxAttrs:
+            plug, value = self._channelBoxAttrs.pop()
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.setAttr(el.path(), channelBox=value)
 
     def _doNiceNames(self):
         while self._niceNames:
@@ -5531,6 +5492,13 @@ class _BaseModifier(object):
             assert _isalive(node._mobject)
 
         return self._modifier.renameNode(node._mobject, name)
+
+    @record_history
+    def lockNode(self, node, value=True):
+        if SAFE_MODE:
+            assert _isalive(node._mobject)
+
+        return self._modifier.setNodeLockState(node._mobject, value)
 
     @record_history
     def addAttr(self, node, attr):
