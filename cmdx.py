@@ -2614,9 +2614,9 @@ class Plug(object):
             Traceback (most recent call last):
             ...
             TypeError: |mynode.visibility does not support indexing
-            >>> node["translate"][2] = 5.1
-            >>> '%.1f' % node["translate"][2].read()
-            5.1
+            >>> node["translate"][2] = 6.1
+            >>> node["translate"][2].read()
+            6.1
 
             # Elements are accessed by logical index, rather than physical
             >>> tm = createNode("transform")

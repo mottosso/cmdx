@@ -410,35 +410,6 @@ def test_superclass():
     assert isinstance(node, cmdx.Node)
 
 
-@with_setup(new_scene)
-def test_undo():
-    """Undo works without modifiers"""
-
-    nodeA = cmdx.createNode("transform", name="nodeA")
-    nodeA["myAttr"] = cmdx.Double(default=1.0)
-    nodeA["myAttr"] = 5.0
-
-    assert "|nodeA" in cmdx.ls()
-    assert_equals(nodeA["myAttr"], 5.0)
-    cmds.undo()
-    assert_equals(nodeA["myAttr"], 1.0)
-    cmds.undo()
-    assert_equals(nodeA.hasAttr("myAttr"), False)
-    cmds.undo()
-    assert "|nodeA" not in cmdx.ls()
-
-    # still groups undo inside modifier
-    with cmdx.DagModifier():
-        nodeB = cmdx.createNode("transform", name="nodeB")
-        nodeB["myAttr"] = cmdx.Double(default=5.0)
-
-    assert "|nodeB" in cmdx.ls()
-    assert_equals(nodeB.hasAttr("myAttr"), True)
-    assert_equals(nodeB["myAttr"], 5.0)
-    cmds.undo()
-    assert "|nodeB" not in cmdx.ls()
-
-
 def test_modifier_badtype():
     """Modifier can't create non-existent types"""
 
