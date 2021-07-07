@@ -430,11 +430,10 @@ def test_undo():
     # still groups undo inside modifier
     with cmdx.DagModifier():
         nodeB = cmdx.createNode("transform", name="nodeB")
-        nodeB["myAttr"] = cmdx.Double(default=1.0)
-        nodeB["myAttr"] = 5.0
+        nodeB["myAttr"] = cmdx.Double(default=5.0)
 
     assert "|nodeB" in cmdx.ls()
-    assert_equals(nodeB.hasAttr("myAttr"), 5.0)
+    assert_equals(nodeB.hasAttr("myAttr"), True)
     assert_equals(nodeB["myAttr"], 5.0)
     cmds.undo()
     assert "|nodeB" not in cmdx.ls()

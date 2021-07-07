@@ -3308,7 +3308,7 @@ class Plug(object):
 
     @niceName.setter
     @use_modifier
-    def niceName(self, value):
+    def niceName(self, value, _mod=None):
         _mod.setNiceName(self, value)
 
     @property
@@ -6330,24 +6330,22 @@ def createNode(type, name=None, parent=None):
     """
 
     kwargs = {}
+    fn = GlobalDependencyNode
 
     if name:
         kwargs["name"] = name
 
     if parent:
-        kwargs["parent"] = parent
+        kwargs["parent"] = parent._mobject
+        fn = GlobalDagNode
 
-    if _BaseModifier.current:
-        node = _BaseModifier.current.createNode(type, **kwargs)
-    else:
-        try:
-            with DagModifier() as mod:
-                node = mod.createNode(type, **kwargs)
-        except TypeError:
-            with DGModifier() as mod:
-                node = mod.createNode(type, **kwargs)
+    try:
+        mobj = fn.create(type, **kwargs)
+    except RuntimeError as e:
+        log.debug(str(e))
+        raise TypeError("Unrecognized node type '%s'" % type)
 
-    return node
+    return Node(mobj, exists=False)
 
 
 def getAttr(attr, type=None, time=None):
