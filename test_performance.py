@@ -98,7 +98,8 @@ def test_createNode_performance():
     )
 
     for contender, test in versions:
-        Compare(contender, "createNode", test, setup=New)
+        with cmdx.DagModifier():
+            Compare(contender, "createNode", test, setup=New)
 
     cmdx_vs_cmds = (
         timings["createNode"]["cmds"]["percall"] /

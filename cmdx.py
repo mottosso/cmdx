@@ -280,6 +280,24 @@ def add_metaclass(metaclass):
         return metaclass(cls.__name__, cls.__bases__, orig_vars)
     return wrapper
 
+def use_modifier(_func=None, dag=False):
+    def decorator_use_modifier(func):
+        @wraps(func)
+        def wrapper_use_modifier(*args, **kwargs):
+            if _BaseModifier.current:
+                kwargs["_mod"] = _BaseModifier.current
+                return func(*args, **kwargs)
+            else:
+                mod = DagModifier() if dag else DGModifier()
+                with mod:
+                    kwargs["_mod"] = mod
+                    return func(*args, **kwargs)
+        return wrapper_use_modifier
+
+    if _func:
+        return decorator_use_modifier(_func)
+    return decorator_use_modifier
+
 
 class _Type(int):
     """Facilitate use of isinstance(space, _Type)"""
@@ -395,19 +413,6 @@ _Cached = type("Cached", (object,), {})  # For isinstance(x, _Cached)
 Cached = _Cached()
 
 _data = collections.defaultdict(dict)
-
-
-def use_modifier(func):
-    @wraps(func)
-    def wrapper_use_modifier(*args, **kwargs):
-        if _BaseModifier.current:
-            kwargs["_mod"] = _BaseModifier.current
-            return func(*args, **kwargs)
-        else:
-            with DGModifier() as mod:
-                kwargs["_mod"] = mod
-                return func(*args, **kwargs)
-    return wrapper_use_modifier
 
 
 class Singleton(type):
@@ -1554,7 +1559,8 @@ class DagNode(Node):
 
         return len(list(self.children(type=type)))
 
-    def addChild(self, child, index=Last, safe=True):
+    @use_modifier(dag=True)
+    def addChild(self, child, index=Last, safe=True, _mod=None):
         """Add `child` to self
 
         Arguments:
@@ -1570,12 +1576,7 @@ class DagNode(Node):
             >>> parent.addChild(child)
 
         """
-        mod = _BaseModifier.current
-        if mod and isinstance(mod, DagModifier):
-            mod.parent(child, self)
-        else:
-            with DagModifier() as mod:
-                mod.parent(child, self)
+        _mod.parent(child, self)
 
     def assembly(self):
         """Return the top-level parent of node
@@ -6183,6 +6184,7 @@ class DagModifier(_BaseModifier):
 
         self._modifier.doIt()
 
+        self._index += 1
         return DagNode(mobj, exists=False)
 
     @record_history
@@ -6330,22 +6332,30 @@ def createNode(type, name=None, parent=None):
     """
 
     kwargs = {}
-    fn = GlobalDependencyNode
 
     if name:
         kwargs["name"] = name
 
     if parent:
         kwargs["parent"] = parent._mobject
-        fn = GlobalDagNode
 
-    try:
-        mobj = fn.create(type, **kwargs)
-    except RuntimeError as e:
-        log.debug(str(e))
-        raise TypeError("Unrecognized node type '%s'" % type)
+    # Try to use current modifier if we have one
+    if _BaseModifier.current:
+        try:
+            return _BaseModifier.current.createNode(type, **kwargs)
+        except TypeError:
+            pass
 
-    return Node(mobj, exists=False)
+    # We may potentially have to use multiple modifiers :(
+    mods = [DagModifier] if "parent" in kwargs else [DagModifier, DGModifier]
+    for mod in mods:
+        try:
+            with mod() as m:
+                return m.createNode(type, **kwargs)
+        except TypeError:
+            pass
+    else:
+        raise TypeError("'%s' is not a valid node type" % type)
 
 
 def getAttr(attr, type=None, time=None):
