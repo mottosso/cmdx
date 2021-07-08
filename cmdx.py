@@ -6337,7 +6337,7 @@ def createNode(type, name=None, parent=None):
         kwargs["name"] = name
 
     if parent:
-        kwargs["parent"] = parent._mobject
+        kwargs["parent"] = parent
 
     # Try to use current modifier if we have one
     if _BaseModifier.current:
