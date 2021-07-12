@@ -1378,113 +1378,6 @@ class Node(object):
                              destination=True,
                              connections=connection), None)
 
-    def walkConnections(self,
-                        type=None,
-                        filter=None,
-                        direction=ItDg.kDownstream,
-                        traversal=ItDg.kDepthFirst,
-                        level=ItDg.kNodeLevel,
-                        plugs=False,
-                        connections=False):
-        """Walk connections either upstream or downstream from this node
-
-        Arguments:
-            type (MTypeId, str, int, optional): Return only nodes of this type
-            filter (MTypeId, str, int, optional): Iterate over only nodes of this type
-            direction (int, optional): Walk upstream or downstream through the graph
-            traversal (int, optional): Traversal method, depth or breadth first
-            level (int, optional): Level of iteration through the graph,
-                defaults to node level. Iterating at plug level will return
-                every connection between this plug and another node, whereas
-                node level would only return one connection to another node.
-            plugs (bool, optional): Return plugs, rather than nodes
-            connections (bool, optional): Return tuples of the connected plugs
-
-        Example:
-            >>> a = createNode("transform")
-            >>> b = createNode("multiplyDivide")
-            >>> c = createNode("transform")
-            >>> d = createNode("transform")
-            >>> a["tx"] >> b["input1X"]
-            >>> b["outputX"] >> c["tx"]
-            >>> a["ty"] >> d["ty"]
-            >>> cons = list(a.walkConnections())
-            >>> all(x in cons for x in (b, c, d))
-            True
-            >>> it = a.walkConnections(filter="transform")
-            >>> next(it) == d
-            True
-            >>> it = c.walkConnections(type="transform", direction=ItDg.kUpstream)
-            >>> next(it) == a
-            True
-            >>> cons = list(a.walkConnections(plugs=True, connections=True))
-            >>> mplugs = [(x.plug(), y.plug()) for x, y in cons]
-            >>> (b["input1X"].plug(), a["tx"].plug()) in mplugs
-            True
-            >>> (c["tx"].plug(), b["outputX"].plug()) in mplugs
-            True
-            >>> (d["ty"].plug(), a["ty"].plug()) in mplugs
-            True
-
-        """
-
-        it = ItDg(self._mobject, direction=direction, traversal=traversal, level=level)
-
-        while not it.isDone():
-            currentNode = it.currentNode()
-
-            if currentNode == self._mobject: # Skip self
-                it.next()
-                continue
-
-            node = Node(currentNode)
-
-            if filter is not None and not node.isA(filter):
-                it.prune()
-
-            elif type is None or node.isA(type):
-                connection = Plug(node, it.currentPlug()) if plugs else node
-                if connections:
-                    plug = it.previousPlug()
-                    previous = Node(plug.node())
-                    yield connection, Plug(previous, plug) if plugs else previous
-                else:
-                    yield connection
-
-            it.next()
-
-    def downstream(self,
-                   type=None,
-                   filter=None,
-                   traversal=ItDg.kDepthFirst,
-                   level=ItDg.kPlugLevel,
-                   plugs=False,
-                   connections=False):
-        """Walk connections downstream from :func:`walkConnections()`"""
-        return self.walkConnections(type=type,
-                                    filter=filter,
-                                    direction=ItDg.kDownstream,
-                                    traversal=traversal,
-                                    level=level,
-                                    plugs=plugs,
-                                    connections=connections)
-
-    def upstream(self,
-                 type=None,
-                 filter=None,
-                 traversal=ItDg.kDepthFirst,
-                 level=ItDg.kPlugLevel,
-                 plugs=False,
-                 connections=False):
-        """Walk connections upstream from :func:`walkConnections()`"""
-        return self.walkConnections(type=type,
-                                    filter=filter,
-                                    direction=ItDg.kUpstream,
-                                    traversal=traversal,
-                                    level=level,
-                                    plugs=plugs,
-                                    connections=connections)
-
     def rename(self, name):
         mod = om.MDGModifier()
         mod.renameNode(self._mobject, name)
@@ -1504,7 +1397,6 @@ class Node(object):
         has_attr = hasAttr
         delete_attr = deleteAttr
         shortest_path = shortestPath
-        walk_connections = walkConnections
 
 
 if __maya_version__ >= 2017:
@@ -4069,116 +3961,6 @@ class Plug(object):
                                      plugs=plug,
                                      unit=unit), None)
 
-    def walkConnections(self,
-                        type=None,
-                        filter=None,
-                        direction=ItDg.kDownstream,
-                        traversal=ItDg.kDepthFirst,
-                        level=ItDg.kPlugLevel,
-                        plugs=False,
-                        connections=False):
-        """Walk connections either upstream or downstream from this plug
-
-        Arguments:
-            type (MTypeId, str, int, optional): Return only nodes of this type
-            filter (MTypeId, str, int, optional): Iterate over only nodes of this type
-            direction (int, optional): Walk upstream or downstream through the graph
-            traversal (int, optional): Traversal method, depth or breadth first
-            level (int, optional): Level of iteration through the graph,
-                defaults to plug level. Iterating at plug level will return
-                every connection between this plug and another node, whereas
-                node level would only return one connection to another node.
-            plugs (bool, optional): Return plugs, rather than nodes
-            connections (bool, optional): Return tuples of the connected plugs
-
-        Example:
-            >>> a = createNode("transform")
-            >>> b = createNode("multiplyDivide")
-            >>> c = createNode("transform")
-            >>> a["tx"] >> b["input1X"]
-            >>> a["tx"] >> b["input2X"]
-            >>> b["outputX"] >> c["tx"]
-            >>> it = a["tx"].walkConnections(type="transform")
-            >>> next(it) == c
-            True
-            >>> it = a["tx"].walkConnections(filter="transform")
-            >>> next(it)
-            Traceback (most recent call last):
-            ...
-            StopIteration
-            >>> it = a["tx"].walkConnections()
-            >>> list(it) == [b, c, b]
-            True
-            >>> it = a["tx"].walkConnections(traversal=ItDg.kBreadthFirst)
-            >>> list(it) == [b, b, c]
-            True
-            >>> it = a["tx"].walkConnections(level=ItDg.kNodeLevel)
-            >>> list(it) == [b, c]
-            True
-            >>> it = a["tx"].walkConnections(plugs=True)
-            >>> next(it).plug() == b["input2X"].plug()
-            True
-            >>> next(it).plug() == c["tx"].plug()
-            True
-            >>> it = a["tx"].walkConnections(plugs=True, connections=True)
-            >>> con, plug = next(it)
-            >>> [con.plug(), plug.plug()] == [b["input2X"].plug(), a["tx"].plug()]
-            True
-
-        """
-
-        it = ItDg(self._mplug, direction=direction, traversal=traversal, level=level)
-        it.next()  # Skip self
-
-        while not it.isDone():
-            node = Node(it.currentNode())
-
-            if filter is not None and not node.isA(filter):
-                it.prune()
-
-            elif type is None or node.isA(type):
-                connection = Plug(node, it.currentPlug()) if plugs else node
-                if connections:
-                    plug = it.previousPlug()
-                    previous = Node(plug.node())
-                    yield connection, Plug(previous, plug) if plugs else previous
-                else:
-                    yield connection
-
-            it.next()
-
-    def downstream(self,
-                   type=None,
-                   filter=None,
-                   traversal=ItDg.kDepthFirst,
-                   level=ItDg.kPlugLevel,
-                   plugs=False,
-                   connections=False):
-        """Walk connections downstream from :func:`walkConnections()`"""
-        return self.walkConnections(type=type,
-                                    filter=filter,
-                                    direction=ItDg.kDownstream,
-                                    traversal=traversal,
-                                    level=level,
-                                    plugs=plugs,
-                                    connections=connections)
-
-    def upstream(self,
-                 type=None,
-                 filter=None,
-                 traversal=ItDg.kDepthFirst,
-                 level=ItDg.kPlugLevel,
-                 plugs=False,
-                 connections=False):
-        """Walk connections upstream from :func:`walkConnections()`"""
-        return self.walkConnections(type=type,
-                                    filter=filter,
-                                    direction=ItDg.kUpstream,
-                                    traversal=traversal,
-                                    level=level,
-                                    plugs=plugs,
-                                    connections=connections)
-
     def source(self, unit=None):
         cls = self.__class__
         plug = self._mplug.source()
@@ -4211,7 +3993,182 @@ class Plug(object):
         is_compound = isCompound
         is_element = isElement
         nice_name = niceName
-        walk_connections = walkConnections
+
+
+class WalkDG(object):
+    """Dependency graph iterator
+
+    Iterate over DG Nodes or Plugs starting at a specified
+    root Node or Plug. Based on MItDependencyGraph, but returns cmdx types.
+
+    Example:
+        >>> a = createNode("transform")
+        >>> b = createNode("multiplyDivide")
+        >>> c = createNode("transform")
+        >>> a["tx"] >> b["input1X"]
+        >>> b["outputX"] >> c["tx"]
+        >>> it = WalkDG.Downstream(a["tx"], type="transform", pruneOnType=False)
+        >>> it.next()
+        >>> it.currentNode() == c
+        True
+        >>> it = WalkDG.Downstream(a["tx"], type="transform")
+        >>> it.next()
+        >>> it.currentNode() is None
+        True
+
+    """
+
+    kUpstream = om.MItDependencyGraph.kUpstream
+    kDownstream = om.MItDependencyGraph.kDownstream
+    kDepthFirst = om.MItDependencyGraph.kDepthFirst
+    kBreadthFirst = om.MItDependencyGraph.kBreadthFirst
+    kNodeLevel = om.MItDependencyGraph.kNodeLevel
+    kPlugLevel = om.MItDependencyGraph.kPlugLevel
+
+    @classmethod
+    def Upstream(cls, node, type=None, pruneOnType=True, traversal=None, level=None):
+        """Convenience method for walking upstream"""
+        return cls(node,
+                   type=type,
+                   pruneOnType=pruneOnType,
+                   direction=cls.kUpstream,
+                   traversal=traversal,
+                   level=level)
+
+    @classmethod
+    def Downstream(cls, node, type=None, pruneOnType=True, traversal=None, level=None):
+        """Convenience method for walking downstream"""
+        return cls(node,
+                   type=type,
+                   pruneOnType=pruneOnType,
+                   direction=cls.kDownstream,
+                   traversal=traversal,
+                   level=level)
+
+    def __init__(self,
+                 node,
+                 type=None,
+                 pruneOnType=True,
+                 direction=None,
+                 traversal=None,
+                 level=None):
+        """Initialise WalkDG
+
+        Arguments:
+            node (Node or Plug): Starting point for the iterator
+            type (MTypeId, str, int, optional): Return only nodes of this type
+            pruneOnType (bool, optional): Prune the iterator on incorrect types
+            direction (int, optional): [description]. Defaults to None.
+            traversal (int, optional): Traversal method, depth or breadth first
+            level (int, optional): Whether to iterate at node level or plug level
+
+        """
+
+        if isinstance(node, Plug):
+            self._rootNode = node.node()
+            self._rootPlug = node
+            mobj = node._mplug
+        else:
+            self._rootNode = node
+            self._rootPlug = None
+            mobj = node._mobject
+
+        self.type = type
+        self._pruneOnType = pruneOnType
+        direction = direction if direction is not None else self.kDownstream
+        traversal = traversal if traversal is not None else self.kDepthFirst
+        if level is None:
+            level = self.kPlugLevel if self._rootPlug is not None else self.kNodeLevel
+
+        self._it = om.MItDependencyGraph(
+            mobj,
+            direction=direction,
+            traversal=traversal,
+            level=level
+        )
+        self._currentNode = None # Cache to reduce calls to Maya API
+        if self._rootPlug is None and level == self.kPlugLevel:
+            self.next()
+
+    def rootNode(self):
+        """Return the root node of the iteration"""
+        return self._rootNode
+
+    def rootPlug(self):
+        """Return the root plug of the iteration"""
+        return self._rootPlug
+
+    def currentNode(self):
+        """Return the current node of the iteration"""
+        if not self.isDone():
+            if not self._currentNode:
+                self._currentNode = Node(self._it.currentNode())
+            return self._currentNode
+
+    def currentPlug(self):
+        """Return the current plug of the iteration"""
+        if not self.isDone():
+            mplug = self._it.currentPlug()
+            if mplug.partialName() != "":
+                return Plug(self.currentNode(), self._it.currentPlug())
+
+    def previousNode(self):
+        """Return the node that the current node is connected to"""
+        if not self.isDone():
+            if self.currentNode() != self.rootNode() and self.depth() > 0:
+                return Node(self._it.previousPlug().node())
+
+    def previousPlug(self):
+        """Return the plug that the current plug is connected to"""
+        if not self.isDone():
+            if self.currentNode() != self.rootNode() and self.depth() > 0:
+                mplug = self._it.previousPlug()
+                return Plug(Node(mplug.node()), mplug)
+
+    def prune(self):
+        """Prune the iterator at the current plug"""
+        self._it.prune()
+
+    def isDone(self):
+        """Indicate whether or not the iterator is finished"""
+        return self._it.isDone()
+
+    def nodePath(self):
+        """Return the direct path from the current node to the root node"""
+        return [Node(x) for x in self._it.getNodePath()]
+
+    def plugPath(self):
+        """Return the direct path from the current plug to the root plug"""
+        return [Plug(Node(x.node()), x) for x in self._it.getPlugPath()]
+
+    def depth(self):
+        """Return the depth of the current iteration"""
+        return len(self._it.getNodePath())
+
+    def next(self):
+        """Iterate to the next node or plug
+
+        If a type is set the iterator will be pruned when it encounters a
+        node that doesn't pass the type.
+        """
+        self._it.next()
+        self._currentNode = None
+        if not self.isDone():
+            if self.type and not self.currentNode().isA(self.type):
+                if self._pruneOnType:
+                    self.prune()
+                self.next()
+
+    if ENABLE_PEP8:
+        root_node = rootNode
+        root_plug = rootPlug
+        current_node = currentNode
+        current_plug = currentPlug
+        previous_node = previousNode
+        previous_plug = previousPlug
+        is_done = isDone
+        node_path = nodePath
+        plug_path = plugPath
 
 
 class TransformationMatrix(om.MTransformationMatrix):
