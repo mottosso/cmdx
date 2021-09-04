@@ -3063,7 +3063,7 @@ class Plug(object):
     def asQuaternion(self, time=None):
         value = self.read(time=time)
         value = Euler(value).asQuaternion()
-        return value
+        return Quaternion(value)
 
     def asVector(self, time=None):
         assert self.isArray or self.isCompound, "'%s' not an array" % self
@@ -3710,9 +3710,14 @@ class Plug(object):
             """
 
             times, values = list(map(UiUnit(), values.keys())), values.values()
-            anim = createNode(_find_curve_type(self))
+            typ = _find_curve_type(self)
+            anim = self.input(type=typ)
+
+            if not anim:
+                anim = createNode(typ)
+                anim["output"] >> self
+
             anim.keys(times, values, interpolation=Linear)
-            anim["output"] >> self
 
     def write(self, value):
         if isinstance(value, dict) and __maya_version__ > 2015:
@@ -3962,7 +3967,8 @@ class TransformationMatrix(om.MTransformationMatrix):
             ")"
         ).format(
             t=self.translation(),
-            r=self.rotation(),
+            r="(%.2f, %.2f, %.2f)" % tuple(
+                degrees(v) for v in self.rotation()),
             s=self.scale(),
             rp=self.rotatePivot(),
             rpt=self.rotatePivotTranslation(),
@@ -4058,6 +4064,11 @@ class TransformationMatrix(om.MTransformationMatrix):
         """This method does not typically support optional arguments"""
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).rotatePivot(space))
+
+    def setRotatePivot(self, pivot, space=sTransform, balance=False):
+        pivot = pivot if isinstance(pivot, om.MPoint) else om.MPoint(pivot)
+        return super(TransformationMatrix, self).setRotatePivot(
+            pivot, space, balance)
 
     def rotatePivotTranslation(self, space=None):
         """This method does not typically support optional arguments"""
@@ -4286,6 +4297,12 @@ class Vector(om.MVector):
     def cross(self, value):
         return Vector(super(Vector, self).__xor__(value))
 
+    def isEquivalent(self, other, tolerance=om.MVector.kTolerance):
+        return super(Vector, self).isEquivalent(other, tolerance)
+
+    if ENABLE_PEP8:
+        is_equivalent = isEquivalent
+
 
 # Alias, it can't take anything other than values
 # and yet it isn't explicit in its name.
@@ -4346,7 +4363,7 @@ class Quaternion(om.MQuaternion):
             return Vector(other.rotateBy(self))
 
         else:
-            return super(Quaternion, self).__mul__(other)
+            return Quaternion(super(Quaternion, self).__mul__(other))
 
     def lengthSquared(self):
         return (
@@ -4362,6 +4379,12 @@ class Quaternion(om.MQuaternion):
     def isNormalised(self, tol=0.0001):
         return abs(self.length() - 1.0) < tol
 
+    def asEulerRotation(self):
+        return Euler(super(Quaternion, self).asEulerRotation())
+
+    def inverse(self):
+        return Quaternion(super(Quaternion, self).inverse())
+
     def asMatrix(self):
         return Matrix4(super(Quaternion, self).asMatrix())
 
@@ -4369,6 +4392,8 @@ class Quaternion(om.MQuaternion):
         as_matrix = asMatrix
         is_normalised = isNormalised
         length_squared = lengthSquared
+        as_euler_rotation = asEulerRotation
+        as_euler = asEulerRotation
 
 
 # Alias
@@ -4406,6 +4431,12 @@ class EulerRotation(om.MEulerRotation):
 
     def asMatrix(self):
         return Matrix4(super(EulerRotation, self).asMatrix())
+
+    def isEquivalent(self, other, tolerance=om.MEulerRotation.kTolerance):
+        return super(EulerRotation, self).isEquivalent(other, tolerance)
+
+    if ENABLE_PEP8:
+        is_equivalent = isEquivalent
 
     strToOrder = {
         'xyz': kXYZ,
@@ -4879,17 +4910,19 @@ def _python_to_mod(value, plug, mod):
     if isinstance(value, dict) and __maya_version__ > 2015:
         times, values = map(UiUnit(), value.keys()), value.values()
         curve_typ = _find_curve_type(plug)
+        anim = plug.input(type=curve_typ)
 
-        if isinstance(mod, DGModifier):
-            anim = mod.createNode(curve_typ)
+        if not anim:
+            if isinstance(mod, DGModifier):
+                anim = mod.createNode(curve_typ)
+            else:
+                # The DagModifier can't create DG nodes
+                with DGModifier() as dgmod:
+                    anim = dgmod.createNode(curve_typ)
 
-        else:
-            # The DagModifier can't create DG nodes
-            with DGModifier() as dgmod:
-                anim = dgmod.createNode(curve_typ)
+            mod.connect(anim["output"]._mplug, plug._mplug)
 
         anim.keys(times, values)
-        mod.connect(anim["output"]._mplug, plug._mplug)
 
         return True
 
@@ -4967,10 +5000,31 @@ def _python_to_mod(value, plug, mod):
 def exists(path, strict=True):
     """Return whether any node at `path` exists
 
+    This will return True for nodes that are *about to* be
+    created via a DG or Dag modifier.
+
     Arguments:
         path (str): Full or partial path to node
         strict (bool, optional): Error if the path isn't a full match,
             including namespace.
+
+    Examples:
+        >>> _new()
+        >>> exists("uniqueName", strict=False)
+        False
+        >>> _ = createNode("transform", name="uniqueName")
+        >>> exists("uniqueName", strict=False)
+        True
+
+        # Note that even to-be-created nodes also register as existing
+        >>> exists("uniqueName2", strict=False)
+        False
+        >>> with DagModifier() as mod:
+        ...    _ = mod.createNode("transform", name="uniqueName2")
+        ...    assert exists("uniqueName2", strict=False)
+        ...
+        >>> exists("uniqueName2", strict=False)
+        True
 
     """
 
@@ -6327,6 +6381,34 @@ def currentTime(time=None):
         return oma.MAnimControl.setCurrentTime(time)
 
 
+def animationStartTime(time=None):
+    if time is None:
+        return oma.MAnimControl.animationStartTime()
+    else:
+        return oma.MAnimControl.setAnimationStartTime(time)
+
+
+def animationEndTime(time=None):
+    if time is None:
+        return oma.MAnimControl.animationEndTime()
+    else:
+        return oma.MAnimControl.setAnimationEndTime(time)
+
+
+def minTime(time=None):
+    if time is None:
+        return oma.MAnimControl.minTime()
+    else:
+        return oma.MAnimControl.setMinTime(time)
+
+
+def maxTime(time=None):
+    if time is None:
+        return oma.MAnimControl.maxTime()
+    else:
+        return oma.MAnimControl.setMaxTime(time)
+
+
 class DGContext(om.MDGContext):
     """Context for evaluating the Maya DG
 
@@ -6752,6 +6834,10 @@ if ENABLE_PEP8:
     connect_attr = connectAttr
     obj_exists = objExists
     current_time = currentTime
+    min_time = minTime
+    max_time = maxTime
+    animation_start_time = animationStartTime
+    animation_end_time = animationEndTime
     up_axis = upAxis
     set_up_axis = setUpAxis
 
@@ -7224,6 +7310,9 @@ class Enum(_AbstractAttribute):
 
 class Divider(Enum):
     """Visual divider in channel box"""
+
+    ChannelBox = True
+    Keyable = False
 
     def __init__(self, label, **kwargs):
         kwargs.pop("name", None)
