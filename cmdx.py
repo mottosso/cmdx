@@ -8,6 +8,7 @@ import time
 import math
 import types
 import logging
+import getpass
 import operator
 import traceback
 import collections
@@ -18,7 +19,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 PY3 = sys.version_info[0] == 3
 
@@ -267,16 +268,16 @@ def add_metaclass(metaclass):
 
     def wrapper(cls):
         orig_vars = cls.__dict__.copy()
-        slots = orig_vars.get('__slots__')
+        slots = orig_vars.get("__slots__")
         if slots is not None:
             if isinstance(slots, str):
                 slots = [slots]
             for slots_var in slots:
                 orig_vars.pop(slots_var)
-        orig_vars.pop('__dict__', None)
-        orig_vars.pop('__weakref__', None)
-        if hasattr(cls, '__qualname__'):
-            orig_vars['__qualname__'] = cls.__qualname__
+        orig_vars.pop("__dict__", None)
+        orig_vars.pop("__weakref__", None)
+        if hasattr(cls, "__qualname__"):
+            orig_vars["__qualname__"] = cls.__qualname__
         return metaclass(cls.__name__, cls.__bases__, orig_vars)
     return wrapper
 
@@ -2653,13 +2654,13 @@ class Plug(object):
             >>> plug[1] << tm["parentMatrix"][0]
             >>> plug[2] << tm["worldMatrix"][0]
 
-            >>> plug[2].connection(plug=True) == tm["worldMatrix"]
+            >>> plug[2].connection(plug=True) == tm["worldMatrix"][0]
             True
 
             # Notice how index 2 remains index 2 even on disconnect
             # The physical index moves to 1.
             >>> plug[1].disconnect()
-            >>> plug[2].connection(plug=True) == tm["worldMatrix"]
+            >>> plug[2].connection(plug=True) == tm["worldMatrix"][0]
             True
 
         """
@@ -2844,7 +2845,7 @@ class Plug(object):
     @property
     def arrayIndices(self):
         if not self._mplug.isArray:
-            raise TypeError('{} is not an array'.format(self.path()))
+            raise TypeError("{} is not an array".format(self.path()))
 
         # Convert from `p_OpenMaya_py2.rItemNot3Strs` to list
         return list(self._mplug.getExistingArrayAttributeIndices())
@@ -3064,7 +3065,7 @@ class Plug(object):
     def asQuaternion(self, time=None):
         value = self.read(time=time)
         value = Euler(value).asQuaternion()
-        return value
+        return Quaternion(value)
 
     def asVector(self, time=None):
         assert self.isArray or self.isCompound, "'%s' not an array" % self
@@ -3711,9 +3712,14 @@ class Plug(object):
             """
 
             times, values = list(map(UiUnit(), values.keys())), values.values()
-            anim = createNode(_find_curve_type(self))
+            typ = _find_curve_type(self)
+            anim = self.input(type=typ)
+
+            if not anim:
+                anim = createNode(typ)
+                anim["output"] >> self
+
             anim.keys(times, values, interpolation=Linear)
-            anim["output"] >> self
 
     def write(self, value):
         if isinstance(value, dict) and __maya_version__ > 2015:
@@ -3805,6 +3811,17 @@ class Plug(object):
             True
             >>> a["ihi"]
             2
+            >>> b["arrayAttr"] = Long(array=True)
+            >>> b["arrayAttr"][0] >> a["ihi"]
+            >>> b["arrayAttr"][1] >> a["visibility"]
+            >>> a["ihi"].connection() == b
+            True
+            >>> a["ihi"].connection(plug=True) == b["arrayAttr"][0]
+            True
+            >>> a["visibility"].connection(plug=True) == b["arrayAttr"][1]
+            True
+            >>> b["arrayAttr"][1].connection(plug=True) == a["visibility"]
+            True
 
         """
 
@@ -3821,7 +3838,27 @@ class Plug(object):
                     # sometimes, we have to convert them before using them.
                     # https://forums.autodesk.com/t5/maya-programming/maya-api-what-is-a-networked-plug-and-do-i-want-it-or-not/td-p/7182472
                     if plug.isNetworked:
-                        plug = node.findPlug(plug.partialName())
+
+                        if plug.isElement:
+                            # Name would be e.g. 'myArrayAttr[0]'
+                            # raise TypeError(plug.partialName() + "\n")
+                            name = plug.partialName()
+
+                            if name.endswith("]"):
+                                name, index = name.rsplit("[", 1)
+                                index = int(index.rstrip("]"))
+
+                            else:
+                                # E.g. worldMatrix[0] -> wm
+                                index = 0
+
+                            plug = node.findPlug(name)
+
+                            # The index returned is *logical*, not physical.
+                            plug = plug.elementByLogicalIndex(index)
+
+                        else:
+                            plug = node.findPlug(plug.partialName())
 
                     yield Plug(node, plug, unit)
                 else:
@@ -3932,7 +3969,8 @@ class TransformationMatrix(om.MTransformationMatrix):
             ")"
         ).format(
             t=self.translation(),
-            r=self.rotation(),
+            r="(%.2f, %.2f, %.2f)" % tuple(
+                degrees(v) for v in self.rotation()),
             s=self.scale(),
             rp=self.rotatePivot(),
             rpt=self.rotatePivotTranslation(),
@@ -4029,6 +4067,11 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).rotatePivot(space))
 
+    def setRotatePivot(self, pivot, space=sTransform, balance=False):
+        pivot = pivot if isinstance(pivot, om.MPoint) else om.MPoint(pivot)
+        return super(TransformationMatrix, self).setRotatePivot(
+            pivot, space, balance)
+
     def rotatePivotTranslation(self, space=None):
         """This method does not typically support optional arguments"""
         space = space or sTransform
@@ -4080,7 +4123,8 @@ class TransformationMatrix(om.MTransformationMatrix):
         return super(TransformationMatrix, self).setScale(seq, space)
 
     def rotation(self, asQuaternion=False):
-        return super(TransformationMatrix, self).rotation(asQuaternion)
+        rotation = super(TransformationMatrix, self).rotation(asQuaternion)
+        return Quaternion(rotation) if asQuaternion else Euler(rotation)
 
     def setRotation(self, rot):
         """Interpret three values as an euler rotation"""
@@ -4255,6 +4299,12 @@ class Vector(om.MVector):
     def cross(self, value):
         return Vector(super(Vector, self).__xor__(value))
 
+    def isEquivalent(self, other, tolerance=om.MVector.kTolerance):
+        return super(Vector, self).isEquivalent(other, tolerance)
+
+    if ENABLE_PEP8:
+        is_equivalent = isEquivalent
+
 
 # Alias, it can't take anything other than values
 # and yet it isn't explicit in its name.
@@ -4315,7 +4365,7 @@ class Quaternion(om.MQuaternion):
             return Vector(other.rotateBy(self))
 
         else:
-            return super(Quaternion, self).__mul__(other)
+            return Quaternion(super(Quaternion, self).__mul__(other))
 
     def lengthSquared(self):
         return (
@@ -4331,6 +4381,12 @@ class Quaternion(om.MQuaternion):
     def isNormalised(self, tol=0.0001):
         return abs(self.length() - 1.0) < tol
 
+    def asEulerRotation(self):
+        return Euler(super(Quaternion, self).asEulerRotation())
+
+    def inverse(self):
+        return Quaternion(super(Quaternion, self).inverse())
+
     def asMatrix(self):
         return Matrix4(super(Quaternion, self).asMatrix())
 
@@ -4338,6 +4394,8 @@ class Quaternion(om.MQuaternion):
         as_matrix = asMatrix
         is_normalised = isNormalised
         length_squared = lengthSquared
+        as_euler_rotation = asEulerRotation
+        as_euler = asEulerRotation
 
 
 # Alias
@@ -4376,13 +4434,28 @@ class EulerRotation(om.MEulerRotation):
     def asMatrix(self):
         return Matrix4(super(EulerRotation, self).asMatrix())
 
-    order = {
+    def isEquivalent(self, other, tolerance=om.MEulerRotation.kTolerance):
+        return super(EulerRotation, self).isEquivalent(other, tolerance)
+
+    if ENABLE_PEP8:
+        is_equivalent = isEquivalent
+
+    strToOrder = {
         'xyz': kXYZ,
         'xzy': kXZY,
         'yxz': kYXZ,
         'yzx': kYZX,
         'zxy': kZXY,
         'zyx': kZYX
+    }
+
+    orderToStr = {
+        kXYZ: 'xyz',
+        kXZY: 'xzy',
+        kYXZ: 'yxz',
+        kYZX: 'yzx',
+        kZXY: 'zxy',
+        kZYX: 'zyx'
     }
 
     if ENABLE_PEP8:
@@ -4839,17 +4912,19 @@ def _python_to_mod(value, plug, mod):
     if isinstance(value, dict) and __maya_version__ > 2015:
         times, values = map(UiUnit(), value.keys()), value.values()
         curve_typ = _find_curve_type(plug)
+        anim = plug.input(type=curve_typ)
 
-        if isinstance(mod, DGModifier):
-            anim = mod.createNode(curve_typ)
+        if not anim:
+            if isinstance(mod, DGModifier):
+                anim = mod.createNode(curve_typ)
+            else:
+                # The DagModifier can't create DG nodes
+                with DGModifier() as dgmod:
+                    anim = dgmod.createNode(curve_typ)
 
-        else:
-            # The DagModifier can't create DG nodes
-            with DGModifier() as dgmod:
-                anim = dgmod.createNode(curve_typ)
+            mod.connect(anim["output"]._mplug, plug._mplug)
 
         anim.keys(times, values)
-        mod.connect(anim["output"]._mplug, plug._mplug)
 
         return True
 
@@ -4924,15 +4999,45 @@ def _python_to_mod(value, plug, mod):
     return True
 
 
-def exists(path):
-    """Return whether any node at `path` exists"""
+def exists(path, strict=True):
+    """Return whether any node at `path` exists
 
-    selectionList = om.MSelectionList()
+    This will return True for nodes that are *about to* be
+    created via a DG or Dag modifier.
+
+    Arguments:
+        path (str): Full or partial path to node
+        strict (bool, optional): Error if the path isn't a full match,
+            including namespace.
+
+    Examples:
+        >>> _new()
+        >>> exists("uniqueName", strict=False)
+        False
+        >>> _ = createNode("transform", name="uniqueName")
+        >>> exists("uniqueName", strict=False)
+        True
+
+        # Note that even to-be-created nodes also register as existing
+        >>> exists("uniqueName2", strict=False)
+        False
+        >>> with DagModifier() as mod:
+        ...    _ = mod.createNode("transform", name="uniqueName2")
+        ...    assert exists("uniqueName2", strict=False)
+        ...
+        >>> exists("uniqueName2", strict=False)
+        True
+
+    """
 
     try:
-        selectionList.add(path)
+        node = encode(path)
     except RuntimeError:
         return False
+
+    if strict:
+        return node.path() == path
+
     return True
 
 
@@ -6278,6 +6383,34 @@ def currentTime(time=None):
         return oma.MAnimControl.setCurrentTime(time)
 
 
+def animationStartTime(time=None):
+    if time is None:
+        return oma.MAnimControl.animationStartTime()
+    else:
+        return oma.MAnimControl.setAnimationStartTime(time)
+
+
+def animationEndTime(time=None):
+    if time is None:
+        return oma.MAnimControl.animationEndTime()
+    else:
+        return oma.MAnimControl.setAnimationEndTime(time)
+
+
+def minTime(time=None):
+    if time is None:
+        return oma.MAnimControl.minTime()
+    else:
+        return oma.MAnimControl.setMinTime(time)
+
+
+def maxTime(time=None):
+    if time is None:
+        return oma.MAnimControl.maxTime()
+    else:
+        return oma.MAnimControl.setMaxTime(time)
+
+
 class DGContext(om.MDGContext):
     """Context for evaluating the Maya DG
 
@@ -6334,7 +6467,8 @@ def ls(*args, **kwargs):
 
 
 def selection(*args, **kwargs):
-    return list(map(encode, cmds.ls(*args, selection=True, **kwargs)))
+    kwargs["selection"] = True
+    return ls(*args, **kwargs)
 
 
 def createNode(type, name=None, parent=None):
@@ -6702,6 +6836,10 @@ if ENABLE_PEP8:
     connect_attr = connectAttr
     obj_exists = objExists
     current_time = currentTime
+    min_time = minTime
+    max_time = maxTime
+    animation_start_time = animationStartTime
+    animation_end_time = animationEndTime
     up_axis = upAxis
     set_up_axis = setUpAxis
 
@@ -7175,6 +7313,9 @@ class Enum(_AbstractAttribute):
 class Divider(Enum):
     """Visual divider in channel box"""
 
+    ChannelBox = True
+    Keyable = False
+
     def __init__(self, label, **kwargs):
         kwargs.pop("name", None)
         kwargs.pop("fields", None)
@@ -7522,8 +7663,14 @@ Distance4Attribute = Distance4
 # --------------------------------------------------------
 
 
-# E.g. ragdoll.vendor.cmdx => ragdoll_vendor_cmdx_plugin.py
-unique_plugin = "cmdx_%s_plugin.py" % __version__.replace(".", "_")
+# E.g. cmdx => cmdx_0_6_0_plugin_username0.py
+unique_plugin = "cmdx_%s_plugin_%s.py" % (
+    __version__.replace(".", "_"),
+
+    # Include username, in case two
+    # users occupy the same machine
+    getpass.getuser()
+)
 
 # Support for multiple co-existing versions of apiundo.
 unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
@@ -7614,18 +7761,50 @@ def install():
 
     """
 
+    import errno
     import shutil
-    import tempfile
 
-    tempdir = tempfile.gettempdir()
+    # E.g. c:\users\marcus\Documents\maya
+    tempdir = os.path.expanduser("~/maya/plug-ins")
+
+    try:
+        os.makedirs(tempdir)
+
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            # This is fine
+            pass
+
+        else:
+            # Can't think of a reason why this would ever
+            # happen but you can never be too careful..
+            log.debug("Could not create %s" % tempdir)
+
+            import tempfile
+            tempdir = tempfile.gettempdir()
+
     tempfname = os.path.join(tempdir, unique_plugin)
 
-    # We can't know whether we're a .pyc or .py file,
-    # but we need to copy the .py file *only*
-    fname = os.path.splitext(__file__)[0] + ".py"
+    if not os.path.exists(tempfname):
+        # We can't know whether we're a .pyc or .py file,
+        # but we need to copy the .py file *only*
+        fname = os.path.splitext(__file__)[0]
 
-    # Copy *and overwrite*
-    shutil.copy(fname, tempfname)
+        try:
+            shutil.copyfile(fname + ".py", tempfname)
+
+        except OSError:
+            # This could never really happen, but you never know.
+            # In which case, use the file as-is. This should work
+            # for a majority of cases and only really conflict when/if
+            # the undo mechanism of cmdx changes, which is exceedingly
+            # rare. The actual functionality of cmdx is independent of
+            # this plug-in and will still pick up the appropriate
+            # vendored module.
+            log.debug("Could not generate unique cmdx.py")
+            log.debug("Undo may still work, but cmdx may conflict\n"
+                      "with other instances of it.")
+            tempfname = __file__
 
     # Now we're guaranteed to not interfere
     # with other versions of cmdx. Win!
