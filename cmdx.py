@@ -2295,14 +2295,26 @@ class AnimCurve(Node):
             else:
                 self._fna.addKey(time, value, interpolation, interpolation)
 
-        def keys(self, times, values, interpolation=Linear):
+        def keys(self, times, values, interpolation=Linear, change=None):
             times = list(map(
                 lambda t: Seconds(t) if isinstance(t, (float, int)) else t,
                 times
             ))
 
             try:
-                self._fna.addKeys(times, values)
+                keepExistingKeys = False  # Default
+                args = [
+                    times,
+                    values,
+                    oma.MFnAnimCurve.kTangentGlobal,
+                    oma.MFnAnimCurve.kTangentGlobal,
+                    keepExistingKeys,
+                ]
+
+                if change is not None:
+                    args += [change]
+
+                self._fna.addKeys(*args)
 
             except RuntimeError:
                 # The error provided by Maya aren't very descriptive,
@@ -4458,6 +4470,15 @@ class EulerRotation(om.MEulerRotation):
         kZYX: 'zyx'
     }
 
+    enumToOrder = [
+        kXYZ,
+        kXZY,
+        kYXZ,
+        kYZX,
+        kZXY,
+        kZYX
+    ]
+
     if ENABLE_PEP8:
         as_quaternion = asQuaternion
         as_matrix = asMatrix
@@ -4912,21 +4933,22 @@ def _python_to_mod(value, plug, mod):
     if isinstance(value, dict) and __maya_version__ > 2015:
         times, values = map(UiUnit(), value.keys()), value.values()
         curve_typ = _find_curve_type(plug)
-        anim = plug.input(type=curve_typ)
+        curve = plug.input(type=curve_typ)
 
-        if not anim:
+        if not curve:
             if isinstance(mod, DGModifier):
-                anim = mod.createNode(curve_typ)
+                curve = mod.createNode(curve_typ)
             else:
                 # The DagModifier can't create DG nodes
                 with DGModifier() as dgmod:
-                    anim = dgmod.createNode(curve_typ)
+                    curve = dgmod.createNode(curve_typ)
 
-            mod.connect(anim["output"]._mplug, plug._mplug)
+            mod.connect(curve["output"]._mplug, plug._mplug)
 
-        anim.keys(times, values)
+        change = oma.MAnimCurveChange()
+        curve.keys(times, values, change=change)
 
-        return True
+        return change
 
     mplug = plug._mplug
 
@@ -5066,6 +5088,14 @@ def encode(path):  # type: (str) -> Node
     # they are also destroyed. But we don't care for
     # removed-but-not-destroyed nodes
     return Node(mobj)
+
+
+def find(path, default=None):
+    """Find node at `path` or return `default`"""
+    try:
+        return encode(path)
+    except ExistError:
+        return default
 
 
 def fromHash(code, default=None):
@@ -5331,7 +5361,19 @@ class _BaseModifier(object):
                 # Make our commit within the current undo chunk,
                 # but *before* we call any maya.cmds as it may
                 # otherwise confuse the chunk
-                commit(self._modifier.undoIt, self._modifier.doIt)
+                def undoit():
+                    for change in self._animChanges:
+                        change.undoIt()
+
+                    self._modifier.undoIt()
+
+                def redoit():
+                    self._modifier.doIt()
+
+                    for change in self._animChanges:
+                        change.redoIt()
+
+                commit(undoit, redoit)
 
             # These all involve calling on cmds,
             # which manages undo on its own.
@@ -5371,6 +5413,7 @@ class _BaseModifier(object):
         self._lockAttrs = []
         self._keyableAttrs = []
         self._niceNames = []
+        self._animChanges = []
 
         # Undo
         self._doneLockAttrs = []
@@ -5762,7 +5805,10 @@ class _BaseModifier(object):
         if isinstance(value, om.MPlug):
             value = Plug(value.node(), value).read()
 
-        _python_to_mod(value, plug, self._modifier)
+        result = _python_to_mod(value, plug, self._modifier)
+
+        if isinstance(result, oma.MAnimCurveChange):
+            self._animChanges += [result]
 
         if SAFE_MODE:
             self._modifier.doIt()
