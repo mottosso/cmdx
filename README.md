@@ -32,7 +32,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 ##### Status
 
-[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://github.com/mottosso/cmdx/) [![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
+[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://pypi.org/project/cmdx/) [![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
 
 | Maya    | Status
 |:----------|:----
