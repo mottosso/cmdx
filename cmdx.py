@@ -3614,6 +3614,10 @@ class Plug(object):
                 '|persp.translateX'
                 >>> persp["translateX"].path(full=True)
                 '|persp.translate.translateX'
+                >>> persp["worldMatrix"].path()
+                '|persp.worldMatrix'
+                >>> persp["worldMatrix"][0].path()
+                '|persp.worldMatrix[0]'
 
             """
 
@@ -3621,7 +3625,8 @@ class Plug(object):
             self._node.path(), self._mplug.partialName(
                 includeNodeName=False,
                 useLongNames=True,
-                useFullAttributePath=full
+                useFullAttributePath=full,
+                includeInstancedIndices=True,
             )
         )
 
@@ -3640,6 +3645,10 @@ class Plug(object):
             'translate.translateX'
             >>> persp["tx"].name(long=False, full=True)
             't.tx'
+            >>> persp["worldMatrix"].name()
+            'worldMatrix'
+            >>> persp["worldMatrix"][0].name()
+            'worldMatrix[0]'
 
         """
 
@@ -3647,7 +3656,8 @@ class Plug(object):
             self._mplug.partialName(
                 includeNodeName=False,
                 useLongNames=long,
-                useFullAttributePath=full
+                useFullAttributePath=full,
+                includeInstancedIndices=True,
             )
         )
 
