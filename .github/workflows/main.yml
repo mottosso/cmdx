@@ -50,7 +50,7 @@ jobs:
             nose-exclude==0.5.0 \
             coverage==5.5 \
             flaky==3.7.0 \
-            docutils<0.18 \
+            docutils==17.1 \
             sphinx==1.8.5 \
             sphinxcontrib-napoleon==0.7
 
