@@ -18,7 +18,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.3"
+__version__ = "0.6.2"
 
 IS_VENDORED = "." in __name__
 
