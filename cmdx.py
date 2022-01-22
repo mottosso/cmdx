@@ -4,11 +4,10 @@ import re
 import os
 import sys
 import json
-import time
+import time as time_
 import math
 import types
 import logging
-import getpass
 import operator
 import traceback
 import collections
@@ -19,7 +18,9 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
+
+IS_VENDORED = "." in __name__
 
 PY3 = sys.version_info[0] == 3
 
@@ -124,7 +125,7 @@ GlobalDependencyNode = om.MFnDependencyNode()
 First = 0
 Last = -1
 
-# Animation curve interpolation, from MFnAnimCurve::TangentType
+# Animation curve tangents, from MFnAnimCurve::TangentType
 Stepped = 5
 Linear = 2
 Smooth = 4
@@ -169,12 +170,12 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         @wraps(func)
         def func_wrapper(*args, **kwargs):
-            t0 = time.clock()
+            t0 = time_.clock()
 
             try:
                 return func(*args, **kwargs)
             finally:
-                t1 = time.clock()
+                t1 = time_.clock()
                 duration = (t1 - t0) * 10 ** 6  # microseconds
 
                 Stats.LastTiming = duration
@@ -839,6 +840,7 @@ class Node(object):
             True
 
         """
+
         if isinstance(type, om.MTypeId):
             return type == self._fn.typeId
         elif isinstance(type, string_types):
@@ -847,7 +849,9 @@ class Node(object):
             return any(self.isA(t) for t in type)
         elif isinstance(type, int):
             return self._mobject.hasFn(type)
+
         cmds.warning("Unsupported argument passed to isA('%s')" % type)
+
         return False
 
     def lock(self, value=True):
@@ -1271,6 +1275,7 @@ class Node(object):
                                                plugs=plugs,
                                                source=source,
                                                destination=destination):
+
                 if connections:
                     yield connection, plug if plugs else self
                 else:
@@ -2284,7 +2289,7 @@ class AnimCurve(Node):
             super(AnimCurve, self).__init__(mobj, exists)
             self._fna = oma.MFnAnimCurve(mobj)
 
-        def key(self, time, value, interpolation=Linear):
+        def key(self, time, value, tangents=Linear):
             if isinstance(time, (float, int)):
                 time = Seconds(time)
 
@@ -2293,21 +2298,24 @@ class AnimCurve(Node):
             if index:
                 self._fna.setValue(index, value)
             else:
-                self._fna.addKey(time, value, interpolation, interpolation)
+                self._fna.addKey(time, value, tangents, tangents)
 
-        def keys(self, times, values, interpolation=Linear, change=None):
+        def keys(self, times, values, tangents=None, change=None):
             times = list(map(
                 lambda t: Seconds(t) if isinstance(t, (float, int)) else t,
                 times
             ))
+
+            if tangents is None:
+                tangents = oma.MFnAnimCurve.kTangentGlobal
 
             try:
                 keepExistingKeys = False  # Default
                 args = [
                     times,
                     values,
-                    oma.MFnAnimCurve.kTangentGlobal,
-                    oma.MFnAnimCurve.kTangentGlobal,
+                    tangents,
+                    tangents,
                     keepExistingKeys,
                 ]
 
@@ -2926,7 +2934,7 @@ class Plug(object):
         return 0
 
     def pull(self):
-        """Pull on a plug, without seriasing any value. For performance"""
+        """Pull on a plug, without serialising any value. For performance."""
         self._mplug.asMObject()
 
     def append(self, value, autofill=False):
@@ -3714,7 +3722,7 @@ class Plug(object):
             raise
 
     if __maya_version__ > 2015:
-        def animate(self, values, interpolation=None):
+        def animate(self, values, tangents=None):
             """Treat values as time:value pairs and animate this attribute
 
             Example:
@@ -3741,7 +3749,7 @@ class Plug(object):
                 anim = createNode(typ)
                 anim["output"] >> self
 
-            anim.keys(times, values, interpolation=Linear)
+            anim.keys(times, values, tangents=Linear)
 
     def write(self, value):
         if isinstance(value, dict) and __maya_version__ > 2015:
@@ -3847,6 +3855,26 @@ class Plug(object):
 
         """
 
+        def _name(plug):
+            return plug.partialName(
+                False,  # includeNodeName
+                False,  # includeNonMandatoryIndices
+                False,  # includeInstancedIndices
+                False,  # useAlias
+                False,  # useFullAttributePath
+                True    # useLongNames
+            ).split("[", 1)[0]
+
+        # Support search of exact plug names
+        plug_names = []
+        if isinstance(plugs, (list, tuple)):
+            plug_names = plugs
+
+            # Convert `plugName[2]` to `plugName`
+            plug_names = [name.split("[", 1)[0] for name in plug_names]
+
+            plugs = True
+
         for plug in self._mplug.connectedTo(source, destination):
             mobject = plug.node()
             node = Node(mobject)
@@ -3882,6 +3910,9 @@ class Plug(object):
                         else:
                             plug = node.findPlug(plug.partialName())
 
+                    if plug_names and _name(plug) not in plug_names:
+                        continue
+
                     yield Plug(node, plug, unit)
                 else:
                     yield node
@@ -3893,6 +3924,10 @@ class Plug(object):
                    plug=False,
                    unit=None):
         """Return first connection from :func:`connections()`"""
+
+        if isinstance(plug, string_types):
+            plug = (plug,)
+
         return next(self.connections(type=type,
                                      source=source,
                                      destination=destination,
@@ -3904,11 +3939,11 @@ class Plug(object):
               plug=False,
               unit=None):
         """Return input connection from :func:`connections()`"""
-        return next(self.connections(type=type,
-                                     source=True,
-                                     destination=False,
-                                     plugs=plug,
-                                     unit=unit), None)
+        return self.connection(type=type,
+                               source=True,
+                               destination=False,
+                               plug=plug,
+                               unit=unit)
 
     def outputs(self,
                 type=None,
@@ -3926,11 +3961,11 @@ class Plug(object):
                plug=False,
                unit=None):
         """Return first output connection from :func:`connections()`"""
-        return next(self.connections(type=type,
-                                     source=False,
-                                     destination=True,
-                                     plugs=plug,
-                                     unit=unit), None)
+        return self.connection(type=type,
+                               source=False,
+                               destination=True,
+                               plug=plug,
+                               unit=unit)
 
     def source(self, unit=None):
         cls = self.__class__
@@ -4089,29 +4124,41 @@ class TransformationMatrix(om.MTransformationMatrix):
         space = space or sTransform
         return Vector(super(TransformationMatrix, self).rotatePivot(space))
 
+    def rotatePivotTranslation(self, space=sTransform):
+        """This method does not typically support optional arguments"""
+        return Vector(
+            super(TransformationMatrix, self).rotatePivotTranslation(space)
+        )
+
+    def scalePivot(self, space=sTransform):
+        """This method does not typically support optional arguments"""
+        return Vector(super(TransformationMatrix, self).scalePivot(space))
+
+    def scalePivotTranslation(self, space=sTransform):
+        """This method does not typically support optional arguments"""
+        return Vector(
+            super(TransformationMatrix, self).scalePivotTranslation(space)
+        )
+
     def setRotatePivot(self, pivot, space=sTransform, balance=False):
         pivot = pivot if isinstance(pivot, om.MPoint) else om.MPoint(pivot)
         return super(TransformationMatrix, self).setRotatePivot(
             pivot, space, balance)
 
-    def rotatePivotTranslation(self, space=None):
-        """This method does not typically support optional arguments"""
-        space = space or sTransform
-        return Vector(
-            super(TransformationMatrix, self).rotatePivotTranslation(space)
-        )
+    def setRotatePivotTranslation(self, pivot, space=sTransform):
+        pivot = pivot if isinstance(pivot, om.MVector) else om.MVector(pivot)
+        return super(TransformationMatrix, self).setRotatePivotTranslation(
+            pivot, space)
 
-    def scalePivot(self, space=None):
-        """This method does not typically support optional arguments"""
-        space = space or sTransform
-        return Vector(super(TransformationMatrix, self).scalePivot(space))
+    def setScalePivot(self, pivot, space=sTransform, balance=False):
+        pivot = pivot if isinstance(pivot, om.MPoint) else om.MPoint(pivot)
+        return super(TransformationMatrix, self).setScalePivot(
+            pivot, space, balance)
 
-    def scalePivotTranslation(self, space=None):
-        """This method does not typically support optional arguments"""
-        space = space or sTransform
-        return Vector(
-            super(TransformationMatrix, self).scalePivotTranslation(space)
-        )
+    def setScalePivotTranslation(self, pivot, space=sTransform):
+        pivot = pivot if isinstance(pivot, om.MVector) else om.MVector(pivot)
+        return super(TransformationMatrix, self).setScalePivotTranslation(
+            pivot, space)
 
     def translation(self, space=None):  # type: (om.MSpace) -> om.MVector
         """This method does not typically support optional arguments"""
@@ -4940,6 +4987,8 @@ def _python_to_mod(value, plug, mod):
 
     """
 
+    assert isinstance(plug, Plug), "plug must be of type cmdx.Plug"
+
     if isinstance(value, dict) and __maya_version__ > 2015:
         times, values = map(UiUnit(), value.keys()), value.values()
         curve_typ = _find_curve_type(plug)
@@ -4955,8 +5004,16 @@ def _python_to_mod(value, plug, mod):
 
             mod.connect(curve["output"]._mplug, plug._mplug)
 
+        tangents = None
+
+        # Unit can also be Time and other unrelated types
+        if plug._unit in (Stepped, Linear, Smooth):
+            tangents = plug._unit
+
         change = oma.MAnimCurveChange()
-        curve.keys(times, values, change=change)
+        curve.keys(times, values,
+                   tangents=tangents,
+                   change=change)
 
         return change
 
@@ -5189,6 +5246,16 @@ sin = math.sin
 cos = math.cos
 tan = math.tan
 pi = math.pi
+
+
+def time(frame):
+    assert isinstance(frame, int), "%s was not an int" % frame
+    return om.MTime(frame, TimeUiUnit())
+
+
+def frame(time):
+    assert isinstance(time, om.MTime), "%s was not an om.MTime" % time
+    return int(time.value)
 
 
 def meters(cm):
@@ -5670,10 +5737,17 @@ class _BaseModifier(object):
 
         """
 
+        mobj = node
+        if isinstance(node, Node):
+            mobj = node._mobject
+
+        assert isinstance(mobj, om.MObject), (
+            "%s was not an MObject" % node
+        )
+
         # This is one picky s-o-b, let's not give it the
         # satisfaction of ever erroring out on us. Performance
         # is of less importance here, as deletion is not time-cricital
-        mobj = node._mobject
         if not _isalive(mobj):
             raise ExistError
 
@@ -5685,10 +5759,13 @@ class _BaseModifier(object):
 
     @record_history
     def renameNode(self, node, name):
-        if SAFE_MODE:
-            assert _isalive(node._mobject)
+        if isinstance(node, Node):
+            node = node._mobject
 
-        return self._modifier.renameNode(node._mobject, name)
+        if SAFE_MODE:
+            assert _isalive(node)
+
+        return self._modifier.renameNode(node, name)
 
     @record_history
     def addAttr(self, node, attr):
@@ -6268,6 +6345,7 @@ class _BaseModifier(object):
     rename = renameNode
 
     if ENABLE_PEP8:
+        commit = doIt
         do_it = doIt
         undo_it = undoIt
         create_node = createNode
@@ -6280,6 +6358,7 @@ class _BaseModifier(object):
         smart_set_attr = smartSetAttr
         delete_attr = deleteAttr
         reset_attr = resetAttr
+        lock_attr = setLocked
         try_connect = tryConnect
         connect_attr = connectAttr
         connect_attrs = connectAttrs
@@ -6434,15 +6513,37 @@ def connect(a, b):
 def currentTime(time=None):
     """Set or return current time in MTime format"""
     if time is None:
-        return oma.MAnimControl.currentTime()
+        return HashableTime(oma.MAnimControl.currentTime())
     else:
+        if not isinstance(time, om.MTime):
+            time = om.MTime(time, TimeUiUnit())
+
         return oma.MAnimControl.setCurrentTime(time)
+
+
+def selectedTime():
+    """Return currently selected time range in MTime format"""
+    from maya import mel
+
+    try:
+        control = mel.eval('$tmpVar=$gPlayBackSlider')
+        time_range = cmds.timeControl(control, q=True, rangeArray=True)
+        time_range = list(om.MTime(t, TimeUiUnit()) for t in time_range)
+
+    except RuntimeError:
+        # Only relevant in interactive mode
+        return (minTime(), minTime() + 1)
+
+    return time_range
 
 
 def animationStartTime(time=None):
     if time is None:
         return oma.MAnimControl.animationStartTime()
     else:
+        if not isinstance(time, om.MTime):
+            time = om.MTime(time, TimeUiUnit())
+
         return oma.MAnimControl.setAnimationStartTime(time)
 
 
@@ -6450,6 +6551,9 @@ def animationEndTime(time=None):
     if time is None:
         return oma.MAnimControl.animationEndTime()
     else:
+        if not isinstance(time, om.MTime):
+            time = om.MTime(time, TimeUiUnit())
+
         return oma.MAnimControl.setAnimationEndTime(time)
 
 
@@ -6457,6 +6561,9 @@ def minTime(time=None):
     if time is None:
         return oma.MAnimControl.minTime()
     else:
+        if not isinstance(time, om.MTime):
+            time = om.MTime(time, TimeUiUnit())
+
         return oma.MAnimControl.setMinTime(time)
 
 
@@ -6464,6 +6571,9 @@ def maxTime(time=None):
     if time is None:
         return oma.MAnimControl.maxTime()
     else:
+        if not isinstance(time, om.MTime):
+            time = om.MTime(time, TimeUiUnit())
+
         return oma.MAnimControl.setMaxTime(time)
 
 
@@ -6896,6 +7006,7 @@ if ENABLE_PEP8:
     max_time = maxTime
     animation_start_time = animationStartTime
     animation_end_time = animationEndTime
+    selected_time = selectedTime
     up_axis = upAxis
     set_up_axis = setUpAxis
 
@@ -6945,7 +7056,7 @@ def editCurve(parent, points, degree=1, form=kOpen):
     return encode(shapeFn.fullPathName())
 
 
-def curve(parent, points, degree=1, form=kOpen):
+def curve(parent, points, degree=1, form=kOpen, mod=None):
     """Create a NURBS curve from a series of points
 
     Arguments:
@@ -6953,6 +7064,7 @@ def curve(parent, points, degree=1, form=kOpen):
         points (list): One tuples per point, with 3 floats each
         degree (int, optional): Degree of curve, 1 is linear
         form (int, optional): Whether to close the curve or not
+        mod (DagModifier, optional): Use this for undo/redo
 
     Example:
         >>> parent = createNode("transform")
@@ -6969,47 +7081,40 @@ def curve(parent, points, degree=1, form=kOpen):
         "parent must be of type cmdx.DagNode"
     )
 
-    # Superimpose end knots
-    # startpoints = [points[0]] * (degree - 1)
-    # endpoints = [points[-1]] * (degree - 1)
-    # points = startpoints + list(points) + endpoints
-
     degree = min(3, max(1, degree))
-
-    cvs = om1.MPointArray()
-    knots = om1.MDoubleArray()
-    curveFn = om1.MFnNurbsCurve()
 
     knotcount = len(points) - degree + 2 * degree - 1
 
-    for point in points:
-        cvs.append(om1.MPoint(*point))
+    cvs = [p for p in points]
+    knots = [i for i in range(knotcount)]
 
-    for index in range(knotcount):
-        knots.append(index)
-
+    curveFn = om.MFnNurbsCurve()
     mobj = curveFn.create(cvs,
                           knots,
                           degree,
                           form,
                           False,
                           True,
-                          _encode1(parent.path()))
+                          parent.object())
 
-    mod = om1.MDagModifier()
-    mod.renameNode(mobj, parent.name(namespace=True) + "Shape")
-    mod.doIt()
+    if mod:
+        mod.rename(mobj, parent.name(namespace=True) + "Shape")
 
-    def undo():
-        mod.deleteNode(mobj)
+    else:
+        mod = DagModifier()
+        mod.rename(mobj, parent.name(namespace=True) + "Shape")
         mod.doIt()
 
-    def redo():
-        mod.undoIt()
+        def undo():
+            mod.deleteNode(mobj)
+            mod.doIt()
 
-    commit(undo, redo)
+        def redo():
+            mod.undoIt()
 
-    shapeFn = om1.MFnDagNode(mobj)
+        commit(undo, redo)
+
+    shapeFn = om.MFnDagNode(mobj)
     return encode(shapeFn.fullPathName())
 
 
@@ -7018,12 +7123,12 @@ def lookAt(origin, center, up=None):
 
     See glm::glc::matrix_transform::lookAt for reference
 
-             + Z (up)
-            /
-           /
+                + Z (up)
+               /
+              /
     (origin) o------ + X (center)
-           \
-            + Y
+              \
+               + Y
 
     Arguments:
         origin (Vector): Starting position
@@ -7053,15 +7158,15 @@ def lookAt(origin, center, up=None):
 
     up = up or Vector(0, 1, 0)
 
-    x = (center - origin).normalize()
-    y = ((center - origin) ^ (center - up)).normalize()
+    x = (center - origin).normal()
+    y = ((center - origin) ^ (center - up)).normal()
     z = x ^ y
 
     return MatrixType((
         x[0], x[1], x[2], 0,
         y[0], y[1], y[2], 0,
         z[0], z[1], z[2], 0,
-        0, 0, 0, 0
+        0, 0, 0, 1
     ))
 
 
@@ -7719,15 +7824,6 @@ Distance4Attribute = Distance4
 # --------------------------------------------------------
 
 
-# E.g. cmdx => cmdx_0_6_0_plugin_username0.py
-unique_plugin = "cmdx_%s_plugin_%s.py" % (
-    __version__.replace(".", "_"),
-
-    # Include username, in case two
-    # users occupy the same machine
-    getpass.getuser()
-)
-
 # Support for multiple co-existing versions of apiundo.
 unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
 
@@ -7788,13 +7884,8 @@ def install():
     Inception time! :)
 
     In order to facilitate undo, we need a custom command registered
-    with Maya's native plug-in system. To do that, we need a dedicated
-    file. We *could* register ourselves as that file, but what we need
-    is a unique instance of said command per distribution of cmdx.
-
-    Per distribution? Yes, because cmdx.py can be vendored with any
-    library, and we don't want cmdx.py from one vendor to interfere
-    with one from another.
+    with Maya's native plug-in system. To do that, we will register
+    ourselves as a Maya command plug-in.
 
     Maya uses (pollutes) global memory in two ways that
     matter to us here.
@@ -7815,56 +7906,21 @@ def install():
     *is* no __name__. Instead, we'll rely on each version being unique
     and consistent.
 
+    Vendoring
+    ---------
+    If you vendored cmdx, you'll need to take into account that Maya
+    plug-ins are registered by *name*. And there can only ever be a
+    single plug-in with a given name.
+
+    So rename your `cmdx.py` to something like `cmdx_mytool.py` and from
+    your `vendor` package use e.g. `from . import cmdx_mytool as cmdx`
+
+    This will enable you to `from vendor import cmdx` whilst at the same
+    time allowing Maya to use the unique name for plug-in purposes. Win-win.
+
     """
 
-    import errno
-    import shutil
-
-    # E.g. c:\users\marcus\Documents\maya
-    tempdir = os.path.expanduser("~/maya/plug-ins")
-
-    try:
-        os.makedirs(tempdir)
-
-    except OSError as e:
-        if e.errno == errno.EEXIST:
-            # This is fine
-            pass
-
-        else:
-            # Can't think of a reason why this would ever
-            # happen but you can never be too careful..
-            log.debug("Could not create %s" % tempdir)
-
-            import tempfile
-            tempdir = tempfile.gettempdir()
-
-    tempfname = os.path.join(tempdir, unique_plugin)
-
-    if not os.path.exists(tempfname):
-        # We can't know whether we're a .pyc or .py file,
-        # but we need to copy the .py file *only*
-        fname = os.path.splitext(__file__)[0]
-
-        try:
-            shutil.copyfile(fname + ".py", tempfname)
-
-        except OSError:
-            # This could never really happen, but you never know.
-            # In which case, use the file as-is. This should work
-            # for a majority of cases and only really conflict when/if
-            # the undo mechanism of cmdx changes, which is exceedingly
-            # rare. The actual functionality of cmdx is independent of
-            # this plug-in and will still pick up the appropriate
-            # vendored module.
-            log.debug("Could not generate unique cmdx.py")
-            log.debug("Undo may still work, but cmdx may conflict\n"
-                      "with other instances of it.")
-            tempfname = __file__
-
-    # Now we're guaranteed to not interfere
-    # with other versions of cmdx. Win!
-    cmds.loadPlugin(tempfname, quiet=True)
+    cmds.loadPlugin(__file__, quiet=True)
 
     self.installed = True
 
@@ -7876,7 +7932,7 @@ def uninstall():
         # therefore cannot be unloaded until flushed.
         clear()
 
-        cmds.unloadPlugin(unique_plugin)
+        cmds.unloadPlugin(__file__)
 
     self.installed = False
 

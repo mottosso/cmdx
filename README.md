@@ -32,7 +32,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 ##### Status
 
-[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://github.com/mottosso/cmdx/) [![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
+[![](https://img.shields.io/pypi/v/cmdx?color=steelblue&label=PyPI)](https://pypi.org/project/cmdx/) [![](https://img.shields.io/pypi/pyversions/cmdx?color=steelblue)](https://pypi.org/project/cmdx)
 
 | Maya    | Status
 |:----------|:----
@@ -63,6 +63,37 @@ $ pip install cmdx
 ```
 
 - Pro tip: **Never use the latest commit for production**. Instead, use [the latest release](https://github.com/mottosso/cmdx/releases). That way, when you read bug reports or make one for yourself you will be able to match a version with the problem without which you will not know which fixes apply to you nor would we be able to help you. Installing via pip or conda as above ensures you are provided the latest *stable* release. Unstable releases are suffixed with a `.b`, e.g. `0.5.0.b1`.
+
+<br>
+
+### Vendoring
+
+> Note: Advanced topic, you can skip this
+
+Unlike PyMEL and cmds, `cmdx` is designed to be distributed alongside your tool. That means multiple copies of `cmdx` can coincide within the same Maya/Python session. But because the way [Undo/Redo](#undo) is handled, the `cmdx.py` module is also loaded as a Maya command plug-in.
+
+You can either ignore this, things to look out for is errors during undo coming from another tool or global module directory, even though the command came from your tool. Alternatively, you can follow this recommendation.
+
+```bash
+mytool/
+    vendor/
+        __init__.py
+        cmdx_mytool.py
+```
+
+From here, you can either `from .vendor import cmdx_mytool as cmdx` or you can put the following into the `__init__.py` of the `vendor/` package.
+
+```py
+from . import cmdx_mytool as cmdx
+```
+
+This would then allow your users to call..
+
+```py
+from mytool.vendor import cmdx
+```
+
+..as though the module was called just `cmdx.py`.
 
 <br>
 
@@ -1091,6 +1122,20 @@ In addition to its default methods, it can also do multiplication with a vector.
 q = Quaternion(0, 0, 0, 1)
 v = Vector(1, 2, 3)
 assert isinstance(q * v, Vector)
+```
+
+##### Conversions
+
+Python's `math` library provides a few convenience functions for converting `math.degrees` to `math.radians`. `cmdx` extends this with `cmdx.time` and `cmdx.frame`.
+
+```py
+radians = cmdx.radians(5)
+degrees = cmdx.degrees(radians)
+assert degrees = 5
+
+time = cmdx.time(frame=10)
+frame = cmdx.frame(time=time)
+assert frame == 10
 ```
 
 ##### Available types
