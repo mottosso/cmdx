@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>cmdx &#8212; cmdx 0.6.0 documentation</title>
+    <title>cmdx &#8212; cmdx 0.6.2 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="stylesheet" type="text/css" href="_static/css/cmdx.css" />
@@ -707,6 +707,34 @@ similar to the UUID of Maya 2016</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="cmdx.Node.index">
+<code class="descname">index</code><span class="sig-paren">(</span><em>plug</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.index" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="docutils">
+<dt>Find index of <cite>attr</cite> in its owning node</dt>
+<dd></dd>
+</dl>
+<div class="line-block">
+<div class="line-block">
+<div class="line"><a href="#id1"><span class="problematic" id="id2">|</span></a></div>
+</div>
+<div class="line">Friction o -&gt; 126</div>
+<div class="line-block">
+<div class="line-block">
+<div class="line">Mass o -&gt; 127</div>
+</div>
+<div class="line">Color R o -&gt; 128</div>
+<div class="line">Color G o -&gt; 129</div>
+<div class="line">Color B o -&gt; 130</div>
+<div class="line-block">
+<div class="line"><a href="#id3"><span class="problematic" id="id4">|</span></a></div>
+</div>
+</div>
+</div>
+<p><a href="#id5"><span class="problematic" id="id6">|_____________|</span></a></p>
+<p># TODO: This is really slow</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="cmdx.Node.input">
 <code class="descname">input</code><span class="sig-paren">(</span><em>type=None</em>, <em>unit=None</em>, <em>plug=None</em>, <em>connection=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Node.input" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return first input connection from <a class="reference internal" href="#cmdx.Node.connections" title="cmdx.Node.connections"><code class="xref py py-func docutils literal notranslate"><span class="pre">connections()</span></code></a></p>
@@ -745,6 +773,8 @@ similar to the UUID of Maya 2016</p>
 <span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">(</span><span class="n">kShape</span><span class="p">)</span>
 <span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">((</span><span class="n">kShape</span><span class="p">,</span> <span class="n">kTransform</span><span class="p">))</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -786,6 +816,8 @@ similar to the UUID of Maya 2016</p>
 <span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">(</span><span class="n">kShape</span><span class="p">)</span>
 <span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">node</span><span class="o">.</span><span class="n">isA</span><span class="p">((</span><span class="n">kShape</span><span class="p">,</span> <span class="n">kTransform</span><span class="p">))</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1375,7 +1407,7 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 
 <dl class="method">
 <dt id="cmdx.DagNode.lineage">
-<code class="descname">lineage</code><span class="sig-paren">(</span><em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.lineage" title="Permalink to this definition">¶</a></dt>
+<code class="descname">lineage</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.lineage" title="Permalink to this definition">¶</a></dt>
 <dd><p>Yield parents all the way up a hierarchy</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1456,7 +1488,7 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 
 <dl class="method">
 <dt id="cmdx.DagNode.parent">
-<code class="descname">parent</code><span class="sig-paren">(</span><em>type=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.parent" title="Permalink to this definition">¶</a></dt>
+<code class="descname">parent</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.parent" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return parent of node</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
@@ -1474,6 +1506,41 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="ow">not</span> <span class="n">child</span><span class="o">.</span><span class="n">parent</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s2">&quot;camera&quot;</span><span class="p">)</span>
 <span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">parent</span><span class="p">(</span><span class="nb">filter</span><span class="o">=</span><span class="n">om</span><span class="o">.</span><span class="n">MFn</span><span class="o">.</span><span class="n">kTransform</span><span class="p">)</span> <span class="o">==</span> <span class="n">parent</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">child</span><span class="o">.</span><span class="n">parent</span><span class="p">(</span><span class="nb">filter</span><span class="o">=</span><span class="n">om</span><span class="o">.</span><span class="n">MFn</span><span class="o">.</span><span class="n">kJoint</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">If any, else None</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">parent (<a class="reference internal" href="#cmdx.Node" title="cmdx.Node">Node</a>)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.DagNode.parenthood">
+<code class="descname">parenthood</code><span class="sig-paren">(</span><em>type=None</em>, <em>filter=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.parenthood" title="Permalink to this definition">¶</a></dt>
+<dd><p>Yield parents all the way up a hierarchy</p>
+<p class="rubric">Example</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;a&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;c&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;d&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lineage</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">lineage</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">lineage</span><span class="p">)</span> <span class="o">==</span> <span class="n">c</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">lineage</span><span class="p">)</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">next</span><span class="p">(</span><span class="n">lineage</span><span class="p">)</span> <span class="o">==</span> <span class="n">a</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1615,6 +1682,11 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="cmdx.DagNode.transformation">
+<code class="descname">transformation</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.transformation" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="cmdx.DagNode.translation">
 <code class="descname">translation</code><span class="sig-paren">(</span><em>space=2</em>, <em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.DagNode.translation" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convenience method for transform(space).translation()</p>
@@ -1637,7 +1709,7 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 <em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Plug</code><span class="sig-paren">(</span><em>node</em>, <em>mplug</em>, <em>unit=None</em>, <em>key=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="method">
 <dt id="cmdx.Plug.animate">
-<code class="descname">animate</code><span class="sig-paren">(</span><em>values</em>, <em>interpolation=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.animate" title="Permalink to this definition">¶</a></dt>
+<code class="descname">animate</code><span class="sig-paren">(</span><em>values</em>, <em>tangents=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.animate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Treat values as time:value pairs and animate this attribute</p>
 <p class="rubric">Example</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">cmds</span><span class="o">.</span><span class="n">file</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1652,6 +1724,22 @@ to the <cite>.inMesh</cite> of the resulting clone.</p>
 &gt;&gt;&gt; node[“ry”].animate({1: 0.0, 5: 1.0, 10: 0.0})</p>
 <p># Interpolation
 &gt;&gt;&gt; node[“rz”].animate({1: 0.0, 5: 1.0, 10: 0.0}, Smooth)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.animated">
+<code class="descname">animated</code><span class="sig-paren">(</span><em>recursive=True</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.animated" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return whether this attribute is connected to an animCurve</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>recursive</strong> (<em>bool</em><em>, </em><em>optional</em>) – Should I travel to connected
+attributes in search of an animCurve, or only look to
+the immediate connection?</td>
+</tr>
+</tbody>
+</table>
 </dd></dl>
 
 <dl class="method">
@@ -1758,8 +1846,18 @@ reuse potentially disconnected plugs and optimise space.</li>
 </dd></dl>
 
 <dl class="method">
+<dt id="cmdx.Plug.asPoint">
+<code class="descname">asPoint</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asPoint" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="cmdx.Plug.asQuaternion">
 <code class="descname">asQuaternion</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asQuaternion" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.asTime">
+<code class="descname">asTime</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.asTime" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="method">
@@ -1863,8 +1961,18 @@ reuse potentially disconnected plugs and optimise space.</li>
 </dd></dl>
 
 <dl class="method">
+<dt id="cmdx.Plug.as_point">
+<code class="descname">as_point</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_point" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="cmdx.Plug.as_quaternion">
 <code class="descname">as_quaternion</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_quaternion" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.as_time">
+<code class="descname">as_time</code><span class="sig-paren">(</span><em>time=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.as_time" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="method">
@@ -1922,6 +2030,39 @@ reuse potentially disconnected plugs and optimise space.</li>
 <dt id="cmdx.Plug.channel_box">
 <code class="descname">channel_box</code><a class="headerlink" href="#cmdx.Plug.channel_box" title="Permalink to this definition">¶</a></dt>
 <dd><p>Is the attribute visible in the Channel Box?</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.clone">
+<code class="descname">clone</code><span class="sig-paren">(</span><em>name</em>, <em>shortName=None</em>, <em>niceName=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return <cite>AbstractAttribute</cite> of this exact plug</p>
+<p>This can be used to replicate one plug on another node,
+including default values, min/max values, hidden and keyable
+states etc.</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">parent</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cam</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;camera&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">original</span> <span class="o">=</span> <span class="n">cam</span><span class="p">[</span><span class="s2">&quot;focalLength&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">clone</span> <span class="o">=</span> <span class="n">original</span><span class="o">.</span><span class="n">clone</span><span class="p">(</span><span class="s2">&quot;focalClone&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># Original setup is preserved
+&gt;&gt;&gt; clone[“min”]
+2.5
+&gt;&gt;&gt; clone[“max”]
+100000.0</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cam</span><span class="o">.</span><span class="n">addAttr</span><span class="p">(</span><span class="n">clone</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cam</span><span class="p">[</span><span class="s2">&quot;focalClone&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+<span class="go">35.0</span>
+</pre></div>
+</div>
+<p># Also works with modifiers
+&gt;&gt;&gt; with DagModifier() as mod:
+…   clone = cam[“fStop”].clone(“fClone”)
+…   _ = mod.addAttr(cam, clone)
+…
+&gt;&gt;&gt; cam[“fClone”].read()
+5.6</p>
 </dd></dl>
 
 <dl class="method">
@@ -1985,6 +2126,17 @@ default is True</li>
 <span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span>
 <span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;arrayAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Long</span><span class="p">(</span><span class="n">array</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;arrayAttr&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;arrayAttr&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;visibility&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="o">==</span> <span class="n">b</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;ihi&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">(</span><span class="n">plug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">==</span> <span class="n">b</span><span class="p">[</span><span class="s2">&quot;arrayAttr&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;visibility&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">(</span><span class="n">plug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">==</span> <span class="n">b</span><span class="p">[</span><span class="s2">&quot;arrayAttr&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="s2">&quot;arrayAttr&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">connection</span><span class="p">(</span><span class="n">plug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">==</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;visibility&quot;</span><span class="p">]</span>
+<span class="go">True</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2065,6 +2217,12 @@ If cmdx.Plug’s, create a new entry and connect it.</td>
 <span class="go">3.0</span>
 </pre></div>
 </div>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.fn">
+<code class="descname">fn</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.fn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the correct function set for the plug attribute MObject</p>
 </dd></dl>
 
 <dl class="attribute">
@@ -2165,6 +2323,10 @@ True</p>
 <span class="go">&#39;translate.translateX&#39;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;tx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">full</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="go">&#39;t.tx&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+<span class="go">&#39;worldMatrix&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+<span class="go">&#39;worldMatrix[0]&#39;</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2306,6 +2468,10 @@ True</p>
 <span class="go">&#39;|persp.translateX&#39;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;translateX&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">full</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="go">&#39;|persp.translate.translateX&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">()</span>
+<span class="go">&#39;|persp.worldMatrix&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">persp</span><span class="p">[</span><span class="s2">&quot;worldMatrix&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">()</span>
+<span class="go">&#39;|persp.worldMatrix[0]&#39;</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2314,6 +2480,12 @@ True</p>
 <dt id="cmdx.Plug.plug">
 <code class="descname">plug</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.plug" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the MPlug of this cmdx.Plug</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cmdx.Plug.pull">
+<code class="descname">pull</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.pull" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pull on a plug, without serialising any value. For performance.</p>
 </dd></dl>
 
 <dl class="method">
@@ -2380,13 +2552,103 @@ method does not alter the keyable state of the attribute.</p>
 <dl class="method">
 <dt id="cmdx.Plug.typeClass">
 <code class="descname">typeClass</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.typeClass" title="Permalink to this definition">¶</a></dt>
-<dd><p>Retrieve cmdx type of plug</p>
+<dd><p>Retrieve cmdx Attribute class of plug, e.g. Double</p>
+<p>This reverse-engineers the plug attribute into the
+attribute class used to originally create it. It’ll
+work on attributes not created with cmdx as well, but
+won’t catch’em’all (see below)</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;enumAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Enum</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;stringAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">String</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;messageAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Message</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;matrixAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Matrix</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;longAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Long</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;doubleAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;floatAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Float</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;double3Attr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double3</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;booleanAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Boolean</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;angleAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Angle</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;timeAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Time</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;distanceAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Distance</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;compoundAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Compound</span><span class="p">(</span><span class="n">children</span><span class="o">=</span><span class="p">[</span><span class="n">Double</span><span class="p">(</span><span class="s2">&quot;Temp&quot;</span><span class="p">)])</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;enumAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Enum</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;stringAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">String</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;messageAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Message</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;matrixAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Matrix</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;longAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Long</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;doubleAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Double</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;floatAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Float</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;double3Attr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Double3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;booleanAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Boolean</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;angleAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Angle</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;timeAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Time</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;distanceAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Distance</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;compoundAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Compound</span>
+</pre></div>
+</div>
+<p># Unsupported
+# &gt;&gt;&gt; victim[“dividerAttr”] = Divider()
+# &gt;&gt;&gt; victim[“double2Attr”] = Double2()
+# &gt;&gt;&gt; victim[“double4Attr”] = Double4()
+# &gt;&gt;&gt; victim[“angle2Attr”] = Angle2()
+# &gt;&gt;&gt; victim[“angle3Attr”] = Angle3()
+# &gt;&gt;&gt; victim[“distance2Attr”] = Distance2()
+# &gt;&gt;&gt; victim[“distance3Attr”] = Distance3()
+# &gt;&gt;&gt; victim[“distance4Attr”] = Distance4()</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="cmdx.Plug.type_class">
 <code class="descname">type_class</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Plug.type_class" title="Permalink to this definition">¶</a></dt>
-<dd><p>Retrieve cmdx type of plug</p>
+<dd><p>Retrieve cmdx Attribute class of plug, e.g. Double</p>
+<p>This reverse-engineers the plug attribute into the
+attribute class used to originally create it. It’ll
+work on attributes not created with cmdx as well, but
+won’t catch’em’all (see below)</p>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span> <span class="o">=</span> <span class="n">createNode</span><span class="p">(</span><span class="s2">&quot;transform&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;enumAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Enum</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;stringAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">String</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;messageAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Message</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;matrixAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Matrix</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;longAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Long</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;doubleAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;floatAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Float</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;double3Attr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Double3</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;booleanAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Boolean</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;angleAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Angle</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;timeAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Time</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;distanceAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Distance</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">victim</span><span class="p">[</span><span class="s2">&quot;compoundAttr&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Compound</span><span class="p">(</span><span class="n">children</span><span class="o">=</span><span class="p">[</span><span class="n">Double</span><span class="p">(</span><span class="s2">&quot;Temp&quot;</span><span class="p">)])</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;enumAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Enum</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;stringAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">String</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;messageAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Message</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;matrixAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Matrix</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;longAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Long</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;doubleAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Double</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;floatAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Float</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;double3Attr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Double3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;booleanAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Boolean</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;angleAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Angle</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;timeAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Time</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;distanceAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Distance</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">victim</span><span class="p">[</span><span class="s2">&quot;compoundAttr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">typeClass</span><span class="p">()</span> <span class="o">==</span> <span class="n">Compound</span>
+</pre></div>
+</div>
+<p># Unsupported
+# &gt;&gt;&gt; victim[“dividerAttr”] = Divider()
+# &gt;&gt;&gt; victim[“double2Attr”] = Double2()
+# &gt;&gt;&gt; victim[“double4Attr”] = Double4()
+# &gt;&gt;&gt; victim[“angle2Attr”] = Angle2()
+# &gt;&gt;&gt; victim[“angle3Attr”] = Angle3()
+# &gt;&gt;&gt; victim[“distance2Attr”] = Distance2()
+# &gt;&gt;&gt; victim[“distance3Attr”] = Distance3()
+# &gt;&gt;&gt; victim[“distance4Attr”] = Distance4()</p>
 </dd></dl>
 
 <dl class="method">
@@ -2433,57 +2695,57 @@ and <cite>plug.locked</cite>.</p>
 
 <dl class="class">
 <dt id="cmdx.String">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">String</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.String" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">String</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.String" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Message">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Message</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Message" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Message</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Message" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Matrix">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Matrix</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Matrix" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Matrix</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Matrix" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Long">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Long</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Long" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Long</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Long" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Double">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Double3">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double3</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double3" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Double3</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Double3" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Boolean">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Boolean</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Boolean" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Boolean</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Boolean" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.AbstractUnit">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">AbstractUnit</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.AbstractUnit" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">AbstractUnit</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.AbstractUnit" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Angle">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Angle</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Angle" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Angle</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Angle" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Time">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Time</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Time" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Time</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Time" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="class">
 <dt id="cmdx.Distance">
-<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Distance</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Distance" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">cmdx.</code><code class="descname">Distance</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em>, <em>label=None</em>, <em>shortName=None</em>, <em>writable=None</em>, <em>readable=None</em>, <em>cached=None</em>, <em>storable=None</em>, <em>keyable=None</em>, <em>hidden=None</em>, <em>min=None</em>, <em>max=None</em>, <em>channelBox=None</em>, <em>affectsAppearance=None</em>, <em>affectsWorldSpace=None</em>, <em>array=False</em>, <em>indexMatters=None</em>, <em>connectable=True</em>, <em>disconnectBehavior=2</em>, <em>help=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cmdx.Distance" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <div class="line-block">
