@@ -4,11 +4,10 @@ import re
 import os
 import sys
 import json
-import time
+import time as time_
 import math
 import types
 import logging
-import getpass
 import operator
 import traceback
 import collections
@@ -19,7 +18,9 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
+
+IS_VENDORED = "." in __name__
 
 PY3 = sys.version_info[0] == 3
 
@@ -169,12 +170,12 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         @wraps(func)
         def func_wrapper(*args, **kwargs):
-            t0 = time.clock()
+            t0 = time_.clock()
 
             try:
                 return func(*args, **kwargs)
             finally:
-                t1 = time.clock()
+                t1 = time_.clock()
                 duration = (t1 - t0) * 10 ** 6  # microseconds
 
                 Stats.LastTiming = duration
@@ -2933,7 +2934,7 @@ class Plug(object):
         return 0
 
     def pull(self):
-        """Pull on a plug, without seriasing any value. For performance"""
+        """Pull on a plug, without serialising any value. For performance."""
         self._mplug.asMObject()
 
     def append(self, value, autofill=False):
@@ -3862,11 +3863,16 @@ class Plug(object):
                 False,  # useAlias
                 False,  # useFullAttributePath
                 True    # useLongNames
-            )
+            ).split("[", 1)[0]
 
+        # Support search of exact plug names
         plug_names = []
         if isinstance(plugs, (list, tuple)):
             plug_names = plugs
+
+            # Convert `plugName[2]` to `plugName`
+            plug_names = [name.split("[", 1)[0] for name in plug_names]
+
             plugs = True
 
         for plug in self._mplug.connectedTo(source, destination):
@@ -5242,6 +5248,16 @@ tan = math.tan
 pi = math.pi
 
 
+def time(frame):
+    assert isinstance(frame, int), "%s was not an int" % frame
+    return om.MTime(frame, TimeUiUnit())
+
+
+def frame(time):
+    assert isinstance(time, om.MTime), "%s was not an om.MTime" % time
+    return int(time.value)
+
+
 def meters(cm):
     """Centimeters (Maya's default unit) to Meters
 
@@ -6497,7 +6513,7 @@ def connect(a, b):
 def currentTime(time=None):
     """Set or return current time in MTime format"""
     if time is None:
-        return oma.MAnimControl.currentTime()
+        return HashableTime(oma.MAnimControl.currentTime())
     else:
         if not isinstance(time, om.MTime):
             time = om.MTime(time, TimeUiUnit())
@@ -7142,14 +7158,14 @@ def lookAt(origin, center, up=None):
 
     up = up or Vector(0, 1, 0)
 
-    x = (center - origin).normalize()
-    y = ((center - origin) ^ (center - up)).normalize()
+    x = (center - origin).normal()
+    y = ((center - origin) ^ (center - up)).normal()
     z = x ^ y
 
     return MatrixType((
-        x[0], x[1], x[2], 1,
-        y[0], y[1], y[2], 1,
-        z[0], z[1], z[2], 1,
+        x[0], x[1], x[2], 0,
+        y[0], y[1], y[2], 0,
+        z[0], z[1], z[2], 0,
         0, 0, 0, 1
     ))
 
@@ -7808,15 +7824,6 @@ Distance4Attribute = Distance4
 # --------------------------------------------------------
 
 
-# E.g. cmdx => cmdx_0_6_0_plugin_username0.py
-unique_plugin = "cmdx_%s_plugin_%s.py" % (
-    __version__.replace(".", "_"),
-
-    # Include username, in case two
-    # users occupy the same machine
-    getpass.getuser()
-)
-
 # Support for multiple co-existing versions of apiundo.
 unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
 
@@ -7877,13 +7884,8 @@ def install():
     Inception time! :)
 
     In order to facilitate undo, we need a custom command registered
-    with Maya's native plug-in system. To do that, we need a dedicated
-    file. We *could* register ourselves as that file, but what we need
-    is a unique instance of said command per distribution of cmdx.
-
-    Per distribution? Yes, because cmdx.py can be vendored with any
-    library, and we don't want cmdx.py from one vendor to interfere
-    with one from another.
+    with Maya's native plug-in system. To do that, we will register
+    ourselves as a Maya command plug-in.
 
     Maya uses (pollutes) global memory in two ways that
     matter to us here.
@@ -7904,56 +7906,21 @@ def install():
     *is* no __name__. Instead, we'll rely on each version being unique
     and consistent.
 
+    Vendoring
+    ---------
+    If you vendored cmdx, you'll need to take into account that Maya
+    plug-ins are registered by *name*. And there can only ever be a
+    single plug-in with a given name.
+
+    So rename your `cmdx.py` to something like `cmdx_mytool.py` and from
+    your `vendor` package use e.g. `from . import cmdx_mytool as cmdx`
+
+    This will enable you to `from vendor import cmdx` whilst at the same
+    time allowing Maya to use the unique name for plug-in purposes. Win-win.
+
     """
 
-    import errno
-    import shutil
-
-    # E.g. c:\users\marcus\Documents\maya
-    tempdir = os.path.expanduser("~/maya/plug-ins")
-
-    try:
-        os.makedirs(tempdir)
-
-    except OSError as e:
-        if e.errno == errno.EEXIST:
-            # This is fine
-            pass
-
-        else:
-            # Can't think of a reason why this would ever
-            # happen but you can never be too careful..
-            log.debug("Could not create %s" % tempdir)
-
-            import tempfile
-            tempdir = tempfile.gettempdir()
-
-    tempfname = os.path.join(tempdir, unique_plugin)
-
-    if not os.path.exists(tempfname):
-        # We can't know whether we're a .pyc or .py file,
-        # but we need to copy the .py file *only*
-        fname = os.path.splitext(__file__)[0]
-
-        try:
-            shutil.copyfile(fname + ".py", tempfname)
-
-        except OSError:
-            # This could never really happen, but you never know.
-            # In which case, use the file as-is. This should work
-            # for a majority of cases and only really conflict when/if
-            # the undo mechanism of cmdx changes, which is exceedingly
-            # rare. The actual functionality of cmdx is independent of
-            # this plug-in and will still pick up the appropriate
-            # vendored module.
-            log.debug("Could not generate unique cmdx.py")
-            log.debug("Undo may still work, but cmdx may conflict\n"
-                      "with other instances of it.")
-            tempfname = __file__
-
-    # Now we're guaranteed to not interfere
-    # with other versions of cmdx. Win!
-    cmds.loadPlugin(tempfname, quiet=True)
+    cmds.loadPlugin(__file__, quiet=True)
 
     self.installed = True
 
@@ -7965,7 +7932,7 @@ def uninstall():
         # therefore cannot be unloaded until flushed.
         clear()
 
-        cmds.unloadPlugin(unique_plugin)
+        cmds.unloadPlugin(__file__)
 
     self.installed = False
 

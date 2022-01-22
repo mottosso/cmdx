@@ -66,6 +66,37 @@ $ pip install cmdx
 
 <br>
 
+### Vendoring
+
+> Note: Advanced topic, you can skip this
+
+Unlike PyMEL and cmds, `cmdx` is designed to be distributed alongside your tool. That means multiple copies of `cmdx` can coincide within the same Maya/Python session. But because the way [Undo/Redo](#undo) is handled, the `cmdx.py` module is also loaded as a Maya command plug-in.
+
+You can either ignore this, things to look out for is errors during undo coming from another tool or global module directory, even though the command came from your tool. Alternatively, you can follow this recommendation.
+
+```bash
+mytool/
+    vendor/
+        __init__.py
+        cmdx_mytool.py
+```
+
+From here, you can either `from .vendor import cmdx_mytool as cmdx` or you can put the following into the `__init__.py` of the `vendor/` package.
+
+```py
+from . import cmdx_mytool as cmdx
+```
+
+This would then allow your users to call..
+
+```py
+from mytool.vendor import cmdx
+```
+
+..as though the module was called just `cmdx.py`.
+
+<br>
+
 ### What is novel?
 
 With [so many options](#comparison) for interacting with Maya, when or why should you choose `cmdx`?
@@ -1091,6 +1122,20 @@ In addition to its default methods, it can also do multiplication with a vector.
 q = Quaternion(0, 0, 0, 1)
 v = Vector(1, 2, 3)
 assert isinstance(q * v, Vector)
+```
+
+##### Conversions
+
+Python's `math` library provides a few convenience functions for converting `math.degrees` to `math.radians`. `cmdx` extends this with `cmdx.time` and `cmdx.frame`.
+
+```py
+radians = cmdx.radians(5)
+degrees = cmdx.degrees(radians)
+assert degrees = 5
+
+time = cmdx.time(frame=10)
+frame = cmdx.frame(time=time)
+assert frame == 10
 ```
 
 ##### Available types
