@@ -1076,7 +1076,7 @@ class Node(object):
             >>> dump = node.dump()
             >>> isinstance(dump, dict)
             True
-            >>> dump["choice1.caching"]
+            >>> dump["caching"]
             False
 
         """
@@ -1097,7 +1097,7 @@ class Node(object):
                 if not ignore_error:
                     raise
 
-            attrs[plug.name()] = value
+            attrs[plug.name().split(".", 1)[-1]] = value
 
         return attrs
 
@@ -2840,8 +2840,8 @@ class Plug(object):
 
         cls = self.typeClass()
         fn = self.fn()
-        attr = cls(
-            name,
+
+        kwargs = dict(
             default=self.default,
             label=niceName,
             shortName=shortName,
@@ -2857,14 +2857,35 @@ class Plug(object):
             array=fn.array,
             indexMatters=fn.indexMatters,
             connectable=fn.connectable,
-            disconnectBehavior=fn.disconnectBehavior,
+            disconnectBehavior=fn.disconnectBehavior
         )
 
-        if hasattr(fn, "getMin") and fn.hasMin():
-            attr["min"] = fn.getMin()
+        if isinstance(fn, om.MFnEnumAttribute):
+            kwargs["fields"] = []
 
-        if hasattr(fn, "getMax") and fn.hasMax():
-            attr["max"] = fn.getMax()
+            for index in range(fn.getMax() + 1):
+                try:
+                    field = fn.fieldName(index)
+
+                except RuntimeError:
+                    # Indices may not be consecutive, e.g.
+                    # 0 = Off
+                    # 2 = Kinematic
+                    # 3 = Dynamic
+                    # (missing 1!)
+                    continue
+
+                else:
+                    kwargs["fields"].append((index, field))
+
+        else:
+            if hasattr(fn, "getMin") and fn.hasMin():
+                kwargs["min"] = fn.getMin()
+
+            if hasattr(fn, "getMax") and fn.hasMax():
+                kwargs["max"] = fn.getMax()
+
+        attr = cls(name, **kwargs)
 
         return attr
 
@@ -3605,6 +3626,9 @@ class Plug(object):
 
         elif typ == om.MFn.kMessageAttribute:
             fn = om.MFnMessageAttribute(attr)
+
+        elif typ == om.MFn.kEnumAttribute:
+            fn = om.MFnEnumAttribute(attr)
 
         else:
             raise TypeError(
@@ -7071,9 +7095,11 @@ def delete(*nodes):
     with DagModifier(undoable=False) as mod:
         for node in flattened:
             if isinstance(node, str):
-                node, node = node.rsplit(".", 1)
-                node = encode(node)
-                node = node[node]
+                try:
+                    node, attr = node.rsplit(".", 1)
+                    node = encode(node)
+                except ExistError:
+                    continue
 
             if not node.exists:
                 # May have been a child of something
