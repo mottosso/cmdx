@@ -5150,12 +5150,19 @@ def _python_to_mod(value, plug, mod):
         >>> int(node["ty"].read())
         10
 
+        # Support for animation keys
+        >>> mod.set_attr(node["ty"], {1: 0.0, 5: 2.0, 10: 0.0})
+        >>> mod.doIt()
+        >>> int(node["ty"].read(time=UiUnit()(5)))
+        2
+
     """
 
     assert isinstance(plug, Plug), "plug must be of type cmdx.Plug"
 
     if isinstance(value, dict) and __maya_version__ > 2015:
-        times, values = map(UiUnit(), value.keys()), value.values()
+        times, values = list(map(UiUnit(), value.keys())), value.values()
+        plug = plug.findAnimatedPlug()
         curve_typ = _find_curve_type(plug)
         curve = plug.input(type=curve_typ)
 
