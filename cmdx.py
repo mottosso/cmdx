@@ -133,19 +133,19 @@ Smooth = 4
 # Animation blend nodes
 # Because type checking against MFn.kBlendNodeBase doesn't work :(
 AnimBlendTypes = (
-    om.MTypeId(0x41424e41), # AnimBlendNodeAdditive
-    om.MTypeId(0x41424141), # AnimBlendNodeAdditiveDA
-    om.MTypeId(0x4142414c), # AnimBlendNodeAdditiveDL
-    om.MTypeId(0x41424146), # AnimBlendNodeAdditiveF
-    om.MTypeId(0x41424641), # AnimBlendNodeAdditiveFA
-    om.MTypeId(0x4142464c), # AnimBlendNodeAdditiveFL
-    om.MTypeId(0x41424153), # AnimBlendNodeAdditiveI16
-    om.MTypeId(0x41424149), # AnimBlendNodeAdditiveI32
-    om.MTypeId(0x41424e52), # AnimBlendNodeAdditiveRotation
-    om.MTypeId(0x41424e53), # AnimBlendNodeAdditiveScale
-    om.MTypeId(0x4142424f), # AnimBlendNodeBoolean
-    om.MTypeId(0x41424e45), # AnimBlendNodeEnum
-    om.MTypeId(0x41425449), # AnimBlendNodeTime
+    om.MFn.kBlendNodeAdditiveRotation,
+    om.MFn.kBlendNodeAdditiveScale,
+    om.MFn.kBlendNodeBoolean,
+    om.MFn.kBlendNodeDouble,
+    om.MFn.kBlendNodeDoubleAngle,
+    om.MFn.kBlendNodeDoubleLinear,
+    om.MFn.kBlendNodeEnum,
+    om.MFn.kBlendNodeFloat,
+    om.MFn.kBlendNodeFloatAngle,
+    om.MFn.kBlendNodeFloatLinear,
+    om.MFn.kBlendNodeInt16,
+    om.MFn.kBlendNodeInt32,
+    om.MFn.kBlendNodeTime,
 )
 
 history = dict()
