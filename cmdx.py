@@ -2815,6 +2815,13 @@ class Plug(object):
             >>> cam["fClone"].read()
             5.6
 
+            # Can clone enum attributes
+            >>> cam["myEnum"] = Enum(fields=["a", "b", "c"])
+            >>> clone = cam["myEnum"].clone("cloneEnum")
+            >>> cam.addAttr(clone)
+            >>> fields = cam["cloneEnum"].fields()
+            >>> assert fields == ((0, "a"), (1, "b"), (2, "c")), fields
+
         """
 
         assert isinstance(self, Plug)
@@ -2862,22 +2869,7 @@ class Plug(object):
         )
 
         if isinstance(fn, om.MFnEnumAttribute):
-            kwargs["fields"] = []
-
-            for index in range(fn.getMax() + 1):
-                try:
-                    field = fn.fieldName(index)
-
-                except RuntimeError:
-                    # Indices may not be consecutive, e.g.
-                    # 0 = Off
-                    # 2 = Kinematic
-                    # 3 = Dynamic
-                    # (missing 1!)
-                    continue
-
-                else:
-                    kwargs["fields"].append((index, field))
+            kwargs["fields"] = self.fields()
 
         else:
             if hasattr(fn, "getMin") and fn.hasMin():
@@ -2984,6 +2976,33 @@ class Plug(object):
                 "%s is not a child or element" % self.path()
             )
 
+    def fields(self):
+        """Return fields of an Enum attribute, if any"""
+
+        fn = self.fn()
+
+        assert isinstance(fn, om.MFnEnumAttribute), (
+            "%s was not an enum attribute" % self.path()
+        )
+
+        fields = []
+
+        for index in range(fn.getMax() + 1):
+            try:
+                field = fn.fieldName(index)
+
+            except RuntimeError:
+                # Indices may not be consecutive, e.g.
+                # 0 = Off
+                # 2 = Kinematic
+                # 3 = Dynamic
+                # (missing 1!)
+                continue
+
+            else:
+                fields.append((index, field))
+
+        return tuple(fields)
 
     def nextAvailableIndex(self, startIndex=0):
         """Find the next unconnected element in an array plug
@@ -3280,16 +3299,19 @@ class Plug(object):
             >>> parent = createNode("transform")
             >>> _ = cmds.parentConstraint(str(parent), str(node))
             >>> blend = ls(type="pairBlend")[0]
-            >>> node["tx"].findAnimatedPlug().path() == blend["inTranslateX1"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == blend["inTranslateX1"].path()
             True
 
             # Animation layers
             >>> layer = encode(cmds.animLayer(at=node["tx"].path()))
-            >>> node["tx"].findAnimatedPlug().path() == blend["inTranslateX1"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == blend["inTranslateX1"].path()
             True
             >>> cmds.animLayer(str(layer), e=True, preferred=True)
             >>> animBlend = ls(type="animBlendNodeBase")[0]
-            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputB"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == animBlend["inputB"].path()
             True
 
             # Animation layer then constraint
@@ -3299,10 +3321,12 @@ class Plug(object):
             >>> parent = createNode("transform")
             >>> _ = cmds.parentConstraint(str(parent), str(node))
             >>> animBlend = ls(type="animBlendNodeBase")[0]
-            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputA"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == animBlend["inputA"].path()
             True
             >>> cmds.animLayer(str(layer), e=True, preferred=True)
-            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputB"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == animBlend["inputB"].path()
             True
 
         """
@@ -3329,7 +3353,10 @@ class Plug(object):
                 plug = plug[self.index()] if plug.isCompound else plug
 
             # Search for more pair blends or anim blends
-            con = plug.input(type=AnimBlendTypes + (MFn.kPairBlend,), plug=True)
+            con = plug.input(
+                type=AnimBlendTypes + (MFn.kPairBlend,),
+                plug=True
+            )
 
         # If no animation layers or pair blends then plug is self
         plug = plug if plug is not None else self
@@ -5056,6 +5083,9 @@ def _python_to_plug(value, plug):
             _python_to_plug(value, plug[index])
 
     # Native Maya types
+
+    elif isinstance(value, om.MObject):
+        plug._mplug.setMObject(value)
 
     elif isinstance(value, om1.MObject):
         node = _encode1(plug._node.path())
