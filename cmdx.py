@@ -3250,7 +3250,7 @@ class Plug(object):
         Example:
             >>> _new()
             >>> node = createNode("transform")
-            >>> node["tx"].findAnimatedPlug().plug() == node["tx"].plug()
+            >>> node["tx"].findAnimatedPlug().path() == node["tx"].path()
             True
 
             # Constraint
@@ -3258,16 +3258,16 @@ class Plug(object):
             >>> parent = createNode("transform")
             >>> _ = cmds.parentConstraint(str(parent), str(node))
             >>> blend = ls(type="pairBlend")[0]
-            >>> node["tx"].findAnimatedPlug().plug() == blend["inTranslateX1"].plug()
+            >>> node["tx"].findAnimatedPlug().path() == blend["inTranslateX1"].path()
             True
 
             # Animation layers
             >>> layer = encode(cmds.animLayer(at=node["tx"].path()))
-            >>> node["tx"].findAnimatedPlug().plug() == blend["inTranslateX1"].plug()
+            >>> node["tx"].findAnimatedPlug().path() == blend["inTranslateX1"].path()
             True
             >>> cmds.animLayer(str(layer), e=True, preferred=True)
             >>> animBlend = ls(type="animBlendNodeBase")[0]
-            >>> node["tx"].findAnimatedPlug().plug() == animBlend["inputB"].plug()
+            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputB"].path()
             True
 
             # Animation layer then constraint
@@ -3277,10 +3277,10 @@ class Plug(object):
             >>> parent = createNode("transform")
             >>> _ = cmds.parentConstraint(str(parent), str(node))
             >>> animBlend = ls(type="animBlendNodeBase")[0]
-            >>> node["tx"].findAnimatedPlug().plug() == animBlend["inputA"].plug()
+            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputA"].path()
             True
             >>> cmds.animLayer(str(layer), e=True, preferred=True)
-            >>> node["tx"].findAnimatedPlug().plug() == animBlend["inputB"].plug()
+            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputB"].path()
             True
 
         """
@@ -5153,7 +5153,7 @@ def _python_to_mod(value, plug, mod):
         # Support for animation keys
         >>> mod.set_attr(node["ty"], {1: 0.0, 5: 2.0, 10: 0.0})
         >>> mod.doIt()
-        >>> int(node["ty"].read(time=UiUnit()(5)))
+        >>> int(node["ty"].read(time=time(5)))
         2
 
     """
@@ -5161,7 +5161,7 @@ def _python_to_mod(value, plug, mod):
     assert isinstance(plug, Plug), "plug must be of type cmdx.Plug"
 
     if isinstance(value, dict) and __maya_version__ > 2015:
-        times, values = list(map(UiUnit(), value.keys())), value.values()
+        times, values = list(map(time, value.keys())), value.values()
         plug = plug.findAnimatedPlug()
         curve_typ = _find_curve_type(plug)
         curve = plug.input(type=curve_typ)
