@@ -308,6 +308,7 @@ class _Type(int):
 MFn = om.MFn
 kDagNode = _Type(om.MFn.kDagNode)
 kShape = _Type(om.MFn.kShape)
+kMesh = _Type(om.MFn.kMesh)
 kTransform = _Type(om.MFn.kTransform)
 kJoint = _Type(om.MFn.kJoint)
 kSet = _Type(om.MFn.kSet)
@@ -4410,6 +4411,12 @@ class TransformationMatrix(om.MTransformationMatrix):
     def asMatrixInverse(self):  # type: () -> MatrixType
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
+    def asScaleMatrix(self):  # type: () -> MatrixType
+        return MatrixType(super(TransformationMatrix, self).asScaleMatrix())
+
+    def asRotateMatrix(self):  # type: () -> MatrixType
+        return MatrixType(super(TransformationMatrix, self).asRotateMatrix())
+
     if ENABLE_PEP8:
         x_axis = xAxis
         y_axis = yAxis
@@ -4421,6 +4428,8 @@ class TransformationMatrix(om.MTransformationMatrix):
         set_scale = setScale
         as_matrix = asMatrix
         as_matrix_inverse = asMatrixInverse
+        as_scale_matrix = asScaleMatrix
+        as_rotate_matrix = asRotateMatrix
 
 
 class MatrixType(om.MMatrix):
@@ -4734,7 +4743,7 @@ class EulerRotation(om.MEulerRotation):
 Euler = EulerRotation
 
 
-def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
+def NurbsCurveData(points, degree=1, form=om.MFnNurbsCurve.kOpen):
     """Tuple of points to MObject suitable for nurbsCurve-typed data
 
     Arguments:
@@ -4761,13 +4770,13 @@ def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
 
     degree = min(3, max(1, degree))
 
-    cvs = om1.MPointArray()
-    curveFn = om1.MFnNurbsCurve()
-    data = om1.MFnNurbsCurveData()
+    cvs = om.MPointArray()
+    curveFn = om.MFnNurbsCurve()
+    data = om.MFnNurbsCurveData()
     mobj = data.create()
 
     for point in points:
-        cvs.append(om1.MPoint(*point))
+        cvs.append(om.MPoint(*point))
 
     curveFn.createWithEditPoints(cvs,
                                  degree,
@@ -5267,6 +5276,9 @@ def _python_to_mod(value, plug, mod):
     elif isinstance(value, om.MMatrix):
         obj = om.MFnMatrixData().create(value)
         mod.newPlugValue(mplug, obj)
+
+    elif isinstance(value, om.MObject):
+        mod.newPlugValue(mplug, value)
 
     elif isinstance(value, om.MEulerRotation):
         for index, value in enumerate(value):
@@ -8118,7 +8130,9 @@ def install():
 
     """
 
-    cmds.loadPlugin(__file__, quiet=True)
+    plugin_name = os.path.basename(__file__).rsplit(".", 1)[0]
+    if not cmds.pluginInfo(plugin_name, query=True, loaded=True):
+        cmds.loadPlugin(__file__, quiet=True)
 
     self.installed = True
 
