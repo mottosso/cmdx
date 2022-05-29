@@ -528,6 +528,50 @@ The reason for this limitation is because the functions `cmds`
 
 <br>
 
+### Path-like Syntax
+
+Neatly traverse a hierarchy with the `|` syntax.
+
+```py
+# Before
+group = cmdx.encode("|some_grp")
+hand = cmdx.encode(group.path() + "|hand_ctl")
+
+# After
+hand = group | "hand_ctl"
+```
+
+It can be nested too.
+
+```py
+finger = group | "hand_ctl" | "finger_ctl"
+```
+
+<br>
+
+### setAttr
+
+Maya's `cmds.setAttr` depends on the UI settings for units.
+
+```py
+cmds.setAttr("hand_ctl.translateY", 5)
+```
+
+For a user with Maya set to `Centimeters`, this would set `translateY` to 5 centimeters. For any user with any other unit, like `Foot`, it would instead move it 5 feet. That is terrible behaviour for a script, how can you possibly define the length of something if you don't know the unit? A dog is 100 cm tall, not 100 "any unit" tall.
+
+The `cmdx.setAttr` on the other hand does what Maya's API does, which is to treat all units consistently.
+
+```py
+cmdx.setAttr("hand_ctl.translateY", 5)  # centimeters, always
+```
+
+- Distance values are in `centimeters`
+- Angular values are in `radians`
+
+So the user is free to choose any unit for their UI without breaking their scripts.
+
+<br>
+
 ### Units
 
 `cmdx` takes and returns values in the units used by the UI. For example, Maya's default unit for distances, such as `translateX` is in Centimeters.
@@ -1014,6 +1058,28 @@ node["myMatrix"] = cmdx.Matrix()
 
 # Store current world matrix in this custom attribute
 node["myMatrix"] = node["worldMatrix"][0].asMatrix()
+```
+
+<br>
+
+### Cloning
+
+Support for cloning enum attributes.
+
+```py
+parent = createNode("transform")
+camera = createNode("camera", parent=parent)
+
+# Make new enum attribute
+camera["myEnum"] = Enum(fields=["a", "b", "c"])
+
+# Clone it
+clone = camera["myEnum"].clone("cloneEnum")
+cam.addAttr(clone)
+
+# Compare it
+fields = camera["cloneEnum"].fields()
+assert fields == ((0, "a"), (1, "b"), (2, "c"))
 ```
 
 <br>
