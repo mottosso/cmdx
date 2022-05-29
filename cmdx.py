@@ -18,7 +18,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 IS_VENDORED = "." in __name__
 
@@ -583,6 +583,8 @@ class Node(object):
             for item in items:
                 if isinstance(item, _Unit):
                     unit = item
+                elif isinstance(item, int):
+                    unit = item
                 elif isinstance(item, _Cached):
                     cached = True
 
@@ -591,6 +593,10 @@ class Node(object):
                 return CachedPlug(self._state["values"][key, unit])
             except KeyError:
                 pass
+
+        assert isinstance(key, str), (
+            "%s was not the name of an attribute" % key
+        )
 
         try:
             plug = self.findPlug(key)
@@ -1501,6 +1507,29 @@ class DagNode(Node):
     def __repr__(self):
         return self.path()
 
+    def __or__(self, other):
+        """Syntax sugar for finding a child
+
+        Examples:
+            >>> _new()
+            >>> parent = createNode("transform", "parent")
+            >>> child =  createNode("transform", "child", parent)
+            >>> parent | "child"
+            |parent|child
+
+            # Stacklable too
+            >>> grand =  createNode("transform", "grand", child)
+            >>> parent | "child" | "grand"
+            |parent|child|grand
+
+        """
+
+        return encode("%s|%s" % (self.path(), other))
+
+    def __iter__(self):
+        for child in self.children():
+            yield child
+
     @property
     def _tfn(self):
         if SAFE_MODE:
@@ -2345,7 +2374,7 @@ class AnimCurve(Node):
 
             except RuntimeError:
                 # The error provided by Maya aren't very descriptive,
-                # help a brother out by look for common problems.
+                # help a brother out by looking for common problems.
 
                 if not times:
                     log.error("No times were provided: %s" % str(times))
@@ -2747,7 +2776,8 @@ class Plug(object):
                 raise TypeError("'%s' is not a compound attribute"
                                 % self.path())
 
-            raise ExistError("'%s' was not found" % logicalIndex)
+            raise ExistError("'%s.%s' was not found" % (
+                self.path(), logicalIndex))
 
     def __setitem__(self, index, value):
         """Write to child of array or compound plug
@@ -3360,6 +3390,9 @@ class Plug(object):
 
         # If no animation layers or pair blends then plug is self
         plug = plug if plug is not None else self
+
+        # Preserve unit passed by user, e.g. Stepped
+        plug._unit = self._unit
 
         return plug
 
@@ -4590,6 +4623,9 @@ class Vector(om.MVector):
     def dot(self, value):
         return Vector(super(Vector, self).__mul__(value))
 
+    def rotateBy(self, value):
+        return Vector(super(Vector, self).rotateBy(value))
+
     def cross(self, value):
         return Vector(super(Vector, self).__xor__(value))
 
@@ -4598,6 +4634,7 @@ class Vector(om.MVector):
 
     if ENABLE_PEP8:
         is_equivalent = isEquivalent
+        rotate_by = rotateBy
 
 
 # Alias, it can't take anything other than values
@@ -4628,6 +4665,26 @@ def divide_vectors(vec1, vec2):
 class Point(om.MPoint):
     """Maya's MPoint"""
 
+    def __init__(self, *args):
+
+        # Protect against passing an instance of a Node
+        # into here, as Maya would crash if that happens
+        if len(args) == 1:
+            assert (
+                isinstance(args[0], om.MPoint) or
+                isinstance(args[0], om.MVector)
+            ), "%s was not a MPoint or MVector" % args[0]
+
+        return super(Point, self).__init__(*args)
+
+    def distanceTo(self, other):
+        if isinstance(other, om.MVector):
+            other = Point(other)
+        return super(Point, self).distanceTo(other)
+
+    if ENABLE_PEP8:
+        distance_to = distanceTo
+
 
 class Color(om.MColor):
     """Maya's MColor"""
@@ -4635,6 +4692,11 @@ class Color(om.MColor):
 
 class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
+
+    def expand(self, position):
+        if isinstance(position, om.MVector):
+            position = Point(position)
+        return super(BoundingBox, self).expand(position)
 
     def volume(self):
         return self.width * self.height * self.depth
@@ -5484,6 +5546,7 @@ sin = math.sin
 cos = math.cos
 tan = math.tan
 pi = math.pi
+sqrt = math.sqrt
 
 
 def time(frame):
@@ -6815,6 +6878,14 @@ def maxTime(time=None):
         return oma.MAnimControl.setMaxTime(time)
 
 
+def isScrubbing():
+    return oma.MAnimControl.isScrubbing()
+
+
+def isPlaying():
+    return oma.MAnimControl.isPlaying()
+
+
 class DGContext(om.MDGContext):
     """Context for evaluating the Maya DG
 
@@ -6952,7 +7023,7 @@ def getAttr(attr, type=None, time=None):
     return attr.read(time=time)
 
 
-def setAttr(attr, value, type=None):
+def setAttr(attr, value, type=None, undoable=False):
     """Write `value` to `attr`
 
     Arguments:
@@ -6966,12 +7037,19 @@ def setAttr(attr, value, type=None):
 
     """
 
+    if type == "matrix":
+        value = Matrix4(value)
+
     if isinstance(attr, str):
         node, attr = attr.rsplit(".", 1)
         node = encode(node)
         attr = node[attr]
 
-    attr.write(value)
+    if undoable:
+        with DGModifier() as mod:
+            mod.setAttr(attr, value)
+    else:
+        attr.write(value)
 
 
 def addAttr(node,
@@ -7244,6 +7322,8 @@ if ENABLE_PEP8:
     current_time = currentTime
     min_time = minTime
     max_time = maxTime
+    is_scrubbing = isScrubbing
+    is_playing = isPlaying
     animation_start_time = animationStartTime
     animation_end_time = animationEndTime
     selected_time = selectedTime
@@ -7323,12 +7403,22 @@ def curve(parent, points, degree=1, form=kOpen, mod=None):
 
     degree = min(3, max(1, degree))
 
-    knotcount = len(points) - degree + 2 * degree - 1
+    if degree > 1:
+        points.insert(0, points[0])
+        points.append(points[-1])
+
+    if degree > 2:
+        points.insert(0, points[0])
+        points.append(points[-1])
+
+    spans = len(points) - degree
+    knotcount = spans + 2 * degree - 1
 
     cvs = [p for p in points]
     knots = [i for i in range(knotcount)]
 
     curveFn = om.MFnNurbsCurve()
+
     mobj = curveFn.create(cvs,
                           knots,
                           degree,
@@ -8242,7 +8332,10 @@ class _apiUndo(om.MPxCommand):
 
 
 def initializePlugin(plugin):
-    om.MFnPlugin(plugin).registerCommand(
+    # Only supports major.minor (no patch)
+    version = ".".join(__version__.rsplit(".")[:2])
+
+    om.MFnPlugin(plugin, "cmdx", version).registerCommand(
         unique_command,
         _apiUndo
     )
