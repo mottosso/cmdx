@@ -4249,6 +4249,8 @@ class Plug(object):
         type_class = typeClass
         next_available_index = nextAvailableIndex
         find_animated_plug = findAnimatedPlug
+        is_array = isArray
+        is_compound = isCompound
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -4608,11 +4610,18 @@ class Vector(om.MVector):
         0.0
         >>> vec ^ Vector(0, 1, 0)  # Cross product
         maya.api.OpenMaya.MVector(0, 0, 1)
+        >>> Vector(0, 1, 0) * 2    # Scale
+        maya.api.OpenMaya.MVector(0, 2, 0)
 
     """
 
     def __mul__(self, value):
-        return super(Vector, self).__mul__(value)
+        if isinstance(value, om.MVector):
+            # Dot product
+            return super(Vector, self).__mul__(value)
+        else:
+            # Scaling
+            return Vector(super(Vector, self).__mul__(value))
 
     def __add__(self, value):
         if isinstance(value, (int, float)):
@@ -5569,7 +5578,7 @@ sqrt = math.sqrt
 
 def time(frame):
     assert isinstance(frame, int), "%s was not an int" % frame
-    return om.MTime(frame, TimeUiUnit())
+    return HashableTime(om.MTime(frame, TimeUiUnit()))
 
 
 def frame(time):
@@ -6869,6 +6878,10 @@ class HashableTime(om.MTime):
     def __hash__(self):
         return hash(self.value)
 
+    if ENABLE_PEP8:
+        def as_units(self, unit):
+            return self.asUnits(unit)
+
 
 # Convenience functions
 def connect(a, b):
@@ -6900,6 +6913,9 @@ def currentFrame(frame=None):
             frame = int(frame.value)
 
         cmds.currentTime(frame)
+
+
+ticksPerSecond = om.MTime.ticksPerSecond
 
 
 def selectedTime():
@@ -7369,6 +7385,14 @@ def upAxis():
             return Vector(0, 0, 1)
 
 
+if __maya_version__ >= 2019:
+    isYAxisUp = om.MGlobal.isYAxisUp
+    isZAxisUp = om.MGlobal.isZAxisUp
+
+    is_y_axis_up = om.MGlobal.isYAxisUp
+    is_z_axis_up = om.MGlobal.isZAxisUp
+
+
 def setUpAxis(axis=Y):
     """Set the current up-axis as Y or Z
 
@@ -7410,6 +7434,8 @@ if ENABLE_PEP8:
     selected_time = selectedTime
     up_axis = upAxis
     set_up_axis = setUpAxis
+    ticks_per_second = ticksPerSecond
+
 
 
 # Special-purpose functions
@@ -8361,7 +8387,8 @@ def uninstall():
         # therefore cannot be unloaded until flushed.
         clear()
 
-        cmds.unloadPlugin(__file__)
+        name = os.path.basename(__file__)
+        cmds.unloadPlugin(name)
 
     self.installed = False
 
