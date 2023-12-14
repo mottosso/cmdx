@@ -188,12 +188,12 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         @wraps(func)
         def func_wrapper(*args, **kwargs):
-            t0 = time_.clock()
+            t0 = time_.perf_counter()
 
             try:
                 return func(*args, **kwargs)
             finally:
-                t1 = time_.clock()
+                t1 = time_.perf_counter()
                 duration = (t1 - t0) * 10 ** 6  # microseconds
 
                 Stats.LastTiming = duration
@@ -2833,10 +2833,10 @@ class Plug(object):
             >>> clone = original.clone("focalClone")
 
             # Original setup is preserved
-            >>> clone["min"]
-            2.5
-            >>> clone["max"]
-            100000.0
+            >>> clone["min"] == original.fn().getMin()
+            True
+            >>> clone["max"] == original.fn().getMax()
+            True
 
             >>> cam.addAttr(clone)
             >>> cam["focalClone"].read()
