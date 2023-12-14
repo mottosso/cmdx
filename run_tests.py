@@ -6,8 +6,8 @@ import nose
 import flaky.flaky_nose_plugin as flaky
 
 # For nose
-if sys.version_info[0] == 3:
-    import collections
+import collections
+if not hasattr(collections, "Callable"):
     collections.Callable = collections.abc.Callable
 
 
@@ -33,8 +33,6 @@ if __name__ == "__main__":
         "test_performance.py",
         "cmdx.py",
     ])
-
-    cmds.colorManagementPrefs(cmEnabled=False, edit=True)
 
     result = nose.main(
         argv=argv,

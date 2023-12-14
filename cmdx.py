@@ -180,6 +180,13 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
     """
 
+    try:
+        perf_counter = time_.perf_counter
+
+    # Python 2.7
+    except AttributeError:
+        perf_counter = time_.clock
+
     def timings_decorator(func):
         if not TIMINGS:
             # Do not wrap the function.
@@ -188,12 +195,12 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         @wraps(func)
         def func_wrapper(*args, **kwargs):
-            t0 = time_.perf_counter()
+            t0 = perf_counter()
 
             try:
                 return func(*args, **kwargs)
             finally:
-                t1 = time_.perf_counter()
+                t1 = perf_counter()
                 duration = (t1 - t0) * 10 ** 6  # microseconds
 
                 Stats.LastTiming = duration
