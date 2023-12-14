@@ -6,8 +6,8 @@ import nose
 import flaky.flaky_nose_plugin as flaky
 
 # For nose
-import collections
-if not hasattr(collections, "Callable"):
+if sys.version_info[0] == 3:
+    import collections
     collections.Callable = collections.abc.Callable
 
 

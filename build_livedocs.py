@@ -108,11 +108,6 @@ if __name__ == '__main__':
 import os
 import sys
 
-# For nose
-import collections
-if not hasattr(collections, "Callable"):
-    collections.Callable = collections.abc.Callable
-
 import nose
 from nose.tools import assert_raises
 
@@ -120,6 +115,11 @@ if __name__ == "__main__":
     print("Initialising Maya..")
     from maya import standalone
     standalone.initialize()
+
+    # For nose
+    if sys.version_info[0] == 3:
+        import collections
+        collections.Callable = collections.abc.Callable
 
     from maya import cmds
     import cmdx
@@ -133,6 +133,11 @@ if __name__ == "__main__":
     ])
 
     result = nose.main(argv=argv, exit=False)
+
+    if os.name == "nt":
+        # Graceful exit, only Windows seems to like this consistently
+        standalone.uninitialize()
+
     os._exit(0 if result.success else 1)
 """)
         f.write("".join(tests))
