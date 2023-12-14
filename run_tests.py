@@ -5,6 +5,12 @@ import sys
 import nose
 import flaky.flaky_nose_plugin as flaky
 
+# For nose
+if sys.version_info[0] == 3:
+    import collections
+    collections.Callable = collections.abc.Callable
+
+
 if __name__ == "__main__":
     print("Initialising Maya..")
     from maya import standalone, cmds

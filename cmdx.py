@@ -18,7 +18,7 @@ from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
 from maya import OpenMaya as om1, OpenMayaMPx as ompx1, OpenMayaUI as omui1
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 IS_VENDORED = "." in __name__
 
@@ -180,6 +180,13 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
     """
 
+    try:
+        perf_counter = time_.perf_counter
+
+    # Python 2.7
+    except AttributeError:
+        perf_counter = time_.clock
+
     def timings_decorator(func):
         if not TIMINGS:
             # Do not wrap the function.
@@ -188,12 +195,12 @@ def withTiming(text="{func}() {time:.2f} ns"):
 
         @wraps(func)
         def func_wrapper(*args, **kwargs):
-            t0 = time_.clock()
+            t0 = perf_counter()
 
             try:
                 return func(*args, **kwargs)
             finally:
-                t1 = time_.clock()
+                t1 = perf_counter()
                 duration = (t1 - t0) * 10 ** 6  # microseconds
 
                 Stats.LastTiming = duration
@@ -308,6 +315,7 @@ class _Type(int):
 MFn = om.MFn
 kDagNode = _Type(om.MFn.kDagNode)
 kShape = _Type(om.MFn.kShape)
+kMesh = _Type(om.MFn.kMesh)
 kTransform = _Type(om.MFn.kTransform)
 kJoint = _Type(om.MFn.kJoint)
 kSet = _Type(om.MFn.kSet)
@@ -582,6 +590,8 @@ class Node(object):
             for item in items:
                 if isinstance(item, _Unit):
                     unit = item
+                elif isinstance(item, int):
+                    unit = item
                 elif isinstance(item, _Cached):
                     cached = True
 
@@ -590,6 +600,10 @@ class Node(object):
                 return CachedPlug(self._state["values"][key, unit])
             except KeyError:
                 pass
+
+        assert isinstance(key, str), (
+            "%s was not the name of an attribute" % key
+        )
 
         try:
             plug = self.findPlug(key)
@@ -1076,7 +1090,7 @@ class Node(object):
             >>> dump = node.dump()
             >>> isinstance(dump, dict)
             True
-            >>> dump["choice1.caching"]
+            >>> dump["caching"]
             False
 
         """
@@ -1097,7 +1111,7 @@ class Node(object):
                 if not ignore_error:
                     raise
 
-            attrs[plug.name()] = value
+            attrs[plug.name().split(".", 1)[-1]] = value
 
         return attrs
 
@@ -1499,6 +1513,34 @@ class DagNode(Node):
 
     def __repr__(self):
         return self.path()
+
+    def __or__(self, other):
+        """Syntax sugar for finding a child
+
+        Examples:
+            >>> _new()
+            >>> parent = createNode("transform", "parent")
+            >>> child =  createNode("transform", "child", parent)
+            >>> parent | "child"
+            |parent|child
+
+            # Stackable too
+            >>> grand =  createNode("transform", "grand", child)
+            >>> parent | "child" | "grand"
+            |parent|child|grand
+
+        """
+
+        # Handle cases where self has a namespace
+        # and no namespace is provided.
+        if ":" not in other:
+            other = "%s:%s" % (self.namespace(), other)
+
+        return encode("%s|%s" % (self.path(), other))
+
+    def __iter__(self):
+        for child in self.children():
+            yield child
 
     @property
     def _tfn(self):
@@ -2344,7 +2386,7 @@ class AnimCurve(Node):
 
             except RuntimeError:
                 # The error provided by Maya aren't very descriptive,
-                # help a brother out by look for common problems.
+                # help a brother out by looking for common problems.
 
                 if not times:
                     log.error("No times were provided: %s" % str(times))
@@ -2746,7 +2788,8 @@ class Plug(object):
                 raise TypeError("'%s' is not a compound attribute"
                                 % self.path())
 
-            raise ExistError("'%s' was not found" % logicalIndex)
+            raise ExistError("'%s.%s' was not found" % (
+                self.path(), logicalIndex))
 
     def __setitem__(self, index, value):
         """Write to child of array or compound plug
@@ -2797,10 +2840,10 @@ class Plug(object):
             >>> clone = original.clone("focalClone")
 
             # Original setup is preserved
-            >>> clone["min"]
-            2.5
-            >>> clone["max"]
-            100000.0
+            >>> clone["min"] == original.fn().getMin()
+            True
+            >>> clone["max"] == original.fn().getMax()
+            True
 
             >>> cam.addAttr(clone)
             >>> cam["focalClone"].read()
@@ -2813,6 +2856,13 @@ class Plug(object):
             ...
             >>> cam["fClone"].read()
             5.6
+
+            # Can clone enum attributes
+            >>> cam["myEnum"] = Enum(fields=["a", "b", "c"])
+            >>> clone = cam["myEnum"].clone("cloneEnum")
+            >>> cam.addAttr(clone)
+            >>> fields = cam["cloneEnum"].fields()
+            >>> assert fields == ((0, "a"), (1, "b"), (2, "c")), fields
 
         """
 
@@ -2840,8 +2890,8 @@ class Plug(object):
 
         cls = self.typeClass()
         fn = self.fn()
-        attr = cls(
-            name,
+
+        kwargs = dict(
             default=self.default,
             label=niceName,
             shortName=shortName,
@@ -2857,14 +2907,20 @@ class Plug(object):
             array=fn.array,
             indexMatters=fn.indexMatters,
             connectable=fn.connectable,
-            disconnectBehavior=fn.disconnectBehavior,
+            disconnectBehavior=fn.disconnectBehavior
         )
 
-        if hasattr(fn, "getMin") and fn.hasMin():
-            attr["min"] = fn.getMin()
+        if isinstance(fn, om.MFnEnumAttribute):
+            kwargs["fields"] = self.fields()
 
-        if hasattr(fn, "getMax") and fn.hasMax():
-            attr["max"] = fn.getMax()
+        else:
+            if hasattr(fn, "getMin") and fn.hasMin():
+                kwargs["min"] = fn.getMin()
+
+            if hasattr(fn, "getMax") and fn.hasMax():
+                kwargs["max"] = fn.getMax()
+
+        attr = cls(name, **kwargs)
 
         return attr
 
@@ -2962,6 +3018,33 @@ class Plug(object):
                 "%s is not a child or element" % self.path()
             )
 
+    def fields(self):
+        """Return fields of an Enum attribute, if any"""
+
+        fn = self.fn()
+
+        assert isinstance(fn, om.MFnEnumAttribute), (
+            "%s was not an enum attribute" % self.path()
+        )
+
+        fields = []
+
+        for index in range(fn.getMax() + 1):
+            try:
+                field = fn.fieldName(index)
+
+            except RuntimeError:
+                # Indices may not be consecutive, e.g.
+                # 0 = Off
+                # 2 = Kinematic
+                # 3 = Dynamic
+                # (missing 1!)
+                continue
+
+            else:
+                fields.append((index, field))
+
+        return tuple(fields)
 
     def nextAvailableIndex(self, startIndex=0):
         """Find the next unconnected element in an array plug
@@ -3258,16 +3341,19 @@ class Plug(object):
             >>> parent = createNode("transform")
             >>> _ = cmds.parentConstraint(str(parent), str(node))
             >>> blend = ls(type="pairBlend")[0]
-            >>> node["tx"].findAnimatedPlug().path() == blend["inTranslateX1"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == blend["inTranslateX1"].path()
             True
 
             # Animation layers
             >>> layer = encode(cmds.animLayer(at=node["tx"].path()))
-            >>> node["tx"].findAnimatedPlug().path() == blend["inTranslateX1"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == blend["inTranslateX1"].path()
             True
             >>> cmds.animLayer(str(layer), e=True, preferred=True)
             >>> animBlend = ls(type="animBlendNodeBase")[0]
-            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputB"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == animBlend["inputB"].path()
             True
 
             # Animation layer then constraint
@@ -3277,10 +3363,12 @@ class Plug(object):
             >>> parent = createNode("transform")
             >>> _ = cmds.parentConstraint(str(parent), str(node))
             >>> animBlend = ls(type="animBlendNodeBase")[0]
-            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputA"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == animBlend["inputA"].path()
             True
             >>> cmds.animLayer(str(layer), e=True, preferred=True)
-            >>> node["tx"].findAnimatedPlug().path() == animBlend["inputB"].path()
+            >>> animPlug = node["tx"].findAnimatedPlug().path()
+            >>> animPlug == animBlend["inputB"].path()
             True
 
         """
@@ -3307,10 +3395,16 @@ class Plug(object):
                 plug = plug[self.index()] if plug.isCompound else plug
 
             # Search for more pair blends or anim blends
-            con = plug.input(type=AnimBlendTypes + (MFn.kPairBlend,), plug=True)
+            con = plug.input(
+                type=AnimBlendTypes + (MFn.kPairBlend,),
+                plug=True
+            )
 
         # If no animation layers or pair blends then plug is self
         plug = plug if plug is not None else self
+
+        # Preserve unit passed by user, e.g. Stepped
+        plug._unit = self._unit
 
         return plug
 
@@ -3605,6 +3699,9 @@ class Plug(object):
 
         elif typ == om.MFn.kMessageAttribute:
             fn = om.MFnMessageAttribute(attr)
+
+        elif typ == om.MFn.kEnumAttribute:
+            fn = om.MFnEnumAttribute(attr)
 
         else:
             raise TypeError(
@@ -4159,6 +4256,8 @@ class Plug(object):
         type_class = typeClass
         next_available_index = nextAvailableIndex
         find_animated_plug = findAnimatedPlug
+        is_array = isArray
+        is_compound = isCompound
 
 
 class TransformationMatrix(om.MTransformationMatrix):
@@ -4386,6 +4485,12 @@ class TransformationMatrix(om.MTransformationMatrix):
     def asMatrixInverse(self):  # type: () -> MatrixType
         return MatrixType(super(TransformationMatrix, self).asMatrixInverse())
 
+    def asScaleMatrix(self):  # type: () -> MatrixType
+        return MatrixType(super(TransformationMatrix, self).asScaleMatrix())
+
+    def asRotateMatrix(self):  # type: () -> MatrixType
+        return MatrixType(super(TransformationMatrix, self).asRotateMatrix())
+
     if ENABLE_PEP8:
         x_axis = xAxis
         y_axis = yAxis
@@ -4397,6 +4502,8 @@ class TransformationMatrix(om.MTransformationMatrix):
         set_scale = setScale
         as_matrix = asMatrix
         as_matrix_inverse = asMatrixInverse
+        as_scale_matrix = asScaleMatrix
+        as_rotate_matrix = asRotateMatrix
 
 
 class MatrixType(om.MMatrix):
@@ -4486,6 +4593,12 @@ class MatrixType(om.MMatrix):
         values = tuple(self)
         return values[row * 4 + col % 4]
 
+    def isEquivalent(self, other, tolerance=1e-10):
+        return super(MatrixType, self).isEquivalent(other, tolerance)
+
+    if ENABLE_PEP8:
+        is_equivalent = isEquivalent
+
 
 # Alias
 Transformation = TransformationMatrix
@@ -4504,8 +4617,18 @@ class Vector(om.MVector):
         0.0
         >>> vec ^ Vector(0, 1, 0)  # Cross product
         maya.api.OpenMaya.MVector(0, 0, 1)
+        >>> Vector(0, 1, 0) * 2    # Scale
+        maya.api.OpenMaya.MVector(0, 2, 0)
 
     """
+
+    def __mul__(self, value):
+        if isinstance(value, om.MVector):
+            # Dot product
+            return super(Vector, self).__mul__(value)
+        else:
+            # Scaling
+            return Vector(super(Vector, self).__mul__(value))
 
     def __add__(self, value):
         if isinstance(value, (int, float)):
@@ -4530,6 +4653,9 @@ class Vector(om.MVector):
     def dot(self, value):
         return Vector(super(Vector, self).__mul__(value))
 
+    def rotateBy(self, value):
+        return Vector(super(Vector, self).rotateBy(value))
+
     def cross(self, value):
         return Vector(super(Vector, self).__xor__(value))
 
@@ -4538,6 +4664,7 @@ class Vector(om.MVector):
 
     if ENABLE_PEP8:
         is_equivalent = isEquivalent
+        rotate_by = rotateBy
 
 
 # Alias, it can't take anything other than values
@@ -4568,6 +4695,26 @@ def divide_vectors(vec1, vec2):
 class Point(om.MPoint):
     """Maya's MPoint"""
 
+    def __init__(self, *args):
+
+        # Protect against passing an instance of a Node
+        # into here, as Maya would crash if that happens
+        if len(args) == 1:
+            assert (
+                isinstance(args[0], om.MPoint) or
+                isinstance(args[0], om.MVector)
+            ), "%s was not a MPoint or MVector" % args[0]
+
+        return super(Point, self).__init__(*args)
+
+    def distanceTo(self, other):
+        if isinstance(other, om.MVector):
+            other = Point(other)
+        return super(Point, self).distanceTo(other)
+
+    if ENABLE_PEP8:
+        distance_to = distanceTo
+
 
 class Color(om.MColor):
     """Maya's MColor"""
@@ -4575,6 +4722,11 @@ class Color(om.MColor):
 
 class BoundingBox(om.MBoundingBox):
     """Maya's MBoundingBox"""
+
+    def expand(self, position):
+        if isinstance(position, om.MVector):
+            position = Point(position)
+        return super(BoundingBox, self).expand(position)
 
     def volume(self):
         return self.width * self.height * self.depth
@@ -4624,12 +4776,16 @@ class Quaternion(om.MQuaternion):
     def asMatrix(self):
         return Matrix4(super(Quaternion, self).asMatrix())
 
+    def isEquivalent(self, other, tolerance=om.MQuaternion.kTolerance):
+        return super(Quaternion, self).isEquivalent(other, tolerance)
+
     if ENABLE_PEP8:
         as_matrix = asMatrix
         is_normalised = isNormalised
         length_squared = lengthSquared
         as_euler_rotation = asEulerRotation
         as_euler = asEulerRotation
+        is_equivalent = isEquivalent
 
 
 # Alias
@@ -4710,7 +4866,7 @@ class EulerRotation(om.MEulerRotation):
 Euler = EulerRotation
 
 
-def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
+def NurbsCurveData(points, degree=1, form=om.MFnNurbsCurve.kOpen):
     """Tuple of points to MObject suitable for nurbsCurve-typed data
 
     Arguments:
@@ -4737,13 +4893,13 @@ def NurbsCurveData(points, degree=1, form=om1.MFnNurbsCurve.kOpen):
 
     degree = min(3, max(1, degree))
 
-    cvs = om1.MPointArray()
-    curveFn = om1.MFnNurbsCurve()
-    data = om1.MFnNurbsCurveData()
+    cvs = om.MPointArray()
+    curveFn = om.MFnNurbsCurve()
+    data = om.MFnNurbsCurveData()
     mobj = data.create()
 
     for point in points:
-        cvs.append(om1.MPoint(*point))
+        cvs.append(om.MPoint(*point))
 
     curveFn.createWithEditPoints(cvs,
                                  degree,
@@ -5024,6 +5180,9 @@ def _python_to_plug(value, plug):
 
     # Native Maya types
 
+    elif isinstance(value, om.MObject):
+        plug._mplug.setMObject(value)
+
     elif isinstance(value, om1.MObject):
         node = _encode1(plug._node.path())
         shapeFn = om1.MFnDagNode(node)
@@ -5244,6 +5403,9 @@ def _python_to_mod(value, plug, mod):
         obj = om.MFnMatrixData().create(value)
         mod.newPlugValue(mplug, obj)
 
+    elif isinstance(value, om.MObject):
+        mod.newPlugValue(mplug, value)
+
     elif isinstance(value, om.MEulerRotation):
         for index, value in enumerate(value):
             value = om.MAngle(value, om.MAngle.kRadians)
@@ -5418,11 +5580,12 @@ sin = math.sin
 cos = math.cos
 tan = math.tan
 pi = math.pi
+sqrt = math.sqrt
 
 
 def time(frame):
     assert isinstance(frame, int), "%s was not an int" % frame
-    return om.MTime(frame, TimeUiUnit())
+    return HashableTime(om.MTime(frame, TimeUiUnit()))
 
 
 def frame(time):
@@ -5627,6 +5790,7 @@ class _BaseModifier(object):
             # These all involve calling on cmds,
             # which manages undo on its own.
             self._doKeyableAttrs()
+            self._doChannelBoxAttrs()
             self._doNiceNames()
             self._doLockAttrs()
 
@@ -5661,6 +5825,7 @@ class _BaseModifier(object):
         # Extras
         self._lockAttrs = []
         self._keyableAttrs = []
+        self._channelBoxAttrs = []
         self._niceNames = []
         self._animChanges = []
 
@@ -5785,6 +5950,42 @@ class _BaseModifier(object):
         assert isinstance(plug, Plug), "%s was not a plug" % plug
         self._keyableAttrs.append((plug, value))
 
+    @record_history
+    def setChannelBox(self, plug, value=True):
+        """Make a plug appear in channel box
+
+        Examples:
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    mod.setChannelBox(node["rotatePivotX"])
+            ...    mod.setChannelBox(node["translateX"], False)
+            ...
+            >>> node["rotatePivotX"].channelBox
+            True
+            >>> node["translateX"].channelBox
+            False
+
+            # Also works with dynamic attributes
+            >>> with DagModifier() as mod:
+            ...    node = mod.createNode("transform")
+            ...    _ = mod.addAttr(node, Double("myDynamic"))
+            ...
+            >>> node["myDynamic"].channelBox
+            False
+            >>> with DagModifier() as mod:
+            ...    mod.setChannelBox(node["myDynamic"])
+            ...
+            >>> node["myDynamic"].channelBox
+            True
+
+        """
+
+        if isinstance(plug, om.MPlug):
+            plug = Plug(Node(plug.node()), plug)
+
+        assert isinstance(plug, Plug), "%s was not a plug" % plug
+        self._channelBoxAttrs.append((plug, value))
+
     def _doLockAttrs(self):
         while self._lockAttrs:
             plug, value = self._lockAttrs.pop(0)
@@ -5800,6 +6001,14 @@ class _BaseModifier(object):
 
             for el in elements:
                 cmds.setAttr(el.path(), keyable=value)
+
+    def _doChannelBoxAttrs(self):
+        while self._channelBoxAttrs:
+            plug, value = self._channelBoxAttrs.pop(0)
+            elements = plug if plug.isArray or plug.isCompound else [plug]
+
+            for el in elements:
+                cmds.setAttr(el.path(), channelBox=value)
 
     def _doNiceNames(self):
         while self._niceNames:
@@ -5978,7 +6187,7 @@ class _BaseModifier(object):
 
         """
 
-        assert isinstance(node, Node), "%s was not a cmdx.Node"
+        assert isinstance(node, Node), "%s was not a cmdx.Node" % str(node)
 
         if SAFE_MODE:
             assert _isalive(node._mobject)
@@ -6535,6 +6744,7 @@ class _BaseModifier(object):
         connect_attr = connectAttr
         connect_attrs = connectAttrs
         set_keyable = setKeyable
+        set_channel_box = setChannelBox
         set_locked = setLocked
         set_nice_name = setNiceName
 
@@ -6675,6 +6885,10 @@ class HashableTime(om.MTime):
     def __hash__(self):
         return hash(self.value)
 
+    if ENABLE_PEP8:
+        def as_units(self, unit):
+            return self.asUnits(unit)
+
 
 # Convenience functions
 def connect(a, b):
@@ -6690,7 +6904,25 @@ def currentTime(time=None):
         if not isinstance(time, om.MTime):
             time = om.MTime(time, TimeUiUnit())
 
-        return oma.MAnimControl.setCurrentTime(time)
+        cmds.currentTime(time.value)
+
+        # For whatever reason, MAnimControl.setCurrentTime
+        # interferes with threading, cause of deadlocks. So
+        # we instead rely on the trusty old cmds.currentTime
+
+
+def currentFrame(frame=None):
+    """Set or return current time as an integer"""
+    if frame is None:
+        return int(oma.MAnimControl.currentTime().value)
+    else:
+        if isinstance(time, om.MTime):
+            frame = int(frame.value)
+
+        cmds.currentTime(frame)
+
+
+ticksPerSecond = om.MTime.ticksPerSecond
 
 
 def selectedTime():
@@ -6747,6 +6979,14 @@ def maxTime(time=None):
             time = om.MTime(time, TimeUiUnit())
 
         return oma.MAnimControl.setMaxTime(time)
+
+
+def isScrubbing():
+    return oma.MAnimControl.isScrubbing()
+
+
+def isPlaying():
+    return oma.MAnimControl.isPlaying()
 
 
 class DGContext(om.MDGContext):
@@ -6886,7 +7126,7 @@ def getAttr(attr, type=None, time=None):
     return attr.read(time=time)
 
 
-def setAttr(attr, value, type=None):
+def setAttr(attr, value, type=None, undoable=False):
     """Write `value` to `attr`
 
     Arguments:
@@ -6900,12 +7140,19 @@ def setAttr(attr, value, type=None):
 
     """
 
+    if type == "matrix":
+        value = Matrix4(value)
+
     if isinstance(attr, str):
         node, attr = attr.rsplit(".", 1)
         node = encode(node)
         attr = node[attr]
 
-    attr.write(value)
+    if undoable:
+        with DGModifier() as mod:
+            mod.setAttr(attr, value)
+    else:
+        attr.write(value)
 
 
 def addAttr(node,
@@ -7071,9 +7318,11 @@ def delete(*nodes):
     with DagModifier(undoable=False) as mod:
         for node in flattened:
             if isinstance(node, str):
-                node, node = node.rsplit(".", 1)
-                node = encode(node)
-                node = node[node]
+                try:
+                    node, attr = node.rsplit(".", 1)
+                    node = encode(node)
+                except ExistError:
+                    continue
 
             if not node.exists:
                 # May have been a child of something
@@ -7143,6 +7392,14 @@ def upAxis():
             return Vector(0, 0, 1)
 
 
+if __maya_version__ >= 2019:
+    isYAxisUp = om.MGlobal.isYAxisUp
+    isZAxisUp = om.MGlobal.isZAxisUp
+
+    is_y_axis_up = om.MGlobal.isYAxisUp
+    is_z_axis_up = om.MGlobal.isZAxisUp
+
+
 def setUpAxis(axis=Y):
     """Set the current up-axis as Y or Z
 
@@ -7174,13 +7431,18 @@ if ENABLE_PEP8:
     connect_attr = connectAttr
     obj_exists = objExists
     current_time = currentTime
+    current_frame = currentFrame
     min_time = minTime
     max_time = maxTime
+    is_scrubbing = isScrubbing
+    is_playing = isPlaying
     animation_start_time = animationStartTime
     animation_end_time = animationEndTime
     selected_time = selectedTime
     up_axis = upAxis
     set_up_axis = setUpAxis
+    ticks_per_second = ticksPerSecond
+
 
 
 # Special-purpose functions
@@ -7253,14 +7515,27 @@ def curve(parent, points, degree=1, form=kOpen, mod=None):
         "parent must be of type cmdx.DagNode"
     )
 
+    if isinstance(points, tuple):
+        points = list(points)
+
     degree = min(3, max(1, degree))
 
-    knotcount = len(points) - degree + 2 * degree - 1
+    if degree > 1:
+        points.insert(0, points[0])
+        points.append(points[-1])
+
+    if degree > 2:
+        points.insert(0, points[0])
+        points.append(points[-1])
+
+    spans = len(points) - degree
+    knotcount = spans + 2 * degree - 1
 
     cvs = [p for p in points]
     knots = [i for i in range(knotcount)]
 
     curveFn = om.MFnNurbsCurve()
+
     mobj = curveFn.create(cvs,
                           knots,
                           degree,
@@ -7709,6 +7984,19 @@ class Long(_AbstractAttribute):
         return data.inputValue(self["mobject"]).asLong()
 
 
+class Integer(_AbstractAttribute):
+    Fn = om.MFnNumericAttribute
+    Type = om.MFnNumericData.kInt
+    Default = 0
+
+    def read(self, data):
+        return data.inputValue(self["mobject"]).asLong()
+
+
+# Alias
+Int = Integer
+
+
 class Double(_AbstractAttribute):
     Fn = om.MFnNumericAttribute
     Type = om.MFnNumericData.kDouble
@@ -7997,11 +8285,11 @@ Distance4Attribute = Distance4
 
 
 # Support for multiple co-existing versions of apiundo.
-unique_command = "cmdx_%s_command" % __version__.replace(".", "_")
+unique_command = "cmdx_%s_command" % (__version__.replace(".", "_"))
 
 # This module is both a Python module and Maya plug-in.
 # Data is shared amongst the two through this "module"
-unique_shared = "cmdx_%s_shared" % __version__.replace(".", "_")
+unique_shared = "cmdx_%s_shared" % (__version__.replace(".", "_"))
 
 if unique_shared not in sys.modules:
     sys.modules[unique_shared] = types.ModuleType(unique_shared)
@@ -8092,7 +8380,9 @@ def install():
 
     """
 
-    cmds.loadPlugin(__file__, quiet=True)
+    plugin_name = os.path.basename(__file__).rsplit(".", 1)[0]
+    if not cmds.pluginInfo(plugin_name, query=True, loaded=True):
+        cmds.loadPlugin(__file__, quiet=True)
 
     self.installed = True
 
@@ -8104,7 +8394,8 @@ def uninstall():
         # therefore cannot be unloaded until flushed.
         clear()
 
-        cmds.unloadPlugin(__file__)
+        name = os.path.basename(__file__)
+        cmds.unloadPlugin(name)
 
     self.installed = False
 
@@ -8172,13 +8463,24 @@ class _apiUndo(om.MPxCommand):
 
 
 def initializePlugin(plugin):
-    om.MFnPlugin(plugin).registerCommand(
+    if hasattr(cmds, unique_command):
+        # E.g. another cmdx from another vendored version
+        initializePlugin.installedElsewhere = True
+        return
+
+    # Only supports major.minor (no patch)
+    version = ".".join(__version__.rsplit(".")[:2])
+
+    om.MFnPlugin(plugin, "cmdx", version).registerCommand(
         unique_command,
         _apiUndo
     )
 
 
 def uninitializePlugin(plugin):
+    if hasattr(initializePlugin, "installedElsewhere"):
+        return
+
     om.MFnPlugin(plugin).deregisterCommand(unique_command)
 
 
