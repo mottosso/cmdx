@@ -22,8 +22,6 @@ jobs:
 
       matrix:
        include:
-         - maya: "2017"
-           pip: "2.7/get-pip.py"
          - maya: "2018"
            pip: "2.7/get-pip.py"
          - maya: "2019"
@@ -31,6 +29,10 @@ jobs:
          - maya: "2020"
            pip: "2.7/get-pip.py"
          - maya: "2022"
+           pip: "get-pip.py"
+         - maya: "2023"
+           pip: "get-pip.py"
+         - maya: "2024"
            pip: "get-pip.py"
 
     container: mottosso/maya:${{ matrix.maya }}
