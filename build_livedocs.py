@@ -107,6 +107,12 @@ if __name__ == '__main__':
 # -*- coding: utf-8 -*-
 import os
 import sys
+
+# For nose
+import collections
+if not hasattr(collections, "Callable"):
+    collections.Callable = collections.abc.Callable
+
 import nose
 from nose.tools import assert_raises
 
