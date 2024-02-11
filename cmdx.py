@@ -7239,10 +7239,7 @@ def listRelatives(node,
     if not isinstance(node, DagNode):
         return None
 
-    if shapes and parent:
-        return []
-
-    if shapes:
+    if shapes and not parent:
         return list(node.shapes(type=type))
 
     if parent:
