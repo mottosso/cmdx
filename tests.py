@@ -609,3 +609,57 @@ def test_commit_undo():
 
 def test_modifier_redo():
     pass
+
+
+def _setup_listrelatives_test():
+    new_scene()
+    cmds.createNode('transform', name='topGrp')
+    cmds.polyCube(name='hierarchyCube', constructionHistory=False)
+    cmds.parent('hierarchyCube', 'topGrp')
+    cmds.createNode('transform', name='botGrp', parent='hierarchyCube')
+    cmds.polyCube(name='worldCube', constructionHistory=False)
+    cmds.blendShape('hierarchyCube', 'worldCube', name='cubeBlend')
+
+
+@with_setup(_setup_listrelatives_test)
+def test_listrelatives_children():
+
+    result_cmdx = cmdx.listRelatives('hierarchyCube', children=True)
+    result_cmdx = [i.name() for i in result_cmdx]
+    result_cmds = cmds.listRelatives('hierarchyCube', children=True)
+
+    assert_equals(result_cmdx, result_cmds)
+
+
+@with_setup(_setup_listrelatives_test)
+def test_listrelatives_alldescendents():
+
+    result_cmdx = cmdx.listRelatives('topGrp', allDescendents=True)
+    result_cmdx = [i.name() for i in result_cmdx]
+    result_cmds = cmds.listRelatives('topGrp', allDescendents=True)
+
+    # cmds has a special result order, so compare sets
+    result_cmdx = set(result_cmdx)
+    result_cmds = set(result_cmds)
+
+    assert_equals(result_cmdx, result_cmds)
+
+
+@with_setup(_setup_listrelatives_test)
+def test_listrelatives_parent():
+
+    result_cmdx = cmdx.listRelatives('hierarchyCubeShape', parent=True)
+    result_cmdx = [i.name() for i in result_cmdx]
+    result_cmds = cmds.listRelatives('hierarchyCubeShape', parent=True)
+
+    assert_equals(result_cmdx, result_cmds)
+
+
+@with_setup(_setup_listrelatives_test)
+def test_listrelatives_shapes():
+
+    result_cmdx = cmdx.listRelatives('worldCube', shapes=True)
+    result_cmdx = [i.name() for i in result_cmdx]
+    result_cmds = cmds.listRelatives('worldCube', shapes=True)
+
+    assert_equals(result_cmdx, result_cmds)
