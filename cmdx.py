@@ -13,6 +13,7 @@ import traceback
 import collections
 import contextlib
 from functools import wraps
+from itertools import chain
 
 from maya import cmds
 from maya.api import OpenMaya as om, OpenMayaAnim as oma, OpenMayaUI as omui
@@ -7238,16 +7239,17 @@ def listRelatives(node,
     if not isinstance(node, DagNode):
         return None
 
-    elif allDescendents:
-        return list(node.descendents(type=type))
-    elif shapes:
+    if shapes and not parent:
         return list(node.shapes(type=type))
 
-    elif parent:
-        return [node.parent(type=type)]
+    if parent:
+        _parent = node.parent(type=type)
+        return [_parent] if _parent else []
 
-    elif children:
-        return list(node.children(type=type))
+    if allDescendents:
+        return list(node.descendents(type=type))
+
+    return list(chain(node.shapes(type=type), node.children(type=type)))
 
 
 def listConnections(attr):
