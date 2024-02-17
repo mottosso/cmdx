@@ -1524,13 +1524,21 @@ class DagNode(Node):
             >>> _new()
             >>> parent = createNode("transform", "parent")
             >>> child =  createNode("transform", "child", parent)
-            >>> (parent | "child").path()
-            '|parent|child'
+            >>> result = (parent | "child").path()
+            >>> result in (
+            ...    '|parent|child',
+            ...   u'|parent|child'
+            ... )
+            True
 
             # Stackable too
             >>> grand =  createNode("transform", "grand", child)
-            >>> (parent | "child" | "grand").path()
-            '|parent|child|grand'
+            >>> result = (parent | "child" | "grand").path()
+            >>> result in (
+            ...    '|parent|child|grand',
+            ...   u'|parent|child|grand'
+            ... )
+            True
 
         """
 
@@ -2303,8 +2311,12 @@ class ObjectSet(Node):
             >>> cc = cmds.sets([gc, b], name="child")
             >>> parent = cmds.sets([cc, c], name="parent")
             >>> mainset = encode(parent)
-            >>> sorted([n.path() for n in mainset.flatten()])
-            ['|a', '|b', '|c']
+            >>> result = sorted([n.path() for n in mainset.flatten()])
+            >>> result in (
+            ...    ['|a', '|b', '|c'],
+            ...    [u'|a', u'|b', u'|c']
+            ... )
+            True
 
         """
 
@@ -6358,16 +6370,25 @@ class _BaseModifier(object):
             >>> with DagModifier() as mod:
             ...     mod.connect(tm["sx"], tm["tx"])
             ...
-            >>> tm["tx"].connection().path()
-            '|myTransform'
+            >>> result = tm["tx"].connection().path()
+            >>> result in (
+            ...    '|myTransform',
+            ...   u'|myTransform'
+            ... )
+            True
+
             >>> cmds.undo()
             >>> tm["tx"].connection() is None
             True
 
             # Connect without undo
             >>> tm["tx"] << tx["output"]
-            >>> tm["tx"].connection().name()
-            'myAnimCurve'
+            >>> result = tm["tx"].connection().name()
+            >>> result in (
+            ...    'myAnimCurve',
+            ...   u'myAnimCurve'
+            ... )
+            True
 
             # Disconnect without undo
             >>> tm["tx"] // tx["output"]
@@ -6452,12 +6473,20 @@ class _BaseModifier(object):
             ...     otherAttr = mod.addAttr(otherNode, Message("otherAttr"))
             ...     mod.connectAttr(newNode["newAttr"], otherNode, otherAttr)
             ...
-            >>> newNode["newAttr"].connection().path()
-            '|otherNode'
+            >>> result = newNode["newAttr"].connection().path()
+            >>> result in (
+            ...    '|otherNode',
+            ...   u'|otherNode'
+            ... )
+            True
 
             >>> cmds.undo()
-            >>> newNode["newAttr"].connection().path()
-            '|newNode'
+            >>> result = newNode["newAttr"].connection().path()
+            >>> result in (
+            ...    '|newNode',
+            ...   u'|newNode'
+            ... )
+            True
 
         """
 
