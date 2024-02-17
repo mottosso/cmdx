@@ -511,7 +511,7 @@ class Node(object):
         >>> transform = createNode("transform")
         >>> transform["tx"] = 5
         >>> transform["worldMatrix"][0] >> decompose["inputMatrix"]
-        >>> decompose["outputTranslate"]
+        >>> decompose["outputTranslate"].read()
         (5.0, 0.0, 0.0)
 
     """
@@ -548,7 +548,8 @@ class Node(object):
         return self.name(namespace=True)
 
     def __repr__(self):
-        return self.name(namespace=True)
+        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
+        return "<{} : '{}'>".format(cls_name, self.name(namespace=True))
 
     def __add__(self, other):
         """Support legacy + '.attr' behavior
@@ -578,7 +579,7 @@ class Node(object):
         Example:
             >>> node = createNode("transform")
             >>> node["translate"] = (1, 1, 1)
-            >>> node["translate", Meters]
+            >>> node["translate", Meters].read()
             (0.01, 0.01, 0.01)
 
         """
@@ -624,7 +625,7 @@ class Node(object):
             True
             >>> node["rotateX", Degrees] = 1.0
             >>> node["rotateX"] = Degrees(1)
-            >>> node["rotateX", Degrees]
+            >>> node["rotateX", Degrees].read()
             1.0
             >>> node["myDist"] = Distance()
             >>> node["myDist"] = node["translateX"]
@@ -980,7 +981,7 @@ class Node(object):
         Examples:
             >>> node = createNode("transform")
             >>> node.update({"tx": 5.0, ("ry", Degrees): 30.0})
-            >>> node["tx"]
+            >>> node["tx"].read()
             5.0
 
         """
@@ -998,14 +999,14 @@ class Node(object):
         Example:
             >>> node = createNode("transform")
             >>> node["translateX"] = 5
-            >>> node["translateX"]
+            >>> node["translateX"].read()
             5.0
             >>> # Plug was reused
-            >>> node["translateX"]
+            >>> node["translateX"].read()
             5.0
             >>> # Value was reused
             >>> node.clear()
-            >>> node["translateX"]
+            >>> node["translateX"].read()
             5.0
             >>> # Plug and value was recomputed
 
@@ -1513,7 +1514,8 @@ class DagNode(Node):
         return self.path()
 
     def __repr__(self):
-        return self.path()
+        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
+        return "<{} : '{}'>".format(cls_name, self.path())
 
     def __or__(self, other):
         """Syntax sugar for finding a child
@@ -1522,13 +1524,13 @@ class DagNode(Node):
             >>> _new()
             >>> parent = createNode("transform", "parent")
             >>> child =  createNode("transform", "child", parent)
-            >>> parent | "child"
-            |parent|child
+            >>> (parent | "child").path()
+            '|parent|child'
 
             # Stackable too
             >>> grand =  createNode("transform", "grand", child)
-            >>> parent | "child" | "grand"
-            |parent|child|grand
+            >>> (parent | "child" | "grand").path()
+            '|parent|child|grand'
 
         """
 
@@ -2301,8 +2303,8 @@ class ObjectSet(Node):
             >>> cc = cmds.sets([gc, b], name="child")
             >>> parent = cmds.sets([cc, c], name="parent")
             >>> mainset = encode(parent)
-            >>> sorted(mainset.flatten(), key=lambda n: n.name())
-            [|a, |b, |c]
+            >>> sorted([n.path() for n in mainset.flatten()])
+            ['|a', '|b', '|c']
 
         """
 
@@ -2560,9 +2562,9 @@ class Plug(object):
         Example:
             >>> node = createNode("transform")
             >>> node["tx"] = 5
-            >>> node["translate"] + "X"
+            >>> (node["translate"] + "X").read()
             5.0
-            >>> node["t"] + "x"
+            >>> (node["t"] + "x").read()
             5.0
             >>> try:
             ...   node["t"] + node["r"]
@@ -2597,11 +2599,11 @@ class Plug(object):
             >>> node["myArray"].extend([2.0, 3.0])
             >>> node["myArray"] += 5.1
             >>> node["myArray"] += [1.1, 2.3, 999.0]
-            >>> node["myArray"][0]
+            >>> node["myArray"][0].read()
             1.0
-            >>> node["myArray"][6]
+            >>> node["myArray"][6].read()
             999.0
-            >>> node["myArray"][-1]
+            >>> node["myArray"][-1].read()
             999.0
 
         """
@@ -2627,7 +2629,13 @@ class Plug(object):
         return str(self.read())
 
     def __repr__(self):
-        return str(self.read())
+        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
+        read_val = self.read()
+        if isinstance(read_val, string_types):
+            # Add surrounding single quotes, indicating the value is a string
+            read_val = "'{}'".format(read_val)
+
+        return "<{} : {}>".format(cls_name, read_val)
 
     def __rshift__(self, other):
         """Support connecting attributes via A >> B"""
@@ -2798,7 +2806,7 @@ class Plug(object):
         Example:
             >>> node = createNode("transform")
             >>> node["translate"][0] = 5
-            >>> node["tx"]
+            >>> node["tx"].read()
             5.0
 
         """
@@ -3173,9 +3181,9 @@ class Plug(object):
             >>> node = createNode("transform")
             >>> node["myArray"] = Double(array=True)
             >>> node["myArray"].extend([1.0, 2.0, 3.0])
-            >>> node["myArray"][0]
+            >>> node["myArray"][0].read()
             1.0
-            >>> node["myArray"][-1]
+            >>> node["myArray"][-1].read()
             3.0
 
         """
@@ -4101,7 +4109,7 @@ class Plug(object):
             True
             >>> b["ihi"].connection() == a
             True
-            >>> a["ihi"]
+            >>> a["ihi"].read()
             2
             >>> b["arrayAttr"] = Long(array=True)
             >>> b["arrayAttr"][0] >> a["ihi"]
@@ -6350,16 +6358,16 @@ class _BaseModifier(object):
             >>> with DagModifier() as mod:
             ...     mod.connect(tm["sx"], tm["tx"])
             ...
-            >>> tm["tx"].connection()
-            |myTransform
+            >>> tm["tx"].connection().path()
+            '|myTransform'
             >>> cmds.undo()
             >>> tm["tx"].connection() is None
             True
 
             # Connect without undo
             >>> tm["tx"] << tx["output"]
-            >>> tm["tx"].connection()
-            myAnimCurve
+            >>> tm["tx"].connection().name()
+            'myAnimCurve'
 
             # Disconnect without undo
             >>> tm["tx"] // tx["output"]
@@ -6444,12 +6452,12 @@ class _BaseModifier(object):
             ...     otherAttr = mod.addAttr(otherNode, Message("otherAttr"))
             ...     mod.connectAttr(newNode["newAttr"], otherNode, otherAttr)
             ...
-            >>> newNode["newAttr"].connection()
-            |otherNode
+            >>> newNode["newAttr"].connection().path()
+            '|otherNode'
 
             >>> cmds.undo()
-            >>> newNode["newAttr"].connection()
-            |newNode
+            >>> newNode["newAttr"].connection().path()
+            '|newNode'
 
         """
 
@@ -6768,9 +6776,9 @@ class DagModifier(_BaseModifier):
         ...
         >>> getAttr(node1 + ".translateX")
         1.0
-        >>> node2["translate"][0]
+        >>> node2["translate"][0].read()
         1.0
-        >>> node2["translate"][1]
+        >>> node2["translate"][1].read()
         2.0
         >>> with DagModifier() as mod:
         ...     node1 = mod.createNode("transform")
@@ -6778,9 +6786,9 @@ class DagModifier(_BaseModifier):
         ...     node1["translate"] = (5, 6, 7)
         ...     node1["translate"] >> node2["translate"]
         ...
-        >>> node2["translate"][0]
+        >>> node2["translate"][0].read()
         5.0
-        >>> node2["translate"][1]
+        >>> node2["translate"][1].read()
         6.0
 
     Example, without context manager:
@@ -7721,7 +7729,8 @@ class _AbstractAttribute(dict):
 
     def __repr__(self):
         """Avoid repr depicting the full contents of this dict"""
-        return self["name"]
+        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
+        return "<{} : '{}'>".format(cls_name, self["name"])
 
     def __new__(cls, *args, **kwargs):
         """Support for using name of assignment

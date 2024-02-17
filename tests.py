@@ -383,8 +383,9 @@ def test_nodeoperators():
 
     node = cmdx.createNode(cmdx.tTransform, name="myNode")
     assert_equals(node, "|myNode")
+    assert_equals(repr(node), "<cmdx.DagNode : '|myNode'>")
     assert_not_equals(node, "|NotEquals")
-    assert_equals(str(node), repr(node))
+    assert_not_equals(str(node), repr(node))
 
 
 @with_setup(new_scene)
