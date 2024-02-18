@@ -511,6 +511,8 @@ class Node(object):
         >>> transform = createNode("transform")
         >>> transform["tx"] = 5
         >>> transform["worldMatrix"][0] >> decompose["inputMatrix"]
+        >>> decompose["outputTranslate"]
+        <cmdx.Plug : (5.0, 0.0, 0.0)>
         >>> decompose["outputTranslate"].read()
         (5.0, 0.0, 0.0)
 
@@ -579,6 +581,8 @@ class Node(object):
         Example:
             >>> node = createNode("transform")
             >>> node["translate"] = (1, 1, 1)
+            >>> node["translate", Meters]
+            <cmdx.Plug : (0.01, 0.01, 0.01)>
             >>> node["translate", Meters].read()
             (0.01, 0.01, 0.01)
 
@@ -625,6 +629,8 @@ class Node(object):
             True
             >>> node["rotateX", Degrees] = 1.0
             >>> node["rotateX"] = Degrees(1)
+            >>> node["rotateX", Degrees]
+            <cmdx.Plug : 1.0>
             >>> node["rotateX", Degrees].read()
             1.0
             >>> node["myDist"] = Distance()
@@ -981,6 +987,8 @@ class Node(object):
         Examples:
             >>> node = createNode("transform")
             >>> node.update({"tx": 5.0, ("ry", Degrees): 30.0})
+            >>> node["tx"]
+            <cmdx.Plug : 5.0>
             >>> node["tx"].read()
             5.0
 
@@ -999,13 +1007,19 @@ class Node(object):
         Example:
             >>> node = createNode("transform")
             >>> node["translateX"] = 5
+            >>> node["translateX"]
+            <cmdx.Plug : 5.0>
             >>> node["translateX"].read()
             5.0
             >>> # Plug was reused
+            >>> node["translateX"]
+            <cmdx.Plug : 5.0>
             >>> node["translateX"].read()
             5.0
             >>> # Value was reused
             >>> node.clear()
+            >>> node["translateX"]
+            <cmdx.Plug : 5.0>
             >>> node["translateX"].read()
             5.0
             >>> # Plug and value was recomputed
@@ -1524,8 +1538,9 @@ class DagNode(Node):
             >>> _new()
             >>> parent = createNode("transform", "parent")
             >>> child =  createNode("transform", "child", parent)
-            >>> result = (parent | "child").path()
-            >>> result in (
+            >>> parent | "child"
+            <cmdx.DagNode : '|parent|child'>
+            >>> (parent | "child").path() in (
             ...    '|parent|child',
             ...   u'|parent|child'
             ... )
@@ -1533,8 +1548,9 @@ class DagNode(Node):
 
             # Stackable too
             >>> grand =  createNode("transform", "grand", child)
-            >>> result = (parent | "child" | "grand").path()
-            >>> result in (
+            >>> parent | "child" | "grand"
+            <cmdx.DagNode : '|parent|child|grand'>
+            >>> (parent | "child" | "grand").path() in (
             ...    '|parent|child|grand',
             ...   u'|parent|child|grand'
             ... )
@@ -2301,22 +2317,24 @@ class ObjectSet(Node):
         """Return members, converting nested object sets into its members
 
         Example:
-            >>> from maya import cmds
-            >>> _ = cmds.file(new=True, force=True)
-            >>> a = cmds.createNode("transform", name="a")
-            >>> b = cmds.createNode("transform", name="b")
-            >>> c = cmds.createNode("transform", name="c")
-            >>> cmds.select(a)
-            >>> gc = cmds.sets([a], name="grandchild")
-            >>> cc = cmds.sets([gc, b], name="child")
-            >>> parent = cmds.sets([cc, c], name="parent")
-            >>> mainset = encode(parent)
-            >>> result = sorted([n.path() for n in mainset.flatten()])
-            >>> result in (
-            ...    ['|a', '|b', '|c'],
-            ...    [u'|a', u'|b', u'|c']
-            ... )
-            True
+          >>> from maya import cmds
+          >>> _ = cmds.file(new=True, force=True)
+          >>> a = cmds.createNode("transform", name="a")
+          >>> b = cmds.createNode("transform", name="b")
+          >>> c = cmds.createNode("transform", name="c")
+          >>> cmds.select(a)
+          >>> gc = cmds.sets([a], name="grandchild")
+          >>> cc = cmds.sets([gc, b], name="child")
+          >>> parent = cmds.sets([cc, c], name="parent")
+          >>> mainset = encode(parent)
+          >>> sorted(mainset.flatten(), key=lambda n: n.name())
+          [<cmdx.DagNode : '|a'>, <cmdx.DagNode : '|b'>, <cmdx.DagNode : '|c'>]
+          >>> result = sorted([n.name() for n in mainset.flatten()])
+          >>> result in (
+          ...    ['a', 'b', 'c'],
+          ...    [u'a', u'b', u'c']
+          ... )
+          True
 
         """
 
@@ -2574,8 +2592,12 @@ class Plug(object):
         Example:
             >>> node = createNode("transform")
             >>> node["tx"] = 5
+            >>> node["translate"] + "X"
+            <cmdx.Plug : 5.0>
             >>> (node["translate"] + "X").read()
             5.0
+            >>> node["t"] + "x"
+            <cmdx.Plug : 5.0>
             >>> (node["t"] + "x").read()
             5.0
             >>> try:
@@ -2611,10 +2633,16 @@ class Plug(object):
             >>> node["myArray"].extend([2.0, 3.0])
             >>> node["myArray"] += 5.1
             >>> node["myArray"] += [1.1, 2.3, 999.0]
+            >>> node["myArray"][0]
+            <cmdx.Plug : 1.0>
             >>> node["myArray"][0].read()
             1.0
+            >>> node["myArray"][6]
+            <cmdx.Plug : 999.0>
             >>> node["myArray"][6].read()
             999.0
+            >>> node["myArray"][-1]
+            <cmdx.Plug : 999.0>
             >>> node["myArray"][-1].read()
             999.0
 
@@ -2818,6 +2846,8 @@ class Plug(object):
         Example:
             >>> node = createNode("transform")
             >>> node["translate"][0] = 5
+            >>> node["tx"]
+            <cmdx.Plug : 5.0>
             >>> node["tx"].read()
             5.0
 
@@ -3193,8 +3223,12 @@ class Plug(object):
             >>> node = createNode("transform")
             >>> node["myArray"] = Double(array=True)
             >>> node["myArray"].extend([1.0, 2.0, 3.0])
+            >>> node["myArray"][0]
+            <cmdx.Plug : 1.0>
             >>> node["myArray"][0].read()
             1.0
+            >>> node["myArray"][-1]
+            <cmdx.Plug : 3.0>
             >>> node["myArray"][-1].read()
             3.0
 
@@ -4121,6 +4155,8 @@ class Plug(object):
             True
             >>> b["ihi"].connection() == a
             True
+            >>> a["ihi"]
+            <cmdx.Plug : 2>
             >>> a["ihi"].read()
             2
             >>> b["arrayAttr"] = Long(array=True)
@@ -6370,8 +6406,9 @@ class _BaseModifier(object):
             >>> with DagModifier() as mod:
             ...     mod.connect(tm["sx"], tm["tx"])
             ...
-            >>> result = tm["tx"].connection().path()
-            >>> result in (
+            >>> tm["tx"].connection()
+            <cmdx.DagNode : '|myTransform'>
+            >>> tm["tx"].connection().path() in (
             ...    '|myTransform',
             ...   u'|myTransform'
             ... )
@@ -6383,8 +6420,9 @@ class _BaseModifier(object):
 
             # Connect without undo
             >>> tm["tx"] << tx["output"]
-            >>> result = tm["tx"].connection().name()
-            >>> result in (
+            >>> tm["tx"].connection()
+            <cmdx.AnimCurve : 'myAnimCurve'>
+            >>> tm["tx"].connection().name() in (
             ...    'myAnimCurve',
             ...   u'myAnimCurve'
             ... )
@@ -6473,16 +6511,18 @@ class _BaseModifier(object):
             ...     otherAttr = mod.addAttr(otherNode, Message("otherAttr"))
             ...     mod.connectAttr(newNode["newAttr"], otherNode, otherAttr)
             ...
-            >>> result = newNode["newAttr"].connection().path()
-            >>> result in (
+            >>> newNode["newAttr"].connection()
+            <cmdx.DagNode : '|otherNode'>
+            >>> newNode["newAttr"].connection().path() in (
             ...    '|otherNode',
             ...   u'|otherNode'
             ... )
             True
 
             >>> cmds.undo()
-            >>> result = newNode["newAttr"].connection().path()
-            >>> result in (
+            >>> newNode["newAttr"].connection()
+            <cmdx.DagNode : '|newNode'>
+            >>> newNode["newAttr"].connection().path() in (
             ...    '|newNode',
             ...   u'|newNode'
             ... )
@@ -6805,8 +6845,12 @@ class DagModifier(_BaseModifier):
         ...
         >>> getAttr(node1 + ".translateX")
         1.0
+        >>> node2["translate"][0]
+        <cmdx.Plug : 1.0>
         >>> node2["translate"][0].read()
         1.0
+        >>> node2["translate"][1]
+        <cmdx.Plug : 2.0>
         >>> node2["translate"][1].read()
         2.0
         >>> with DagModifier() as mod:
@@ -6815,8 +6859,12 @@ class DagModifier(_BaseModifier):
         ...     node1["translate"] = (5, 6, 7)
         ...     node1["translate"] >> node2["translate"]
         ...
+        >>> node2["translate"][0]
+        <cmdx.Plug : 5.0>
         >>> node2["translate"][0].read()
         5.0
+        >>> node2["translate"][1]
+        <cmdx.Plug : 6.0>
         >>> node2["translate"][1].read()
         6.0
 
