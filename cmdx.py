@@ -2674,12 +2674,16 @@ class Plug(object):
         return str(self.read())
 
     def __repr__(self):
+        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
+        if self._mplug.attribute().apiType() == om.MFn.kCompoundAttribute:
+            return '{}("{}", "{}")'.format(cls_name,
+                                           self.node().name(),
+                                           self.name())
         read_val = self.read()
         if isinstance(read_val, string_types):
             # Add surrounding single quotes, indicating the value is a string
             read_val = '"{}"'.format(read_val)
 
-        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
         return '{}("{}", "{}") == {}'.format(cls_name,
                                              self.node().name(),
                                              self.name(),
@@ -7818,7 +7822,7 @@ class _AbstractAttribute(dict):
     def __repr__(self):
         """Avoid repr depicting the full contents of this dict"""
         cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
-        return "<{} : '{}'>".format(cls_name, self["name"])
+        return 'cmdx.{}("{}")'.format(cls_name, self["name"])
 
     def __new__(cls, *args, **kwargs):
         """Support for using name of assignment
