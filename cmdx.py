@@ -2674,20 +2674,27 @@ class Plug(object):
         return str(self.read())
 
     def __repr__(self):
-        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
-        if self._mplug.attribute().apiType() == om.MFn.kCompoundAttribute:
-            return '{}("{}", "{}")'.format(cls_name,
-                                           self.node().name(),
-                                           self.name())
-        read_val = self.read()
-        if isinstance(read_val, string_types):
-            # Add surrounding single quotes, indicating the value is a string
-            read_val = '"{}"'.format(read_val)
+        try:
+            # Delegate the value reading to __str__
+            read_result = str(self)
+            valid = True
+        except:
+            valid = False
 
-        return '{}("{}", "{}") == {}'.format(cls_name,
-                                             self.node().name(),
-                                             self.name(),
-                                             read_val)
+        cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
+        msg = '{}("{}", "{}")'.format(cls_name,
+                                      self.node().name(),
+                                      self.name())
+        if valid:
+            try:
+                if self.typeClass() == String:
+                    # Add surrounding quotes, indicating it is a string
+                    read_result = '"{}"'.format(read_result)
+            except TypeError:
+                pass
+            msg += ' == {}'.format(read_result)
+
+        return msg
 
     def __rshift__(self, other):
         """Support connecting attributes via A >> B"""
