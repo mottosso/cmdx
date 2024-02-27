@@ -653,6 +653,13 @@ class Node(object):
             ... else:
             ...   assert False
             >>>
+            >>> node["myString"] = String()
+            >>> node["myString"]
+            cmdx.Plug("myNode", "myString") == ""
+            >>> node["myString"] = "Hello, world!"
+            >>> node["myString"]
+            cmdx.Plug("myNode", "myString") == "Hello, world!"
+            >>>
             >>> delete(node)
 
         """
@@ -2674,24 +2681,21 @@ class Plug(object):
         return str(self.read())
 
     def __repr__(self):
-        try:
-            # Delegate the value reading to __str__
-            read_result = str(self)
-            valid = True
-        except:
-            valid = False
-
         cls_name = '{}.{}'.format(__name__, self.__class__.__name__)
         msg = '{}("{}", "{}")'.format(cls_name,
                                       self.node().name(),
                                       self.name())
-        if valid:
-            try:
-                if self.typeClass() == String:
+
+        if not self.isCompound and not self.isArray:
+            # Delegate and include the value result from __str__
+            read_result = str(self)
+            attr = self._mplug.attribute()
+            typ = attr.apiType()
+            if typ == om.MFn.kTypedAttribute:
+                typ = om.MFnTypedAttribute(attr).attrType()
+                if typ == om.MFnData.kString:
                     # Add surrounding quotes, indicating it is a string
                     read_result = '"{}"'.format(read_result)
-            except TypeError:
-                pass
             msg += ' == {}'.format(read_result)
 
         return msg
