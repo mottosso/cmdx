@@ -2686,7 +2686,7 @@ class Plug(object):
                                       self.node().name(),
                                       self.name())
 
-        if not self.isCompound and not self.isArray:
+        if not all((self.isCompound, self.isArray)):
             # Delegate and include the value result from __str__
             read_result = str(self)
             attr = self._mplug.attribute()
