@@ -29,7 +29,7 @@ jobs:
          - maya: "2020"
            pip: "2.7/get-pip.py"
          - maya: "2022"
-           pip: "get-pip.py"
+           pip: "3.7/get-pip.py"
          - maya: "2023"
            pip: "get-pip.py"
          - maya: "2024"
