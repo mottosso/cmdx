@@ -1905,6 +1905,8 @@ Another wrapping of the Maya API is [MRV](http://pythonhosted.org/MRV/), written
 
 Unlike `cmdx` and PyMEL, MRV (and seemingly Metan) exposes the Maya API as directly as possible.
 
+Another more recent alternative is [`mayax`](https://github.com/chirieac/mayax) which seems similar in implementation and design as `cmdx`, it's used in [Overlap Tool](https://puppeteer.movindot.com/) by Adrian Chirieac.
+
 See the [Comparison page](http://pythonhosted.org/MRV/compare/index.html) for more details.
 
 <br>
