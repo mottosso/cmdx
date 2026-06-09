@@ -5222,11 +5222,52 @@ def _plug_to_python(plug, unit=None, context=None):
         # UI-independent units.
         return plug.asMTime(**kwargs).asUnits(unit or Seconds)
 
+    elif type == om.MFn.kMesh:
+        return Mesh(plug)
+
+    # A generic attribute *could* be a mesh, check it
+    elif type == om.MFn.kGenericAttribute:
+        try:
+            data_obj = plug.asMObject(**kwargs)
+
+        except RuntimeError:
+            raise TypeError("Generic plug '%s' had no data" % plug)
+
+        if data_obj.isNull():
+            raise TypeError("Generic plug '%s' with no data" % plug)
+
+        api_type = data_obj.apiType()
+
+        # Mesh case
+        if api_type in (om.MFn.kMesh, om.MFn.kMeshData):
+            return Mesh(plug)
+        else:
+            raise TypeError("Generic plug '%s' unsupported" % plug)
+
     elif type == om.MFn.kInvalid:
         raise TypeError("%s was invalid" % plug.name())
 
     else:
         raise TypeError("Unsupported type '%s'" % type)
+
+
+class Mesh(object):
+    def __init__(self, plug=None):
+        self._plug = plug
+
+    def __repr__(self):
+        return "%s (kMesh)" % self._plug
+
+    def points(self):
+        data_obj = self._plug.asMObject()
+
+        if data_obj.isNull():
+            raise RuntimeError(
+                "{0} has no points".format(self._plug)
+            )
+
+        mesh_fn = om.MFnMesh(data_obj)
+        return mesh_fn.getPoints(om.MSpace.kObject)
 
 
 def _python_to_plug(value, plug):

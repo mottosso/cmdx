@@ -23,6 +23,7 @@ On average, `cmdx` is **140x faster** than [PyMEL](https://github.com/LumaPictur
 
 | Date     | Version   | Event
 |:---------|:----------|:----------
+| Jun 2026 | 0.6.5 | Printing an inspection of mesh attributes, support for Maya 2027+
 | Dec 2023 | 0.6.3 | Cloning of attributes
 | Apr 2020 | 0.6.0 | Stable Undo/Redo, dropped support for Maya 2015-2016
 | Mar 2020 | 0.5.1 | Support for Maya 2022
